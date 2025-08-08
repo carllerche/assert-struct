@@ -10,7 +10,8 @@ A Rust procedural macro for ergonomic structural assertions in tests. Write clea
 - 🎨 **String literals** - Use `"text"` directly without `.to_string()`
 - 📦 **Collection support** - Compare `Vec` with slice literals `[1, 2, 3]`
 - 🔢 **Tuple support** - Destructure and compare tuples element by element
-- 🔤 **Regex matching** - Use `regex!("pattern")` for pattern matching on string fields
+- 🔤 **Regex matching** - Use `=~ r"pattern"` for pattern matching on string fields
+- 📊 **Comparison operators** - Use `<`, `<=`, `>`, `>=` for numeric comparisons
 
 ## Installation
 
@@ -153,7 +154,7 @@ assert_struct!(container, Container {
 
 ### Regex Patterns
 
-Use `regex!("pattern")` to match string fields against regular expressions:
+Use `=~ r"pattern"` to match string fields against regular expressions:
 
 ```rust
 #[derive(Debug)]
@@ -168,12 +169,44 @@ let user = User {
 };
 
 assert_struct!(user, User {
-    username: regex!(r"^user_\d+$"),  // Must start with "user_" followed by digits
-    email: regex!(r"^[^@]+@[^@]+\.[^@]+$"),  // Basic email pattern
+    username: =~ r"^user_\d+$",  // Must start with "user_" followed by digits
+    email: =~ r"^[^@]+@[^@]+\.[^@]+$",  // Basic email pattern
 });
 ```
 
 Note: Regex support is enabled by default but can be disabled by turning off default features.
+
+### Comparison Operators
+
+Use comparison operators for numeric field assertions:
+
+```rust
+#[derive(Debug)]
+struct Person {
+    name: String,
+    age: u32,
+    score: i32,
+}
+
+let person = Person {
+    name: "Alice".to_string(),
+    age: 25,
+    score: 85,
+};
+
+assert_struct!(person, Person {
+    name: "Alice",
+    age: >= 18,        // At least 18
+    score: > 80,       // Greater than 80
+});
+
+// All comparison operators are supported
+assert_struct!(person, Person {
+    age: < 30,         // Less than 30
+    score: <= 100,     // At most 100
+    ..
+});
+```
 
 ## How It Works
 

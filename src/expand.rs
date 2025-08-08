@@ -1,4 +1,4 @@
-use crate::{AssertStruct, Expected, FieldAssertion};
+use crate::{AssertStruct, ComparisonOp, Expected, FieldAssertion};
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::Expr;
@@ -18,6 +18,7 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
             FieldAssertion::Tuple { field_name, .. } => field_name.clone(),
             #[cfg(feature = "regex")]
             FieldAssertion::Regex { field_name, .. } => field_name.clone(),
+            FieldAssertion::Comparison { field_name, .. } => field_name.clone(),
         })
         .collect();
 
@@ -99,6 +100,39 @@ fn generate_assertions(expected: &Expected) -> TokenStream {
                                 #field_name
                             );
                         }
+                    }
+                });
+            }
+            FieldAssertion::Comparison {
+                field_name,
+                op,
+                value,
+                ..
+            } => {
+                // Comparison: generate appropriate comparison assertion
+                let op_str = match op {
+                    ComparisonOp::Less => "<",
+                    ComparisonOp::LessEqual => "<=",
+                    ComparisonOp::Greater => ">",
+                    ComparisonOp::GreaterEqual => ">=",
+                };
+
+                let comparison = match op {
+                    ComparisonOp::Less => quote! { #field_name < &#value },
+                    ComparisonOp::LessEqual => quote! { #field_name <= &#value },
+                    ComparisonOp::Greater => quote! { #field_name > &#value },
+                    ComparisonOp::GreaterEqual => quote! { #field_name >= &#value },
+                };
+
+                assertions.push(quote! {
+                    if !(#comparison) {
+                        panic!(
+                            "Field `{}` failed comparison: {:?} {} {}",
+                            stringify!(#field_name),
+                            #field_name,
+                            #op_str,
+                            &#value
+                        );
                     }
                 });
             }
@@ -185,9 +219,26 @@ fn generate_nested_assert(
                 pattern,
                 ..
             } => {
-                // For regex in nested structs, we pass through as a regex! macro call
+                // For regex in nested structs, we pass through with =~ syntax
                 field_assignments.push(quote! {
-                    #field_name: regex!(#pattern)
+                    #field_name: =~ #pattern
+                });
+            }
+            FieldAssertion::Comparison {
+                field_name,
+                op,
+                value,
+                ..
+            } => {
+                // For comparisons in nested structs, we pass through the operator
+                let op_tokens = match op {
+                    ComparisonOp::Less => quote! { < },
+                    ComparisonOp::LessEqual => quote! { <= },
+                    ComparisonOp::Greater => quote! { > },
+                    ComparisonOp::GreaterEqual => quote! { >= },
+                };
+                field_assignments.push(quote! {
+                    #field_name: #op_tokens #value
                 });
             }
         }
@@ -248,6 +299,11 @@ fn generate_nested_struct(type_name: &syn::Path, expected: &Expected) -> TokenSt
                 // Regex patterns aren't used in nested struct construction
                 // They're only used for assertions
                 unreachable!("Regex patterns should not appear in nested struct construction")
+            }
+            FieldAssertion::Comparison { .. } => {
+                // Comparison patterns aren't used in nested struct construction
+                // They're only used for assertions
+                unreachable!("Comparison patterns should not appear in nested struct construction")
             }
         }
     }

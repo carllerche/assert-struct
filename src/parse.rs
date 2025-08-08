@@ -1,4 +1,4 @@
-use crate::{AssertStruct, Expected, FieldAssertion};
+use crate::{AssertStruct, ComparisonOp, Expected, FieldAssertion};
 use syn::{Result, Token, parse::Parse, parse::ParseStream, punctuated::Punctuated};
 
 pub fn parse(input: proc_macro::TokenStream) -> syn::Result<AssertStruct> {
@@ -58,6 +58,47 @@ impl Parse for FieldAssertion {
     fn parse(input: ParseStream) -> Result<Self> {
         let field_name: syn::Ident = input.parse()?;
         let _: Token![:] = input.parse()?;
+
+        // Check for comparison operators: <, <=, >, >=
+        if input.peek(Token![<]) {
+            let _: Token![<] = input.parse()?;
+            if input.peek(Token![=]) {
+                let _: Token![=] = input.parse()?;
+                let value = input.parse()?;
+                return Ok(FieldAssertion::Comparison {
+                    field_name,
+                    op: ComparisonOp::LessEqual,
+                    value,
+                });
+            } else {
+                let value = input.parse()?;
+                return Ok(FieldAssertion::Comparison {
+                    field_name,
+                    op: ComparisonOp::Less,
+                    value,
+                });
+            }
+        }
+
+        if input.peek(Token![>]) {
+            let _: Token![>] = input.parse()?;
+            if input.peek(Token![=]) {
+                let _: Token![=] = input.parse()?;
+                let value = input.parse()?;
+                return Ok(FieldAssertion::Comparison {
+                    field_name,
+                    op: ComparisonOp::GreaterEqual,
+                    value,
+                });
+            } else {
+                let value = input.parse()?;
+                return Ok(FieldAssertion::Comparison {
+                    field_name,
+                    op: ComparisonOp::Greater,
+                    value,
+                });
+            }
+        }
 
         // Check for =~ regex operator
         #[cfg(feature = "regex")]

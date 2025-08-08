@@ -35,6 +35,19 @@ enum FieldAssertion {
         field_name: syn::Ident,
         pattern: String,
     },
+    Comparison {
+        field_name: syn::Ident,
+        op: ComparisonOp,
+        value: Expr,
+    },
+}
+
+#[derive(Clone, Copy)]
+enum ComparisonOp {
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
 }
 
 /// Assert that a struct matches the expected pattern.
