@@ -21,10 +21,15 @@ exclude = [
 [lib]
 proc-macro = true
 
+[features]
+default = ["regex"]
+regex = ["dep:regex"]
+
 [dependencies]
 syn = { version = "2.0", features = ["full", "extra-traits"] }
 quote = "1.0"
 proc-macro2 = "1.0"
+regex = { version = "1.10", optional = true }
 
 [package.metadata.docs.rs]
 all-features = true

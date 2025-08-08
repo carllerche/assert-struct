@@ -10,6 +10,7 @@ A Rust procedural macro for ergonomic structural assertions in tests. Write clea
 - 🎨 **String literals** - Use `"text"` directly without `.to_string()`
 - 📦 **Collection support** - Compare `Vec` with slice literals `[1, 2, 3]`
 - 🔢 **Tuple support** - Destructure and compare tuples element by element
+- 🔤 **Regex matching** - Use `regex!("pattern")` for pattern matching on string fields
 
 ## Installation
 
@@ -149,6 +150,30 @@ assert_struct!(container, Container {
     id: 1,
 });
 ```
+
+### Regex Patterns
+
+Use `regex!("pattern")` to match string fields against regular expressions:
+
+```rust
+#[derive(Debug)]
+struct User {
+    username: String,
+    email: String,
+}
+
+let user = User {
+    username: "user_123".to_string(),
+    email: "alice@example.com".to_string(),
+};
+
+assert_struct!(user, User {
+    username: regex!(r"^user_\d+$"),  // Must start with "user_" followed by digits
+    email: regex!(r"^[^@]+@[^@]+\.[^@]+$"),  // Basic email pattern
+});
+```
+
+Note: Regex support is enabled by default but can be disabled by turning off default features.
 
 ## How It Works
 

@@ -1,5 +1,5 @@
-use syn::{parse::Parse, parse::ParseStream, Result, Token, punctuated::Punctuated};
 use crate::{AssertStruct, Expected, FieldAssertion};
+use syn::{Result, Token, parse::Parse, parse::ParseStream, punctuated::Punctuated};
 
 pub fn parse(input: proc_macro::TokenStream) -> syn::Result<AssertStruct> {
     syn::parse(input)
@@ -58,6 +58,26 @@ impl Parse for FieldAssertion {
     fn parse(input: ParseStream) -> Result<Self> {
         let field_name: syn::Ident = input.parse()?;
         let _: Token![:] = input.parse()?;
+
+        // Check for regex! macro syntax
+        #[cfg(feature = "regex")]
+        if input.peek(syn::Ident) {
+            let fork = input.fork();
+            if let Ok(ident) = fork.parse::<syn::Ident>() {
+                if ident == "regex" && fork.peek(Token![!]) {
+                    // This is a regex pattern
+                    let _ident: syn::Ident = input.parse()?;
+                    let _: Token![!] = input.parse()?;
+                    let content;
+                    syn::parenthesized!(content in input);
+                    let lit: syn::LitStr = content.parse()?;
+                    return Ok(FieldAssertion::Regex {
+                        field_name,
+                        pattern: lit.value(),
+                    });
+                }
+            }
+        }
 
         // Check if this is a tuple by looking for parentheses
         if input.peek(syn::token::Paren) {

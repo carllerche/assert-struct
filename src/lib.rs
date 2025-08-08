@@ -1,8 +1,8 @@
 use proc_macro::TokenStream;
 use syn::{Expr, Token, punctuated::Punctuated};
 
-mod parse;
 mod expand;
+mod parse;
 
 // Root-level structs that track input details
 struct AssertStruct {
@@ -13,7 +13,7 @@ struct AssertStruct {
 
 struct Expected {
     fields: Punctuated<FieldAssertion, Token![,]>,
-    rest: bool,  // true if ".." was present
+    rest: bool, // true if ".." was present
 }
 
 enum FieldAssertion {
@@ -29,6 +29,11 @@ enum FieldAssertion {
     Tuple {
         field_name: syn::Ident,
         elements: Vec<Expr>,
+    },
+    #[cfg(feature = "regex")]
+    Regex {
+        field_name: syn::Ident,
+        pattern: String,
     },
 }
 

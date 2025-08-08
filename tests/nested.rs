@@ -26,15 +26,18 @@ fn test_nested_struct_exhaustive() {
         },
     };
 
-    assert_struct!(person, Person {
-        name: "Alice",
-        age: 30,
-        address: Address {
-            street: "123 Main St",
-            city: "Springfield",
-            zip: 12345,
-        },
-    });
+    assert_struct!(
+        person,
+        Person {
+            name: "Alice",
+            age: 30,
+            address: Address {
+                street: "123 Main St",
+                city: "Springfield",
+                zip: 12345,
+            },
+        }
+    );
 }
 
 #[test]
@@ -50,14 +53,17 @@ fn test_nested_struct_partial() {
     };
 
     // Check only some fields of the nested struct
-    assert_struct!(person, Person {
-        name: "Bob",
-        address: Address {
-            city: "Shelbyville",
+    assert_struct!(
+        person,
+        Person {
+            name: "Bob",
+            address: Address {
+                city: "Shelbyville",
+                ..
+            },
             ..
-        },
-        ..
-    });
+        }
+    );
 }
 
 #[test]
@@ -73,13 +79,16 @@ fn test_nested_field_mismatch() {
         },
     };
 
-    assert_struct!(person, Person {
-        name: "Charlie",
-        age: 35,
-        address: Address {
-            street: "789 Elm St",
-            city: "Wrong City",
-            zip: 99999,
-        },
-    });
+    assert_struct!(
+        person,
+        Person {
+            name: "Charlie",
+            age: 35,
+            address: Address {
+                street: "789 Elm St",
+                city: "Wrong City",
+                zip: 99999,
+            },
+        }
+    );
 }
