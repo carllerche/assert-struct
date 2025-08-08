@@ -109,11 +109,13 @@
 //! - **String Literals** - Compare `String` fields directly with `"text"` literals
 //! - **Collections** - Assert on `Vec` fields using slice syntax `[1, 2, 3]`
 //! - **Tuples** - Destructure and compare tuple fields element by element
+//! - **Enum Support** - Match on `Option`, `Result`, and custom enum variants
 //!
 //! ## Advanced Matchers
 //!
 //! - **Comparison Operators** - Use `<`, `<=`, `>`, `>=` for numeric field assertions
 //! - **Regex Patterns** - Match string fields with regular expressions using `=~ r"pattern"`
+//! - **Advanced Enum Patterns** - Use comparison operators and regex inside `Some()` and other variants
 //!
 //! # Usage
 //!
@@ -187,6 +189,55 @@
 //!         ..
 //!     },
 //!     ..
+//! });
+//! ```
+//!
+//! ## Option and Result Types
+//!
+//! Native support for Rust's standard `Option` and `Result` types:
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct UserProfile { name: String, age: Option<u32>, verified: Result<bool, String> }
+//! # let profile = UserProfile {
+//! #     name: "Alice".to_string(),
+//! #     age: Some(30),
+//! #     verified: Ok(true),
+//! # };
+//! assert_struct!(profile, UserProfile {
+//!     name: "Alice",
+//!     age: Some(30),
+//!     verified: Ok(true),
+//! });
+//!
+//! // Advanced patterns with Option
+//! assert_struct!(profile, UserProfile {
+//!     name: "Alice",
+//!     age: Some(>= 18),  // Adult check inside Some
+//!     verified: Ok(true),
+//! });
+//! ```
+//!
+//! ## Custom Enums
+//!
+//! Full support for custom enum types with all variant types:
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug, PartialEq)]
+//! # enum Status { Active, Pending { since: String } }
+//! # #[derive(Debug)]
+//! # struct Account { id: u32, status: Status }
+//! # let account = Account {
+//! #     id: 1,
+//! #     status: Status::Pending { since: "2024-01-01".to_string() },
+//! # };
+//! assert_struct!(account, Account {
+//!     id: 1,
+//!     status: Status::Pending {
+//!         since: "2024-01-01",
+//!     },
 //! });
 //! ```
 //!
@@ -380,14 +431,24 @@ enum FieldAssertion {
         field_name: syn::Ident,
         expected_value: Expr,
     },
-    Nested {
+    // Handles both standalone structs and enum struct variants
+    // e.g., User { ... } or Status::Active { ... }
+    StructPattern {
         field_name: syn::Ident,
-        type_name: syn::Path,
+        path: syn::Path,
         nested: Expected,
     },
-    Tuple {
+    // Handles both standalone tuples and enum tuple variants
+    // e.g., (1, 2) or Some(value)
+    TuplePattern {
         field_name: syn::Ident,
-        elements: Vec<Expr>,
+        path: Option<syn::Path>, // None for plain tuples, Some for enum variants
+        elements: Vec<PatternElement>,
+    },
+    // Unit enum variants like None or Status::Inactive
+    UnitPattern {
+        field_name: syn::Ident,
+        path: syn::Path,
     },
     #[cfg(feature = "regex")]
     Regex {
@@ -399,6 +460,15 @@ enum FieldAssertion {
         op: ComparisonOp,
         value: Expr,
     },
+}
+
+// Elements that can appear inside tuple patterns
+enum PatternElement {
+    Simple(Expr),                   // Some(42)
+    Comparison(ComparisonOp, Expr), // Some(> 30)
+    #[cfg(feature = "regex")]
+    Regex(String), // Some(=~ r"pattern")
+    Struct(syn::Path, Expected),    // Some(Location { ... })
 }
 
 #[derive(Clone, Copy)]
@@ -432,6 +502,9 @@ enum ComparisonOp {
 /// | Exact value | Direct equality comparison | `name: "Alice"` |
 /// | Comparison | Numeric comparisons | `age: >= 18` |
 /// | Regex | Pattern matching (requires `regex` feature) | `email: =~ r"@.*\.com$"` |
+/// | Option | Match `Some` and `None` variants | `age: Some(30)`, `bio: None` |
+/// | Result | Match `Ok` and `Err` variants | `result: Ok(200)`, `error: Err("failed")` |
+/// | Custom enum | Match custom enum variants | `status: Status::Active` |
 /// | Nested struct | Recursive structural matching | `address: Address { city: "Boston", .. }` |
 /// | Tuple | Element-wise comparison | `point: (10, 20)` |
 /// | Vec/slice | Collection comparison | `items: [1, 2, 3]` |
@@ -497,6 +570,28 @@ enum ComparisonOp {
 ///     email: =~ r"^[^@]+@[^@]+\.[^@]+$",
 /// });
 /// # }
+/// ```
+///
+/// ## Enum Support
+///
+/// ```
+/// # use assert_struct::assert_struct;
+/// # #[derive(Debug)]
+/// # struct Config {
+/// #     timeout: Option<u32>,
+/// #     retry_count: Option<u32>,
+/// #     result: Result<String, String>,
+/// # }
+/// # let config = Config {
+/// #     timeout: Some(5000),
+/// #     retry_count: None,
+/// #     result: Ok("success".to_string()),
+/// # };
+/// assert_struct!(config, Config {
+///     timeout: Some(> 1000),  // Comparison inside Some
+///     retry_count: None,
+///     result: Ok("success"),
+/// });
 /// ```
 ///
 /// # Behavior

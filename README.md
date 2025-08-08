@@ -70,11 +70,13 @@ assert_struct!(response, Response {
 - **String literals** - Compare `String` fields directly with `"text"` literals
 - **Collections** - Assert on `Vec` fields using slice syntax `[1, 2, 3]`
 - **Tuples** - Destructure and compare tuple fields element by element
+- **Enum support** - Match on `Option`, `Result`, and custom enum variants
 
 ### Advanced Matchers
 
 - **Comparison operators** - Use `<`, `<=`, `>`, `>=` for numeric field assertions
 - **Regex patterns** - Match string fields with regular expressions using `=~ r"pattern"`
+- **Advanced enum patterns** - Use comparison operators and regex inside `Some()` and other variants
 
 ## Installation
 
@@ -239,6 +241,89 @@ assert_struct!(user, User {
 
 Note: Regex support is enabled by default but can be disabled by turning off
 default features.
+
+### Option and Result Types
+
+Native support for Rust's standard `Option` and `Result` types:
+
+```rust
+#[derive(Debug)]
+struct UserProfile {
+    name: String,
+    age: Option<u32>,
+    email_verified: Result<bool, String>,
+}
+
+let profile = UserProfile {
+    name: "Alice".to_string(),
+    age: Some(30),
+    email_verified: Ok(true),
+};
+
+assert_struct!(profile, UserProfile {
+    name: "Alice",
+    age: Some(30),
+    email_verified: Ok(true),
+});
+
+// Advanced patterns with Option
+assert_struct!(profile, UserProfile {
+    name: "Alice",
+    age: Some(>= 18),  // Adult check inside Some
+    email_verified: Ok(true),
+});
+```
+
+### Custom Enums
+
+Full support for custom enum types with all variant types:
+
+```rust
+#[derive(Debug, PartialEq)]
+enum Status {
+    Active,
+    Inactive,
+    Pending { since: String },
+    Error { code: i32, message: String },
+}
+
+#[derive(Debug)]
+struct Account {
+    id: u32,
+    status: Status,
+}
+
+let account = Account {
+    id: 1,
+    status: Status::Pending {
+        since: "2024-01-01".to_string(),
+    },
+};
+
+assert_struct!(account, Account {
+    id: 1,
+    status: Status::Pending {
+        since: "2024-01-01",
+    },
+});
+
+// Partial matching on enum fields
+let error_account = Account {
+    id: 2,
+    status: Status::Error {
+        code: 500,
+        message: "Internal error".to_string(),
+    },
+};
+
+assert_struct!(error_account, Account {
+    id: 2,
+    status: Status::Error {
+        code: 500,
+        ..  // Ignore the message field
+    },
+});
+```
 
 ### Comparison Operators
 
