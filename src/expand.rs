@@ -25,8 +25,9 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
     };
     
     // Generate the destructuring pattern with references to avoid moves
+    // In Rust 2024 edition, we use & on the value instead of ref in the pattern
     let destructure = quote! {
-        let #type_name { #(ref #field_names),* #rest_pattern } = #value;
+        let #type_name { #(#field_names),* #rest_pattern } = &#value;
     };
     
     // Generate assertions for each field
@@ -47,6 +48,7 @@ fn generate_assertions(expected: &Expected) -> TokenStream {
         match field {
             FieldAssertion::Simple { field_name, expected_value, .. } => {
                 // Simple field: generate assert_eq! with reference comparison
+                // field_name is already a reference from the destructuring
                 assertions.push(quote! {
                     assert_eq!(#field_name, &#expected_value);
                 });
@@ -76,8 +78,9 @@ fn generate_tuple_assertions(field_name: &syn::Ident, elements: &[Expr]) -> Toke
         .collect();
     
     // Destructure the tuple
+    // In Rust 2024 edition, we use & on the value instead of ref in the pattern
     let destructure = quote! {
-        let (#(ref #element_names),*) = #field_name;
+        let (#(#element_names),*) = &#field_name;
     };
     
     // Generate assertions for each element
