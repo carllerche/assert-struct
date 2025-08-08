@@ -1,5 +1,9 @@
 # assert-struct
 
+[![CI](https://github.com/carllerche/assert-struct/workflows/CI/badge.svg)](https://github.com/carllerche/assert-struct/actions)
+[![Crates.io](https://img.shields.io/crates/v/assert-struct.svg)](https://crates.io/crates/assert-struct)
+[![Documentation](https://docs.rs/assert-struct/badge.svg)](https://docs.rs/assert-struct)
+
 A Rust procedural macro for ergonomic structural assertions in tests. Write clean, readable assertions for complex data structures without verbose field-by-field comparisons.
 
 ## Features
