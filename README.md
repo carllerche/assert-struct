@@ -4,18 +4,77 @@
 [![Crates.io](https://img.shields.io/crates/v/assert-struct.svg)](https://crates.io/crates/assert-struct)
 [![Documentation](https://docs.rs/assert-struct/badge.svg)](https://docs.rs/assert-struct)
 
-A Rust procedural macro for ergonomic structural assertions in tests. Write clean, readable assertions for complex data structures without verbose field-by-field comparisons.
+Ergonomic structural assertions for Rust tests. `assert-struct` is a procedural
+macro that enables clean, readable assertions for complex data structures
+without verbose field-by-field comparisons. It's the testing tool you need when
+`assert_eq!` isn't enough and manually comparing fields is too cumbersome.
+
+## Quick Example
+
+```rust
+use assert_struct::assert_struct;
+
+#[derive(Debug)]
+struct User {
+    name: String,
+    age: u32,
+    email: String,
+    role: String,
+}
+
+let user = User {
+    name: "Alice".to_string(),
+    age: 30,
+    email: "alice@example.com".to_string(),
+    role: "admin".to_string(),
+};
+
+// Only check the fields you care about
+assert_struct!(user, User {
+    name: "Alice",
+    age: 30,
+    ..  // Ignore email and role
+});
+```
+
+## Why assert-struct?
+
+Testing complex data structures in Rust often involves tedious boilerplate:
+
+```rust
+// Without assert-struct: verbose and hard to read
+assert_eq!(response.user.profile.age, 25);
+assert!(response.user.profile.verified);
+assert_eq!(response.status.code, 200);
+
+// With assert-struct: clean and intuitive
+assert_struct!(response, Response {
+    user: User {
+        profile: Profile {
+            age: 25,
+            verified: true,
+            ..
+        },
+        ..
+    },
+    status: Status { code: 200 },
+});
+```
 
 ## Features
 
-- 🎯 **Partial matching** - Check only the fields you care about with `..`
-- 🔍 **Deep nesting** - Assert on nested structs without manual field access chains
-- 📝 **Clean syntax** - Rust-like syntax that feels natural
-- 🎨 **String literals** - Use `"text"` directly without `.to_string()`
-- 📦 **Collection support** - Compare `Vec` with slice literals `[1, 2, 3]`
-- 🔢 **Tuple support** - Destructure and compare tuples element by element
-- 🔤 **Regex matching** - Use `=~ r"pattern"` for pattern matching on string fields
-- 📊 **Comparison operators** - Use `<`, `<=`, `>`, `>=` for numeric comparisons
+### Core Capabilities
+
+- **Partial matching** - Use `..` to check only the fields you care about
+- **Deep nesting** - Assert on nested structs without manual field access chains
+- **String literals** - Compare `String` fields directly with `"text"` literals
+- **Collections** - Assert on `Vec` fields using slice syntax `[1, 2, 3]`
+- **Tuples** - Destructure and compare tuple fields element by element
+
+### Advanced Matchers
+
+- **Comparison operators** - Use `<`, `<=`, `>`, `>=` for numeric field assertions
+- **Regex patterns** - Match string fields with regular expressions using `=~ r"pattern"`
 
 ## Installation
 
@@ -178,89 +237,113 @@ assert_struct!(user, User {
 });
 ```
 
-Note: Regex support is enabled by default but can be disabled by turning off default features.
+Note: Regex support is enabled by default but can be disabled by turning off
+default features.
 
 ### Comparison Operators
 
-Use comparison operators for numeric field assertions:
+Perfect for range checks and threshold validations:
 
 ```rust
 #[derive(Debug)]
-struct Person {
-    name: String,
-    age: u32,
-    score: i32,
+struct Metrics {
+    cpu_usage: f64,
+    memory_mb: u32,
+    response_time_ms: u32,
 }
 
-let person = Person {
-    name: "Alice".to_string(),
-    age: 25,
-    score: 85,
+let metrics = Metrics {
+    cpu_usage: 75.5,
+    memory_mb: 1024,
+    response_time_ms: 150,
 };
 
-assert_struct!(person, Person {
-    name: "Alice",
-    age: >= 18,        // At least 18
-    score: > 80,       // Greater than 80
-});
-
-// All comparison operators are supported
-assert_struct!(person, Person {
-    age: < 30,         // Less than 30
-    score: <= 100,     // At most 100
-    ..
+assert_struct!(metrics, Metrics {
+    cpu_usage: < 80.0,        // Less than 80%
+    memory_mb: <= 2048,        // At most 2GB
+    response_time_ms: < 200,   // Under 200ms
 });
 ```
 
-## How It Works
+## Real-World Examples
 
-The macro expands to efficient code using destructuring and `assert_eq!`:
+### Testing API Responses
 
 ```rust
-// This macro invocation:
-assert_struct!(user, User {
-    name: "Alice",
-    age: 30,
-});
-
-// Expands to:
-{
-    let User { ref name, ref age } = user;
-    assert_eq!(name, &"Alice");
-    assert_eq!(age, &30);
+#[derive(Debug)]
+struct ApiResponse {
+    status: String,
+    data: UserData,
+    timestamp: i64,
 }
+
+// After deserializing JSON response
+assert_struct!(response, ApiResponse {
+    status: "success",
+    data: UserData {
+        username: "testuser",
+        permissions: ["read", "write"],
+        ..  // Don't check the generated ID
+    },
+    ..  // Don't check timestamp
+});
 ```
 
-For nested structures, it generates recursive `assert_struct!` calls, maintaining clean error messages and efficient comparisons.
+### Testing Database Records
 
-## Error Messages
-
-When assertions fail, you get clear error messages showing exactly which field didn't match:
-
+```rust
+// After fetching from database
+assert_struct!(product, Product {
+    name: "Laptop",
+    price: > 500.0,      // Price above minimum
+    stock: > 0,          // In stock
+    category: "Electronics",
+    ..  // Ignore auto-generated ID
+});
 ```
-thread 'test_name' panicked at 'assertion failed: (left == right)
-  left: "Bob",
- right: "Alice"'
+
+### Testing State Changes
+
+```rust
+// After game action
+assert_struct!(state, GameState {
+    score: >= 1000,      // Minimum score achieved
+    level: 3,            // Reached level 3
+    player: Player {
+        health: > 0,     // Still alive
+        inventory: ["sword", "shield"],  // Has required items
+        ..  // Position doesn't matter
+    },
+});
 ```
+
+## Crate Features
+
+| Feature | Default | Description |
+|---------|---------|-------------|
+| `regex` | **Yes** | Enables regex pattern matching with the `=~ r"pattern"` syntax |
+
+To disable regex support (and avoid the regex dependency):
+
+```toml
+[dependencies]
+assert-struct = { version = "0.1", default-features = false }
+```
+
+## Documentation
+
+See the [full documentation](https://docs.rs/assert-struct) for:
+- Complete syntax reference
+- All supported matchers
+- Advanced usage patterns
+- Compilation error examples
 
 ## Development
 
-### Running Tests
-
 ```bash
-cargo test
-```
-
-### Building
-
-```bash
-cargo build
-```
-
-### Documentation
-
-```bash
-cargo doc --open
+cargo test           # Run all tests
+cargo test --doc     # Test documentation examples
+cargo doc --open     # View local documentation
 ```
 
 ## Contributing
