@@ -59,23 +59,21 @@ impl Parse for FieldAssertion {
         let field_name: syn::Ident = input.parse()?;
         let _: Token![:] = input.parse()?;
 
-        // Check for regex! macro syntax
+        // Check for =~ regex operator
         #[cfg(feature = "regex")]
-        if input.peek(syn::Ident) {
+        if input.peek(Token![=]) {
             let fork = input.fork();
-            if let Ok(ident) = fork.parse::<syn::Ident>() {
-                if ident == "regex" && fork.peek(Token![!]) {
-                    // This is a regex pattern
-                    let _ident: syn::Ident = input.parse()?;
-                    let _: Token![!] = input.parse()?;
-                    let content;
-                    syn::parenthesized!(content in input);
-                    let lit: syn::LitStr = content.parse()?;
-                    return Ok(FieldAssertion::Regex {
-                        field_name,
-                        pattern: lit.value(),
-                    });
-                }
+            if fork.parse::<Token![=]>().is_ok() && fork.peek(Token![~]) {
+                // This is the =~ regex operator
+                let _: Token![=] = input.parse()?;
+                let _: Token![~] = input.parse()?;
+
+                // Expect a string literal (raw or regular)
+                let lit: syn::LitStr = input.parse()?;
+                return Ok(FieldAssertion::Regex {
+                    field_name,
+                    pattern: lit.value(),
+                });
             }
         }
 

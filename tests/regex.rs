@@ -20,9 +20,9 @@ fn test_regex_match() {
     assert_struct!(
         msg,
         Message {
-            id: regex!(r"^user-\d+$"),
-            content: regex!(r"Hello.*"),
-            email: regex!(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"),
+            id: =~ r"^user-\d+$",
+            content: =~ r"Hello.*",
+            email: =~ r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
         }
     );
 }
@@ -38,7 +38,7 @@ fn test_regex_partial_match() {
     assert_struct!(
         msg,
         Message {
-            content: regex!(r"\d+"), // Contains digits
+            content: =~ r"\d+", // Contains digits
             ..
         }
     );
@@ -58,7 +58,7 @@ fn test_regex_mismatch() {
         Message {
             id: "invalid",
             content: "Test",
-            email: regex!(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"),
+            email: =~ r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
         }
     );
 }
@@ -74,9 +74,9 @@ fn test_mixed_matchers() {
     assert_struct!(
         msg,
         Message {
-            id: regex!(r"^prefix-\d+$"),
-            content: "Mixed test",            // Exact match
-            email: regex!(r"@example\.com$"), // Ends with @example.com
+            id: =~ r"^prefix-\d+$",
+            content: "Mixed test",       // Exact match
+            email: =~ r"@example\.com$", // Ends with @example.com
         }
     );
 }
