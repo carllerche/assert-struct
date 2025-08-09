@@ -1,0 +1,5 @@
+error[E0026]: struct `User` does not have a field named `email`
+  --> tests/compile_fail/field_does_not_exist.rs:19:9
+   |
+19 |         email: "alice@example.com",
+   |         ^^^^^ struct `User` does not have this field

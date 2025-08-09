@@ -138,6 +138,9 @@ RUST_BACKTRACE=1 cargo test  # Debug macro panics
 2. **Fork and peek pattern**: Using `fork()` to look ahead without consuming tokens is essential for complex parsing
 3. **Enum variant detection**: Checking if a path has multiple segments (e.g., `Status::Active` vs `Location`) helps distinguish enum variants from structs
 4. **Special handling for Option/Result**: Custom logic for `Some`, `None`, `Ok`, `Err` provides better error messages
+5. **NO EXPRESSIONS IN PATTERNS**: By design, we do NOT accept arbitrary expressions in pattern positions (e.g., `Some(vec![1, 2, 3])` is not allowed). This is a deliberate architectural choice that eliminates parsing ambiguities and enables our complex pattern syntax
+6. **Expressions after operators**: While patterns themselves cannot be expressions, we CAN accept arbitrary expressions AFTER comparison operators (`>`, `>=`, `<`, `<=`, and in the future `!=`, `==`). For example: `age: > compute_min_age()` would be valid
+7. **Special operator handling**: `=~` is treated specially and currently only accepts regex literals, not arbitrary expressions (though this could be improved later)
 
 ### Development Best Practices
 1. **Incremental feature development**: Build features progressively (Option → Result → custom enums → tuples)

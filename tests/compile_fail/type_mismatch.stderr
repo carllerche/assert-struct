@@ -1,0 +1,14 @@
+error[E0277]: can't compare `u32` with `&str`
+  --> tests/compile_fail/type_mismatch.rs:16:5
+   |
+16 | /     assert_struct!(user, User {
+17 | |         name: "Alice",
+18 | |         age: "thirty",
+19 | |     });
+   | |______^ no implementation for `u32 == &str`
+   |
+   = help: the trait `PartialEq<&str>` is not implemented for `u32`
+           but trait `PartialEq<u32>` is implemented for it
+   = help: for that trait implementation, expected `u32`, found `&str`
+   = note: required for `&u32` to implement `PartialEq<&&str>`
+   = note: this error originates in the macro `assert_eq` which comes from the expansion of the macro `assert_struct` (in Nightly builds, run with -Z macro-backtrace for more info)

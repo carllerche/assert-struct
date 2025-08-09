@@ -59,7 +59,7 @@ impl Parse for FieldAssertion {
         let field_name: syn::Ident = input.parse()?;
         let _: Token![:] = input.parse()?;
 
-        // Check for comparison operators at the top level: <, <=, >, >=
+        // Check for comparison operators at the top level: <, <=, >, >=, ==, !=
         if input.peek(Token![<]) {
             let _: Token![<] = input.parse()?;
             if input.peek(Token![=]) {
@@ -100,21 +100,49 @@ impl Parse for FieldAssertion {
             }
         }
 
-        // Check for =~ regex operator at the top level
-        #[cfg(feature = "regex")]
+        // Check for != operator
+        if input.peek(Token![!]) {
+            let fork = input.fork();
+            if fork.parse::<Token![!]>().is_ok() && fork.peek(Token![=]) {
+                let _: Token![!] = input.parse()?;
+                let _: Token![=] = input.parse()?;
+                let value = input.parse()?;
+                return Ok(FieldAssertion::Comparison {
+                    field_name,
+                    op: ComparisonOp::NotEqual,
+                    value,
+                });
+            }
+        }
+
+        // Check for == or =~ operators
         if input.peek(Token![=]) {
             let fork = input.fork();
-            if fork.parse::<Token![=]>().is_ok() && fork.peek(Token![~]) {
-                // This is the =~ regex operator
-                let _: Token![=] = input.parse()?;
-                let _: Token![~] = input.parse()?;
+            if fork.parse::<Token![=]>().is_ok() {
+                if fork.peek(Token![=]) {
+                    // This is the == operator
+                    let _: Token![=] = input.parse()?;
+                    let _: Token![=] = input.parse()?;
+                    let value = input.parse()?;
+                    return Ok(FieldAssertion::Comparison {
+                        field_name,
+                        op: ComparisonOp::Equal,
+                        value,
+                    });
+                }
+                #[cfg(feature = "regex")]
+                if fork.peek(Token![~]) {
+                    // This is the =~ regex operator
+                    let _: Token![=] = input.parse()?;
+                    let _: Token![~] = input.parse()?;
 
-                // Expect a string literal (raw or regular)
-                let lit: syn::LitStr = input.parse()?;
-                return Ok(FieldAssertion::Regex {
-                    field_name,
-                    pattern: lit.value(),
-                });
+                    // Expect a string literal (raw or regular)
+                    let lit: syn::LitStr = input.parse()?;
+                    return Ok(FieldAssertion::Regex {
+                        field_name,
+                        pattern: lit.value(),
+                    });
+                }
             }
         }
 
@@ -219,10 +247,18 @@ fn check_for_special_syntax(content: ParseStream) -> bool {
         return true;
     }
 
-    // Check for regex pattern
+    // Check for != operator
+    if content.peek(Token![!]) {
+        let fork = content.fork();
+        if fork.parse::<Token![!]>().is_ok() && fork.peek(Token![=]) {
+            return true;
+        }
+    }
+
+    // Check for == or =~ operators
     if content.peek(Token![=]) {
         let fork = content.fork();
-        if fork.parse::<Token![=]>().is_ok() && fork.peek(Token![~]) {
+        if fork.parse::<Token![=]>().is_ok() && (fork.peek(Token![=]) || fork.peek(Token![~])) {
             return true;
         }
     }
@@ -282,26 +318,52 @@ fn parse_tuple_elements(content: ParseStream) -> Result<Vec<PatternElement>> {
             let value = content.parse()?;
             elements.push(PatternElement::Comparison(op, value));
         }
-        // Check for regex pattern
-        else if content.peek(Token![=]) {
-            // Might be a regex pattern
+        // Check for != operator
+        else if content.peek(Token![!]) {
             let fork = content.fork();
-            if fork.parse::<Token![=]>().is_ok() && fork.peek(Token![~]) {
-                #[cfg(feature = "regex")]
-                {
+            if fork.parse::<Token![!]>().is_ok() && fork.peek(Token![=]) {
+                let _: Token![!] = content.parse()?;
+                let _: Token![=] = content.parse()?;
+                let value = content.parse()?;
+                elements.push(PatternElement::Comparison(ComparisonOp::NotEqual, value));
+            } else {
+                // Not a != operator, parse as regular expression
+                let expr = content.parse()?;
+                elements.push(PatternElement::Simple(expr));
+            }
+        }
+        // Check for == or =~ operators
+        else if content.peek(Token![=]) {
+            let fork = content.fork();
+            if fork.parse::<Token![=]>().is_ok() {
+                if fork.peek(Token![=]) {
+                    // == operator
                     let _: Token![=] = content.parse()?;
-                    let _: Token![~] = content.parse()?;
-                    let lit: syn::LitStr = content.parse()?;
-                    elements.push(PatternElement::Regex(lit.value()));
-                }
-                #[cfg(not(feature = "regex"))]
-                {
-                    // If regex feature is disabled, parse as regular expression
+                    let _: Token![=] = content.parse()?;
+                    let value = content.parse()?;
+                    elements.push(PatternElement::Comparison(ComparisonOp::Equal, value));
+                } else if fork.peek(Token![~]) {
+                    // =~ regex operator
+                    #[cfg(feature = "regex")]
+                    {
+                        let _: Token![=] = content.parse()?;
+                        let _: Token![~] = content.parse()?;
+                        let lit: syn::LitStr = content.parse()?;
+                        elements.push(PatternElement::Regex(lit.value()));
+                    }
+                    #[cfg(not(feature = "regex"))]
+                    {
+                        // If regex feature is disabled, parse as regular expression
+                        let expr = content.parse()?;
+                        elements.push(PatternElement::Simple(expr));
+                    }
+                } else {
+                    // Just a single =, parse as regular expression
                     let expr = content.parse()?;
                     elements.push(PatternElement::Simple(expr));
                 }
             } else {
-                // Not a regex, parse as regular expression
+                // Not an operator, parse as regular expression
                 let expr = content.parse()?;
                 elements.push(PatternElement::Simple(expr));
             }

@@ -31,6 +31,9 @@ quote = "1.0"
 proc-macro2 = "1.0"
 regex = { version = "1.10", optional = true }
 
+[dev-dependencies]
+trybuild = "1.0"
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
