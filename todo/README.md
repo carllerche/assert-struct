@@ -1,6 +1,15 @@
 # TODO
 
-## Next Features
+## Active Development
+
+### [Like Trait - Generic Pattern Matching](./like.md)
+A major enhancement to support custom pattern matching through a trait-based system. This will enable:
+- Custom pattern matching for user-defined types
+- Regex patterns from variables/expressions  
+- Clean, extensible API following Rust idioms
+- See [like.md](./like.md) for detailed plan
+
+## Completed Features
 
 ### 1. Equality operators (`==`, `!=`) ✅
 - [x] Add `==` operator for explicit equality checks
@@ -49,21 +58,41 @@
 - [x] Test with various element types and patterns
 - [x] Update documentation with slice examples
 
-### 5. Enhanced slice patterns (Future)
-- [ ] Support partial slice matching with `..`
+### 5. Enhanced slice patterns ✅
+- [x] Support partial slice matching with `..`
   - Example: `[1, 2, ..]` to match first N elements
   - Example: `[.., 5]` to match last element
   - Example: `[1, .., 5]` to match first and last
-- [ ] Support slice patterns inside Option/Result
+- [x] Support slice patterns inside Option/Result
   - Example: `Some([1, 2, 3])`
-- [ ] Support empty slice syntax `[]` with type inference
+- [x] Support empty slice syntax `[]`
 
-### 6. Improved regex operator
-- [ ] Consider allowing variables containing regex patterns
-- [ ] Consider function calls returning regex patterns
-- [ ] Need to carefully design compile-time vs runtime behavior
-- [ ] Maintain backward compatibility with current `=~ r"pattern"` syntax
-- [ ] Document any limitations or trade-offs
+## Future Ideas
+
+### Improved Error Messages
+- Include field paths in error messages (e.g., "user.profile.age: Value not in range")
+- Show expected vs actual values more clearly
+- Better diagnostics for complex nested structures
+
+### HashMap/BTreeMap Support
+- Pattern matching for map types
+- Key-value assertions
+- Example: `map: { "key1": > 10, "key2": == 20 }`
+
+### Length Assertions
+- Assert on collection lengths
+- Example: `items: len(3)` or `items: len(> 5)`
+- Could be part of slice pattern syntax
+
+### Custom Matcher Functions (Post-Like trait)
+- Allow closures as matchers
+- Example: `score: |s| s > 90 && s < 100`
+- Would build on Like trait infrastructure
+
+### Performance Optimizations
+- Cache compiled regex patterns
+- Optimize code generation for common patterns
+- Benchmark and profile macro expansion
 
 ## Architecture Notes
 
