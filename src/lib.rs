@@ -115,8 +115,9 @@
 //!
 //! - **Comparison Operators** - Use `<`, `<=`, `>`, `>=` for numeric field assertions
 //! - **Equality Operators** - Use `==` and `!=` for explicit equality/inequality checks
+//! - **Range Patterns** - Use `18..=65`, `0.0..100.0`, `0..` for range matching
 //! - **Regex Patterns** - Match string fields with regular expressions using `=~ r"pattern"`
-//! - **Advanced Enum Patterns** - Use comparison operators and regex inside `Some()` and other variants
+//! - **Advanced Enum Patterns** - Use comparison operators, ranges, and regex inside `Some()` and other variants
 //!
 //! # Usage
 //!
@@ -506,6 +507,10 @@ enum FieldAssertion {
         op: ComparisonOp,
         value: Expr,
     },
+    Range {
+        field_name: syn::Ident,
+        range: Expr,
+    },
 }
 
 // Elements that can appear inside tuple patterns
@@ -551,6 +556,7 @@ enum ComparisonOp {
 /// | Exact value | Direct equality comparison | `name: "Alice"` |
 /// | Equality | Explicit equality/inequality | `age: == 30`, `status: != "error"` |
 /// | Comparison | Numeric comparisons | `age: >= 18` |
+/// | Range | Match values in ranges | `age: 18..=65`, `score: 0.0..100.0` |
 /// | Regex | Pattern matching (requires `regex` feature) | `email: =~ r"@.*\.com$"` |
 /// | Option | Match `Some` and `None` variants | `age: Some(30)`, `bio: None` |
 /// | Result | Match `Ok` and `Err` variants | `result: Ok(200)`, `error: Err("failed")` |
@@ -610,6 +616,20 @@ enum ComparisonOp {
 /// assert_struct!(score, Score {
 ///     grade: != "F",      // Not equal
 ///     ..
+/// });
+/// ```
+///
+/// ## Range Patterns
+///
+/// ```
+/// # use assert_struct::assert_struct;
+/// # #[derive(Debug)]
+/// # struct Person { age: u32, score: f64, level: i32 }
+/// # let person = Person { age: 25, score: 85.5, level: 10 };
+/// assert_struct!(person, Person {
+///     age: 18..=65,       // Inclusive range
+///     score: 0.0..100.0,  // Exclusive range
+///     level: 0..,         // Range from (unbounded end)
 /// });
 /// ```
 ///

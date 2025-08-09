@@ -22,7 +22,22 @@
 - [x] Test with various expression types
 - [x] Update documentation with examples
 
-### 3. Improved regex operator
+### 3. Range support ✅
+- [x] Add range syntax recognition in parser
+- [x] Add `Range` variant to `FieldAssertion`
+- [x] Implement code generation using match expressions
+- [x] **Solution**: Use Rust's pattern matching with ranges
+  - Instead of `(18..=65).contains(age)`, generate `match age { 18..=65 => {}, _ => panic!() }`
+  - This leverages Rust's built-in handling of reference levels in patterns
+  - Works with all range types: `..=`, `..`, `n..`, `..n`, `..=n`
+- [x] Test with all numeric types and chars
+- [x] Update documentation
+- **Note**: Full range `..` is intentionally not supported:
+  - It's not a valid match pattern in Rust
+  - It would be semantically confusing (different meaning than struct-level `..`)
+  - No practical value (just omit the assertion or use struct-level `..`)
+
+### 4. Improved regex operator
 - [ ] Consider allowing variables containing regex patterns
 - [ ] Consider function calls returning regex patterns
 - [ ] Need to carefully design compile-time vs runtime behavior

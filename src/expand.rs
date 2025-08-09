@@ -20,6 +20,7 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
             #[cfg(feature = "regex")]
             FieldAssertion::Regex { field_name, .. } => field_name.clone(),
             FieldAssertion::Comparison { field_name, .. } => field_name.clone(),
+            FieldAssertion::Range { field_name, .. } => field_name.clone(),
         })
         .collect();
 
@@ -149,6 +150,23 @@ fn generate_assertions(expected: &Expected) -> TokenStream {
                     }
                 });
             }
+            FieldAssertion::Range {
+                field_name, range, ..
+            } => {
+                // Range: use match expression for pattern matching
+                // Note: Full range (..) will fail at compile time with a clear error
+                // about .. patterns not being allowed, which is intentional
+                assertions.push(quote! {
+                    match #field_name {
+                        #range => {},
+                        _ => panic!(
+                            "Field `{}` not in range: {:?} not matching pattern",
+                            stringify!(#field_name),
+                            #field_name
+                        ),
+                    }
+                });
+            }
         }
     }
 
@@ -184,6 +202,7 @@ fn generate_struct_pattern_assert(
                 #[cfg(feature = "regex")]
                 FieldAssertion::Regex { field_name, .. } => field_name.clone(),
                 FieldAssertion::Comparison { field_name, .. } => field_name.clone(),
+                FieldAssertion::Range { field_name, .. } => field_name.clone(),
             })
             .collect();
 
@@ -369,6 +388,7 @@ fn generate_pattern_element_assertion(
                         #[cfg(feature = "regex")]
                         FieldAssertion::Regex { field_name, .. } => field_name.clone(),
                         FieldAssertion::Comparison { field_name, .. } => field_name.clone(),
+                        FieldAssertion::Range { field_name, .. } => field_name.clone(),
                     })
                     .collect();
 
@@ -820,6 +840,14 @@ fn generate_struct_field_assignments(nested: &Expected) -> Vec<TokenStream> {
                 };
                 field_assignments.push(quote! {
                     #field_name: #op_tokens #value
+                });
+            }
+            FieldAssertion::Range {
+                field_name, range, ..
+            } => {
+                // For ranges in nested structs, pass through the range expression
+                field_assignments.push(quote! {
+                    #field_name: #range
                 });
             }
         }
