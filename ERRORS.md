@@ -139,16 +139,15 @@ assert_struct!(user, User {
 Target error:
 ```
 assert_struct! failed:
-   | User {
-   |     profile: Profile {
+   | User { ... Profile {
 
-comparison mismatch at `user.profile.age`:
-3  |         age: >= 18,
-   |              ^^^^^ actual: 17
-   |         ..
-   |     },
+comparison mismatch:
+  --> `user.profile.age`
+3  |     age: >= 18,
+   |          ^^^^^ actual: 17
+   |                failed: 17 >= 18
    |     ..
-   | }
+   | } ... }
 ```
 
 This error does *not* include the expected value because the pattern is a number
@@ -197,7 +196,7 @@ comparison mismatch at `scores[2]`:
    |         failed: 78 >= 80
 ```
 
-### Example 5: Range pattern failure
+### Example 6: Range pattern failure
 
 Code:
 ```rust
@@ -229,7 +228,7 @@ range mismatch at `person.age`:
    | }
 ```
 
-### Example 6: Option with comparison
+### Example 7: Option with comparison
 
 Code:
 ```rust
@@ -259,7 +258,7 @@ comparison mismatch at `config.timeout`:
 
 The expected value is **not** included because the pattern is a literal.
 
-### Example 7: Large slice pattern
+### Example 8: Large slice pattern
 
 Code:
 ```rust
@@ -284,6 +283,90 @@ comparison mismatch at `data[15]`:
    |              failed: > 200
    |
    = note: failed at index 15 of 20 elements
+```
+
+### Example 9: Deeply nested field mismatch
+
+Code:
+```rust
+struct Address {
+    street: String,
+    city: String,
+    postal_code: String,
+    country: String,
+}
+
+struct Contact {
+    email: String,
+    phone: String,
+    address: Address,
+    preferred: bool,
+}
+
+struct Profile {
+    bio: String,
+    contact: Contact,
+    created_at: u64,
+    verified: bool,
+    score: u32,
+}
+
+struct User {
+    id: u64,
+    username: String,
+    profile: Profile,
+    is_active: bool,
+}
+
+let user = User {
+    id: 12345,
+    username: "alice".to_string(),
+    profile: Profile {
+        bio: "Software engineer".to_string(),
+        contact: Contact {
+            email: "alice@example.com".to_string(),
+            phone: "+1-555-0100".to_string(),
+            address: Address {
+                street: "123 Main St".to_string(),
+                city: "Seattle".to_string(),
+                postal_code: "98101".to_string(),
+                country: "USA".to_string(),
+            },
+            preferred: true,
+        },
+        created_at: 1699564800,
+        verified: true,
+        score: 95,
+    },
+    is_active: true,
+};
+
+assert_struct!(user, User {
+    profile: Profile {
+        contact: Contact {
+            address: Address {
+                postal_code: "90210",
+                ..
+            },
+            ..
+        },
+        ..
+    },
+    ..
+});
+```
+
+Target error:
+```
+assert_struct! failed:
+   | User { ... Address {
+
+string pattern mismatch:
+  --> `user.profile.contact.address.postal_code`
+5  |     postal_code: "90210",
+   |                  ^^^^^^^ actual: "98101"
+   |     ..
+   | } ... }
 ```
 
 ### More examples to add:
