@@ -163,6 +163,37 @@ fn generate_pattern_assertion(
                 }
             }
         }
+        #[cfg(feature = "regex")]
+        Pattern::Like(pattern_expr) => {
+            // Use the Like trait for pattern matching
+            if is_ref {
+                quote! {
+                    {
+                        use ::assert_struct::Like;
+                        if !#value_expr.like(&#pattern_expr) {
+                            panic!(
+                                "Value does not match pattern\n  value: {:?}\n  pattern: {:?}",
+                                #value_expr,
+                                &#pattern_expr
+                            );
+                        }
+                    }
+                }
+            } else {
+                quote! {
+                    {
+                        use ::assert_struct::Like;
+                        if !(&#value_expr).like(&#pattern_expr) {
+                            panic!(
+                                "Value does not match pattern\n  value: {:?}\n  pattern: {:?}",
+                                &#value_expr,
+                                &#pattern_expr
+                            );
+                        }
+                    }
+                }
+            }
+        }
         Pattern::Rest => {
             // Rest patterns don't generate assertions themselves
             quote! {}

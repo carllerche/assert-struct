@@ -38,9 +38,12 @@ enum Pattern {
     Comparison(ComparisonOp, Expr),
     // Range: 10..20, 0..=100
     Range(Expr),
-    // Regex: =~ r"pattern"
+    // Regex: =~ r"pattern" (for backward compatibility) or =~ expr (for Like trait)
     #[cfg(feature = "regex")]
-    Regex(String),
+    Regex(String),  // Literal regex pattern (backward compat)
+    // Like pattern: =~ expr where expr implements Like trait
+    #[cfg(feature = "regex")]
+    Like(Expr),
     // Rest pattern: .. for partial matching
     Rest,
 }
