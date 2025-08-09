@@ -62,6 +62,7 @@ fn test_plain_tuple_with_regex() {
 enum Event {
     Click(i32, i32),
     Drag(i32, i32, i32, i32),
+    #[allow(dead_code)] // Only used with regex feature
     Scroll(f64, String),
     Complex(String, u32, bool, Vec<u8>),
 }
@@ -105,7 +106,7 @@ fn test_enum_tuple_with_comparisons() {
 #[cfg(feature = "regex")]
 fn test_enum_tuple_with_regex() {
     let log = EventLog {
-        event: Event::Scroll(3.14, "smooth".to_string()),
+        event: Event::Scroll(3.5, "smooth".to_string()),
         timestamp: 1234567890,
     };
 

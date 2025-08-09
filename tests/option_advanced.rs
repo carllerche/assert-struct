@@ -7,7 +7,9 @@ struct User {
     name: String,
     age: Option<u32>,
     score: Option<f64>,
+    #[allow(dead_code)] // Only used with regex feature
     email: Option<String>,
+    #[allow(dead_code)] // Only used with regex feature
     user_id: Option<String>,
 }
 
@@ -84,6 +86,7 @@ fn test_option_comparison_less_equal() {
 }
 
 #[test]
+#[cfg(feature = "regex")]
 fn test_option_regex_pattern() {
     let user = User {
         name: "Eve".to_string(),
@@ -102,6 +105,7 @@ fn test_option_regex_pattern() {
 }
 
 #[test]
+#[cfg(feature = "regex")]
 fn test_mixed_option_patterns() {
     let user = User {
         name: "Frank".to_string(),
@@ -159,6 +163,7 @@ fn test_option_comparison_none_failure() {
 }
 
 #[test]
+#[cfg(feature = "regex")]
 #[should_panic(expected = "does not match regex pattern")]
 fn test_option_regex_failure() {
     let user = User {
