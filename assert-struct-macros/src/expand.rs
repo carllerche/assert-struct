@@ -59,57 +59,15 @@ fn generate_pattern_assertion(
             }
         }
         Pattern::Struct { path, fields, rest } => {
-            // Distinguish between enum struct variants and regular structs
-            // WHY: Enums require match expressions for exhaustive checking,
-            // while structs can use let destructuring
-            let is_enum_variant = if path.segments.len() > 1 {
-                // Multi-segment paths like `Status::Active` are always enum variants
-                true
-            } else if let Some(segment) = path.segments.first() {
-                // Single segment starting with uppercase likely an enum variant
-                // This heuristic handles `Some`, `None`, `Ok`, `Err`
-                segment
-                    .ident
-                    .to_string()
-                    .chars()
-                    .next()
-                    .is_some_and(|c| c.is_uppercase())
-            } else {
-                false
-            };
-
-            if is_enum_variant {
-                // Enum struct variant requires match for exhaustive checking
-                // Example input: Status::Error { code: 500, message: "Internal" }
-                // Generates: match value { Status::Error { code, message } => { ... } _ => panic!() }
-                generate_enum_struct_assertion(value_expr, path, fields, *rest, is_ref)
-            } else {
-                // Regular struct uses let destructuring
-                // Example input: User { name: "Alice", age: 30, .. }
-                // Generates: let User { name, age, .. } = &value; assert_eq!(name, &"Alice"); ...
-                let field_names: Vec<_> = fields.iter().map(|f| &f.field_name).collect();
-
-                let rest_pattern = if *rest {
-                    quote! { , .. }
-                } else {
-                    quote! {}
-                };
-
-                let field_assertions: Vec<_> = fields
-                    .iter()
-                    .map(|f| {
-                        let field_name = &f.field_name;
-                        let field_pattern = &f.pattern;
-                        // Fields from destructuring are already references
-                        generate_pattern_assertion(&quote! { #field_name }, field_pattern, true)
-                    })
-                    .collect();
-
-                quote! {
-                    let #path { #(#field_names),* #rest_pattern } = &#value_expr;
-                    #(#field_assertions)*
-                }
-            }
+            // Use match expression for both structs and enums for unified handling
+            // WHY: This eliminates the need for heuristics to distinguish between them.
+            // The unreachable pattern warning for structs is suppressed - a small cost
+            // for the robustness gain of not having to guess type categories.
+            //
+            // Example for struct: User { name: "Alice", age: 30 }
+            // Example for enum: Status::Error { code: 500, message: "Internal" }
+            // Both generate similar match expressions with exhaustive checking
+            generate_struct_match_assertion(value_expr, path, fields, *rest, is_ref)
         }
         Pattern::Tuple { path, elements } => {
             // Handle both plain tuples and enum variants
@@ -292,8 +250,11 @@ fn generate_unit_variant_assertion(
     }
 }
 
-// Generate assertion for enum struct variants
-fn generate_enum_struct_assertion(
+/// Generate match-based assertion for both structs and enums with fields.
+/// 
+/// Using match for both eliminates the need for type detection heuristics.
+/// The `#[allow(unreachable_patterns)]` suppresses warnings for struct matches.
+fn generate_struct_match_assertion(
     value_expr: &TokenStream,
     path: &syn::Path,
     fields: &Punctuated<FieldAssertion, Token![,]>,
@@ -320,6 +281,7 @@ fn generate_enum_struct_assertion(
 
     if is_ref {
         quote! {
+            #[allow(unreachable_patterns)]
             match #value_expr {
                 #path { #(#field_names),* #rest_pattern } => {
                     #(#field_assertions)*
@@ -333,6 +295,7 @@ fn generate_enum_struct_assertion(
         }
     } else {
         quote! {
+            #[allow(unreachable_patterns)]
             match &#value_expr {
                 #path { #(#field_names),* #rest_pattern } => {
                     #(#field_assertions)*
