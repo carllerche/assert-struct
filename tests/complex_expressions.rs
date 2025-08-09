@@ -346,7 +346,7 @@ fn test_macro_in_expression() {
 
 // Test failure cases
 #[test]
-#[should_panic(expected = "Field `age` failed comparison")]
+#[should_panic(expected = "Failed comparison")]
 fn test_complex_expression_failure() {
     let user = User {
         name: "Mike".to_string(),

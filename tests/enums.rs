@@ -371,7 +371,7 @@ fn test_nested_enum_struct_variant() {
 
 // Failure tests
 #[test]
-#[should_panic(expected = "expected Ok, got Err")]
+#[should_panic(expected = "Expected Ok, got Err")]
 fn test_result_expected_ok_got_err() {
     let data = UserData {
         login_result: Err("Failed".to_string()),
@@ -396,7 +396,7 @@ fn test_result_expected_ok_got_err() {
 }
 
 #[test]
-#[should_panic(expected = "expected Status :: Active, got")]
+#[should_panic(expected = "Expected Status :: Active, got")]
 fn test_enum_variant_mismatch() {
     let account = Account {
         id: 5,

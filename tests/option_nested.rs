@@ -164,7 +164,7 @@ fn test_nested_field_mismatch() {
 }
 
 #[test]
-#[should_panic(expected = "expected Some(...), got None")]
+#[should_panic(expected = "Expected Some(...), got None")]
 fn test_expected_some_got_none_nested() {
     let profile = Profile {
         bio: Some("Developer".to_string()),
