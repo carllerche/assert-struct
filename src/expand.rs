@@ -399,6 +399,104 @@ fn generate_pattern_element_assertion(
                 }
             }
         }
+        PatternElement::Tuple(path, elements) => {
+            // Handle nested tuples or enum variants within tuples
+            if let Some(variant_path) = path {
+                // It's an enum variant like Some(42) or None
+                if elements.is_empty() {
+                    // Unit variant like None
+                    // Special handling for None
+                    if is_option_none_path(variant_path) {
+                        quote! {
+                            match #elem_name {
+                                None => {},
+                                Some(_) => panic!(
+                                    concat!("Element expected None, got Some")
+                                ),
+                            }
+                        }
+                    } else {
+                        // General unit variant
+                        quote! {
+                            match #elem_name {
+                                #variant_path => {},
+                                _ => panic!(
+                                    "Element expected {}, got {:?}",
+                                    stringify!(#variant_path),
+                                    #elem_name
+                                ),
+                            }
+                        }
+                    }
+                } else {
+                    // Tuple variant with data
+                    // Special handling for Some
+                    if is_option_some_path(variant_path) && elements.len() == 1 {
+                        // Generate specialized Option handling
+                        let inner_assertion = generate_pattern_element_assertion(
+                            &quote::format_ident!("inner"),
+                            &elements[0],
+                        );
+                        quote! {
+                            match #elem_name {
+                                Some(inner) => {
+                                    #inner_assertion
+                                },
+                                None => panic!(
+                                    concat!("Element expected Some(...), got None")
+                                ),
+                            }
+                        }
+                    } else {
+                        // General enum tuple variant
+                        let element_names: Vec<_> = (0..elements.len())
+                            .map(|i| quote::format_ident!("__elem_{}", i))
+                            .collect();
+
+                        let element_assertions = elements
+                            .iter()
+                            .zip(&element_names)
+                            .map(|(elem, name)| generate_pattern_element_assertion(name, elem))
+                            .collect::<Vec<_>>();
+
+                        quote! {
+                            match #elem_name {
+                                #variant_path(#(#element_names),*) => {
+                                    #(#element_assertions)*
+                                },
+                                _ => panic!(
+                                    "Element expected {}, got {:?}",
+                                    stringify!(#variant_path),
+                                    #elem_name
+                                ),
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Plain nested tuple
+                let element_names: Vec<_> = (0..elements.len())
+                    .map(|i| quote::format_ident!("__tuple_{}", i))
+                    .collect();
+
+                let destructure = quote! {
+                    let (#(#element_names),*) = &#elem_name;
+                };
+
+                let element_assertions = elements
+                    .iter()
+                    .zip(&element_names)
+                    .map(|(elem, name)| generate_pattern_element_assertion(name, elem))
+                    .collect::<Vec<_>>();
+
+                quote! {
+                    {
+                        #destructure
+                        #(#element_assertions)*
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -525,6 +623,11 @@ fn generate_option_assertion(field_name: &syn::Ident, element: &PatternElement) 
                 }
             }
         }
+        PatternElement::Tuple(_path, _elements) => {
+            // This shouldn't happen - Tuple patterns inside Some() should be handled differently
+            // But for completeness, we can just panic with an error message
+            panic!("Complex tuple patterns inside Option are not yet supported in this context");
+        }
     }
 }
 
@@ -598,6 +701,20 @@ fn generate_struct_field_assignments(nested: &Expected) -> Vec<TokenStream> {
                             PatternElement::Regex(pattern) => {
                                 quote! { =~ #pattern }
                             }
+                            PatternElement::Tuple(path, inner_elements) => {
+                                // For nested tuples/enums in field assignments, generate the pattern
+                                if let Some(variant_path) = path {
+                                    // It's an enum variant
+                                    let inner_values =
+                                        generate_pattern_element_values(inner_elements);
+                                    quote! { #variant_path(#(#inner_values),*) }
+                                } else {
+                                    // Plain tuple
+                                    let inner_values =
+                                        generate_pattern_element_values(inner_elements);
+                                    quote! { (#(#inner_values),*) }
+                                }
+                            }
                         })
                         .collect();
                     field_assignments.push(quote! {
@@ -627,6 +744,20 @@ fn generate_struct_field_assignments(nested: &Expected) -> Vec<TokenStream> {
                             #[cfg(feature = "regex")]
                             PatternElement::Regex(pattern) => {
                                 quote! { =~ #pattern }
+                            }
+                            PatternElement::Tuple(path, inner_elements) => {
+                                // For nested tuples/enums in field assignments, generate the pattern
+                                if let Some(variant_path) = path {
+                                    // It's an enum variant
+                                    let inner_values =
+                                        generate_pattern_element_values(inner_elements);
+                                    quote! { #variant_path(#(#inner_values),*) }
+                                } else {
+                                    // Plain tuple
+                                    let inner_values =
+                                        generate_pattern_element_values(inner_elements);
+                                    quote! { (#(#inner_values),*) }
+                                }
                             }
                         })
                         .collect();
@@ -674,6 +805,42 @@ fn generate_struct_field_assignments(nested: &Expected) -> Vec<TokenStream> {
     }
 
     field_assignments
+}
+
+/// Generate values from pattern elements for use in field assignments
+fn generate_pattern_element_values(elements: &[PatternElement]) -> Vec<TokenStream> {
+    elements
+        .iter()
+        .map(|e| match e {
+            PatternElement::Simple(expr) => quote! { #expr },
+            PatternElement::Comparison(op, value) => {
+                let op_tokens = match op {
+                    ComparisonOp::Less => quote! { < },
+                    ComparisonOp::LessEqual => quote! { <= },
+                    ComparisonOp::Greater => quote! { > },
+                    ComparisonOp::GreaterEqual => quote! { >= },
+                };
+                quote! { #op_tokens #value }
+            }
+            #[cfg(feature = "regex")]
+            PatternElement::Regex(pattern) => {
+                quote! { =~ #pattern }
+            }
+            PatternElement::Struct(struct_path, nested) => {
+                let nested_struct = generate_nested_struct(struct_path, nested);
+                quote! { #nested_struct }
+            }
+            PatternElement::Tuple(path, inner_elements) => {
+                if let Some(variant_path) = path {
+                    let inner_values = generate_pattern_element_values(inner_elements);
+                    quote! { #variant_path(#(#inner_values),*) }
+                } else {
+                    let inner_values = generate_pattern_element_values(inner_elements);
+                    quote! { (#(#inner_values),*) }
+                }
+            }
+        })
+        .collect()
 }
 
 fn generate_nested_struct(type_name: &syn::Path, expected: &Expected) -> TokenStream {

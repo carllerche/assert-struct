@@ -69,7 +69,7 @@ assert_struct!(response, Response {
 - **Deep nesting** - Assert on nested structs without manual field access chains
 - **String literals** - Compare `String` fields directly with `"text"` literals
 - **Collections** - Assert on `Vec` fields using slice syntax `[1, 2, 3]`
-- **Tuples** - Destructure and compare tuple fields element by element
+- **Tuples** - Full support for multi-field tuples with advanced patterns
 - **Enum support** - Match on `Option`, `Result`, and custom enum variants
 
 ### Advanced Matchers
@@ -197,23 +197,54 @@ assert_struct!(data, Data {
 
 ### Tuples
 
-Tuples are destructured and compared element by element:
+Full support for multi-field tuples with advanced pattern matching:
 
 ```rust
 #[derive(Debug)]
-struct Container {
-    data: (u32, String),
-    id: u32,
+struct Data {
+    point: (i32, i32),
+    metadata: (String, u32, bool),
+    nested: ((f64, f64), (String, bool)),
 }
 
-let container = Container {
-    data: (100, "hello".to_string()),
-    id: 1,
+let data = Data {
+    point: (15, 25),
+    metadata: ("info".to_string(), 100, true),
+    nested: ((1.5, 2.5), ("test".to_string(), false)),
 };
 
-assert_struct!(container, Container {
-    data: (100, "hello"),  // String literal works!
-    id: 1,
+// Basic tuple matching
+assert_struct!(data, Data {
+    point: (15, 25),
+    metadata: ("info", 100, true),  // String literals work!
+    nested: ((1.5, 2.5), ("test", false)),  // Nested tuples!
+});
+
+// Advanced patterns with comparisons
+assert_struct!(data, Data {
+    point: (> 10, < 30),  // Comparison operators in tuples
+    metadata: ("info", >= 50, true),
+    nested: ((> 1.0, <= 3.0), ("test", false)),
+});
+
+// Enum tuple variants with multiple fields
+#[derive(Debug, PartialEq)]
+enum Event {
+    Click(i32, i32),
+    Drag(i32, i32, i32, i32),
+    Scroll(f64, String),
+}
+
+struct Log {
+    event: Event,
+}
+
+let log = Log {
+    event: Event::Drag(10, 20, 110, 120),
+};
+
+assert_struct!(log, Log {
+    event: Event::Drag(>= 0, >= 0, < 200, < 200),  // Comparisons in enum tuples
 });
 ```
 

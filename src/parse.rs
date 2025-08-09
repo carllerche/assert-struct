@@ -190,66 +190,58 @@ impl Parse for FieldAssertion {
     }
 }
 
-// Parse the contents of a variant's tuple - handles special syntax like Some(> 30)
+// Parse the contents of a variant's tuple - handles special syntax like Some(> 30) or Foo(> 1, < 10)
 fn parse_variant_tuple_contents(input: ParseStream) -> Result<Vec<PatternElement>> {
     // We need to look at the raw tokens to determine if there's special syntax
     let content;
     let _paren = syn::parenthesized!(content in input);
 
-    // Peek at the first token to see if it's a special pattern
-    if content.peek(Token![<]) || content.peek(Token![>]) {
-        // It's a comparison pattern
-        let op = if content.peek(Token![<]) {
-            let _: Token![<] = content.parse()?;
-            if content.peek(Token![=]) {
-                let _: Token![=] = content.parse()?;
-                ComparisonOp::LessEqual
-            } else {
-                ComparisonOp::Less
-            }
-        } else {
-            let _: Token![>] = content.parse()?;
-            if content.peek(Token![=]) {
-                let _: Token![=] = content.parse()?;
-                ComparisonOp::GreaterEqual
-            } else {
-                ComparisonOp::Greater
-            }
-        };
+    // Check if the content contains special syntax that requires special parsing
+    // Otherwise, treat it as a simple expression
+    let fork = content.fork();
+    let has_special_syntax = check_for_special_syntax(&fork);
 
-        let value = content.parse()?;
-        return Ok(vec![PatternElement::Comparison(op, value)]);
+    if has_special_syntax {
+        // Parse all elements using the same logic as plain tuples
+        // This now supports comparison operators and regex in any position
+        parse_tuple_elements(&content)
+    } else {
+        // Parse as a single simple expression (could be a tuple literal, vec![], etc.)
+        let expr = content.parse()?;
+        Ok(vec![PatternElement::Simple(expr)])
+    }
+}
+
+// Helper to check if content contains special syntax that needs pattern parsing
+fn check_for_special_syntax(content: ParseStream) -> bool {
+    // Check for comparison operators
+    if content.peek(Token![<]) || content.peek(Token![>]) {
+        return true;
     }
 
     // Check for regex pattern
-    #[cfg(feature = "regex")]
     if content.peek(Token![=]) {
-        // Might be a regex pattern
         let fork = content.fork();
         if fork.parse::<Token![=]>().is_ok() && fork.peek(Token![~]) {
-            let _: Token![=] = content.parse()?;
-            let _: Token![~] = content.parse()?;
-            let lit: syn::LitStr = content.parse()?;
-            return Ok(vec![PatternElement::Regex(lit.value())]);
+            return true;
         }
     }
 
-    // Check for nested struct pattern
+    // Check for path followed by braces or parens (struct/enum patterns)
     let fork = content.fork();
-    if let Ok(_inner_path) = fork.parse::<syn::Path>() {
-        if fork.peek(syn::token::Brace) {
-            // It's a nested struct pattern inside the tuple
-            let inner_path: syn::Path = content.parse()?;
-            let inner_content;
-            syn::braced!(inner_content in content);
-            let inner_nested = inner_content.parse()?;
-
-            return Ok(vec![PatternElement::Struct(inner_path, inner_nested)]);
+    if let Ok(_path) = fork.parse::<syn::Path>() {
+        if fork.peek(syn::token::Brace) || fork.peek(syn::token::Paren) {
+            return true;
         }
     }
 
-    // Parse as normal tuple elements
-    parse_tuple_elements(&content)
+    // Check if there's a comma at the top level - if so, it's multiple elements
+    let fork = content.fork();
+    if fork.parse::<syn::Expr>().is_ok() && fork.peek(Token![,]) {
+        return true; // Multiple elements, needs tuple parsing
+    }
+
+    false
 }
 
 // Parse the contents of a tuple pattern (for plain tuples without a variant)
@@ -257,30 +249,108 @@ fn parse_tuple_elements(content: ParseStream) -> Result<Vec<PatternElement>> {
     let mut elements = Vec::new();
 
     while !content.is_empty() {
-        // For plain tuples, we don't support special syntax at the top level
-        // (since (> 30) wouldn't be valid Rust)
-        // So we just parse expressions
+        // Check for nested parentheses (nested tuple)
+        if content.peek(syn::token::Paren) {
+            // It's a nested tuple like ((10, 20), ...)
+            let inner_content;
+            syn::parenthesized!(inner_content in content);
+            let inner_elements = parse_tuple_elements(&inner_content)?;
+            // Wrap in a TuplePattern without a path
+            elements.push(PatternElement::Tuple(None, inner_elements));
+        }
+        // Check for comparison operators
+        else if content.peek(Token![<]) || content.peek(Token![>]) {
+            // It's a comparison pattern
+            let op = if content.peek(Token![<]) {
+                let _: Token![<] = content.parse()?;
+                if content.peek(Token![=]) {
+                    let _: Token![=] = content.parse()?;
+                    ComparisonOp::LessEqual
+                } else {
+                    ComparisonOp::Less
+                }
+            } else {
+                let _: Token![>] = content.parse()?;
+                if content.peek(Token![=]) {
+                    let _: Token![=] = content.parse()?;
+                    ComparisonOp::GreaterEqual
+                } else {
+                    ComparisonOp::Greater
+                }
+            };
 
-        // Try to parse as a nested struct pattern first
-        let fork = content.fork();
-        if let Ok(_inner_path) = fork.parse::<syn::Path>() {
-            if fork.peek(syn::token::Brace) {
-                // It's a nested struct pattern
-                let inner_path: syn::Path = content.parse()?;
-                let inner_content;
-                syn::braced!(inner_content in content);
-                let inner_nested = inner_content.parse()?;
+            let value = content.parse()?;
+            elements.push(PatternElement::Comparison(op, value));
+        }
+        // Check for regex pattern
+        else if content.peek(Token![=]) {
+            // Might be a regex pattern
+            let fork = content.fork();
+            if fork.parse::<Token![=]>().is_ok() && fork.peek(Token![~]) {
+                #[cfg(feature = "regex")]
+                {
+                    let _: Token![=] = content.parse()?;
+                    let _: Token![~] = content.parse()?;
+                    let lit: syn::LitStr = content.parse()?;
+                    elements.push(PatternElement::Regex(lit.value()));
+                }
+                #[cfg(not(feature = "regex"))]
+                {
+                    // If regex feature is disabled, parse as regular expression
+                    let expr = content.parse()?;
+                    elements.push(PatternElement::Simple(expr));
+                }
+            } else {
+                // Not a regex, parse as regular expression
+                let expr = content.parse()?;
+                elements.push(PatternElement::Simple(expr));
+            }
+        }
+        // Try to parse as path (could be struct pattern or enum variant)
+        else {
+            let fork = content.fork();
+            if let Ok(path) = fork.parse::<syn::Path>() {
+                // Check if it's followed by braces (struct pattern)
+                if fork.peek(syn::token::Brace) {
+                    // It's a nested struct pattern
+                    let inner_path: syn::Path = content.parse()?;
+                    let inner_content;
+                    syn::braced!(inner_content in content);
+                    let inner_nested = inner_content.parse()?;
 
-                elements.push(PatternElement::Struct(inner_path, inner_nested));
+                    elements.push(PatternElement::Struct(inner_path, inner_nested));
+                }
+                // Check if it's followed by parentheses (enum tuple variant like Some(...))
+                else if fork.peek(syn::token::Paren) {
+                    // It's an enum variant with tuple data
+                    let variant_path: syn::Path = content.parse()?;
+                    let variant_elements = parse_variant_tuple_contents(content)?;
+                    elements.push(PatternElement::Tuple(Some(variant_path), variant_elements));
+                } else {
+                    // It's either a unit variant or regular expression
+                    // Try to determine which by checking if it starts with uppercase
+                    if let Some(segment) = path.segments.last() {
+                        let name = segment.ident.to_string();
+                        if name.chars().next().is_some_and(|c| c.is_uppercase()) {
+                            // Likely a unit variant like None
+                            let variant_path: syn::Path = content.parse()?;
+                            elements.push(PatternElement::Tuple(Some(variant_path), vec![]));
+                        } else {
+                            // Regular expression
+                            let expr = content.parse()?;
+                            elements.push(PatternElement::Simple(expr));
+                        }
+                    } else {
+                        // Regular expression
+                        let expr = content.parse()?;
+                        elements.push(PatternElement::Simple(expr));
+                    }
+                }
             } else {
                 // Regular expression
                 let expr = content.parse()?;
                 elements.push(PatternElement::Simple(expr));
             }
-        } else {
-            // Regular expression
-            let expr = content.parse()?;
-            elements.push(PatternElement::Simple(expr));
         }
 
         // Handle comma

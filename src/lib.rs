@@ -108,7 +108,7 @@
 //! - **Deep Nesting** - Assert on nested structs without manual field access chains
 //! - **String Literals** - Compare `String` fields directly with `"text"` literals
 //! - **Collections** - Assert on `Vec` fields using slice syntax `[1, 2, 3]`
-//! - **Tuples** - Destructure and compare tuple fields element by element
+//! - **Tuples** - Full support for multi-field tuples with advanced patterns
 //! - **Enum Support** - Match on `Option`, `Result`, and custom enum variants
 //!
 //! ## Advanced Matchers
@@ -238,6 +238,51 @@
 //!     status: Status::Pending {
 //!         since: "2024-01-01",
 //!     },
+//! });
+//! ```
+//!
+//! ## Tuples
+//!
+//! Full support for multi-field tuples with advanced pattern matching:
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct Data {
+//! #     point: (i32, i32),
+//! #     metadata: (String, u32, bool),
+//! # }
+//! # let data = Data {
+//! #     point: (15, 25),
+//! #     metadata: ("info".to_string(), 100, true),
+//! # };
+//! // Basic tuple matching
+//! assert_struct!(data, Data {
+//!     point: (15, 25),
+//!     metadata: ("info", 100, true),  // String literals work!
+//! });
+//!
+//! // Advanced patterns with comparisons
+//! assert_struct!(data, Data {
+//!     point: (> 10, < 30),  // Comparison operators in tuples
+//!     metadata: ("info", >= 50, true),
+//! });
+//! ```
+//!
+//! Tuples can also appear in enum variants:
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug, PartialEq)]
+//! # enum Event {
+//! #     Click(i32, i32),
+//! #     Drag(i32, i32, i32, i32),
+//! # }
+//! # #[derive(Debug)]
+//! # struct Log { event: Event }
+//! # let log = Log { event: Event::Drag(10, 20, 110, 120) };
+//! assert_struct!(log, Log {
+//!     event: Event::Drag(>= 0, >= 0, < 200, < 200),  // Comparisons in enum tuples
 //! });
 //! ```
 //!
@@ -464,11 +509,12 @@ enum FieldAssertion {
 
 // Elements that can appear inside tuple patterns
 enum PatternElement {
-    Simple(Expr),                   // Some(42)
-    Comparison(ComparisonOp, Expr), // Some(> 30)
+    Simple(Expr),                   // 42 or "hello"
+    Comparison(ComparisonOp, Expr), // > 30
     #[cfg(feature = "regex")]
-    Regex(String), // Some(=~ r"pattern")
-    Struct(syn::Path, Expected),    // Some(Location { ... })
+    Regex(String), // =~ r"pattern"
+    Struct(syn::Path, Expected),    // Location { ... }
+    Tuple(Option<syn::Path>, Vec<PatternElement>), // (10, 20) or Some(42) or None
 }
 
 #[derive(Clone, Copy)]
@@ -591,6 +637,25 @@ enum ComparisonOp {
 ///     timeout: Some(> 1000),  // Comparison inside Some
 ///     retry_count: None,
 ///     result: Ok("success"),
+/// });
+/// ```
+///
+/// ## Tuples
+///
+/// ```
+/// # use assert_struct::assert_struct;
+/// # #[derive(Debug)]
+/// # struct Data {
+/// #     point: (i32, i32),
+/// #     triple: (String, u32, bool),
+/// # }
+/// # let data = Data {
+/// #     point: (15, 25),
+/// #     triple: ("test".to_string(), 100, true),
+/// # };
+/// assert_struct!(data, Data {
+///     point: (> 10, < 30),  // Comparisons in tuples
+///     triple: ("test", >= 50, true),  // Mixed patterns
 /// });
 /// ```
 ///
