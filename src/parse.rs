@@ -211,7 +211,7 @@ impl Parse for FieldAssertion {
 
         // Fall back to simple field assertion - but check if it's a range first
         let expected_value: syn::Expr = input.parse()?;
-        
+
         // Check if it's a range expression
         if matches!(expected_value, syn::Expr::Range(_)) {
             return Ok(FieldAssertion::Range {
@@ -219,7 +219,7 @@ impl Parse for FieldAssertion {
                 range: expected_value,
             });
         }
-        
+
         Ok(FieldAssertion::Simple {
             field_name,
             expected_value,

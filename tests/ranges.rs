@@ -21,12 +21,15 @@ fn test_inclusive_range_integers() {
         grade: 75,
     };
 
-    assert_struct!(person, Person {
-        age: 18..=65,      // Inclusive range
-        level: 0..=100,
-        grade: 0..=100,
-        ..
-    });
+    assert_struct!(
+        person,
+        Person {
+            age: 18..=65, // Inclusive range
+            level: 0..=100,
+            grade: 0..=100,
+            ..
+        }
+    );
 }
 
 // Test exclusive ranges with ..
@@ -40,12 +43,15 @@ fn test_exclusive_range_integers() {
         grade: 85,
     };
 
-    assert_struct!(person, Person {
-        age: 0..100,       // Exclusive upper bound (30 < 100)
-        level: -100..100,
-        grade: 0..=254,
-        ..
-    });
+    assert_struct!(
+        person,
+        Person {
+            age: 0..100, // Exclusive upper bound (30 < 100)
+            level: -100..100,
+            grade: 0..=254,
+            ..
+        }
+    );
 }
 
 // Test ranges with floating point
@@ -59,15 +65,21 @@ fn test_range_floating_point() {
         grade: 80,
     };
 
-    assert_struct!(person, Person {
-        score: 0.0..100.0,      // Exclusive range for float
-        ..
-    });
-    
-    assert_struct!(person, Person {
-        score: 0.0..=100.0,     // Inclusive range for float
-        ..
-    });
+    assert_struct!(
+        person,
+        Person {
+            score: 0.0..100.0, // Exclusive range for float
+            ..
+        }
+    );
+
+    assert_struct!(
+        person,
+        Person {
+            score: 0.0..=100.0, // Inclusive range for float
+            ..
+        }
+    );
 }
 
 // Test range from (unbounded end)
@@ -81,12 +93,15 @@ fn test_range_from() {
         grade: 90,
     };
 
-    assert_struct!(person, Person {
-        age: 18..,          // 18 or older
-        score: 0.0..,       // Non-negative
-        level: 0..,
-        ..
-    });
+    assert_struct!(
+        person,
+        Person {
+            age: 18..,    // 18 or older
+            score: 0.0.., // Non-negative
+            level: 0..,
+            ..
+        }
+    );
 }
 
 // Test range to (unbounded start)
@@ -100,12 +115,15 @@ fn test_range_to() {
         grade: 99,
     };
 
-    assert_struct!(person, Person {
-        age: ..18,          // Less than 18
-        level: ..0,         // Negative
-        grade: ..100,       // Less than 100
-        ..
-    });
+    assert_struct!(
+        person,
+        Person {
+            age: ..18,    // Less than 18
+            level: ..0,   // Negative
+            grade: ..100, // Less than 100
+            ..
+        }
+    );
 }
 
 // Test range to inclusive
@@ -119,13 +137,16 @@ fn test_range_to_inclusive() {
         grade: 100,
     };
 
-    assert_struct!(person, Person {
-        age: ..=18,         // 18 or younger
-        score: ..=100.0,    // Up to and including 100
-        level: ..=0,        // Zero or negative
-        grade: ..=100,      // Up to and including 100
-        ..
-    });
+    assert_struct!(
+        person,
+        Person {
+            age: ..=18,      // 18 or younger
+            score: ..=100.0, // Up to and including 100
+            level: ..=0,     // Zero or negative
+            grade: ..=100,   // Up to and including 100
+            ..
+        }
+    );
 }
 
 // Note: Full range (..) is not supported in match patterns
@@ -168,10 +189,13 @@ fn test_range_failure_below() {
         grade: 50,
     };
 
-    assert_struct!(person, Person {
-        age: 18..=65,  // Should fail: 17 is below range
-        ..
-    });
+    assert_struct!(
+        person,
+        Person {
+            age: 18..=65, // Should fail: 17 is below range
+            ..
+        }
+    );
 }
 
 #[test]
@@ -185,10 +209,13 @@ fn test_range_failure_above() {
         grade: 50,
     };
 
-    assert_struct!(person, Person {
-        age: 18..=65,  // Should fail: 66 is above range
-        ..
-    });
+    assert_struct!(
+        person,
+        Person {
+            age: 18..=65, // Should fail: 66 is above range
+            ..
+        }
+    );
 }
 
 #[test]
@@ -202,10 +229,13 @@ fn test_range_exclusive_boundary_failure() {
         grade: 50,
     };
 
-    assert_struct!(person, Person {
-        score: 0.0..100.0,  // Should fail: 100.0 is not less than 100.0 (exclusive)
-        ..
-    });
+    assert_struct!(
+        person,
+        Person {
+            score: 0.0..100.0, // Should fail: 100.0 is not less than 100.0 (exclusive)
+            ..
+        }
+    );
 }
 
 // Test char ranges
@@ -222,8 +252,11 @@ fn test_char_range() {
         category: 'M',
     };
 
-    assert_struct!(data, TextData {
-        grade: 'A'..='F',      // Letter grades
-        category: 'A'..='Z',   // Uppercase letters
-    });
+    assert_struct!(
+        data,
+        TextData {
+            grade: 'A'..='F',    // Letter grades
+            category: 'A'..='Z', // Uppercase letters
+        }
+    );
 }

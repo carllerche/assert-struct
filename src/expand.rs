@@ -151,9 +151,7 @@ fn generate_assertions(expected: &Expected) -> TokenStream {
                 });
             }
             FieldAssertion::Range {
-                field_name,
-                range,
-                ..
+                field_name, range, ..
             } => {
                 // Range: use match expression for pattern matching
                 // Note: Full range (..) will fail at compile time with a clear error
@@ -845,9 +843,7 @@ fn generate_struct_field_assignments(nested: &Expected) -> Vec<TokenStream> {
                 });
             }
             FieldAssertion::Range {
-                field_name,
-                range,
-                ..
+                field_name, range, ..
             } => {
                 // For ranges in nested structs, pass through the range expression
                 field_assignments.push(quote! {
