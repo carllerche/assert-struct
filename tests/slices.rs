@@ -406,6 +406,116 @@ fn test_option_vec_none() {
     assert_struct!(config, Config { values: None });
 }
 
+// Test with Result<Vec<T>, String>
+#[derive(Debug)]
+struct Response {
+    data: Result<Vec<u32>, String>,
+}
+
+#[test]
+fn test_result_vec_ok() {
+    let response = Response {
+        data: Ok(vec![1, 2, 3]),
+    };
+
+    assert_struct!(
+        response,
+        Response {
+            data: Ok([1, 2, 3]),
+        }
+    );
+}
+
+#[test]
+fn test_result_vec_ok_partial() {
+    let response = Response {
+        data: Ok(vec![10, 20, 30, 40]),
+    };
+
+    assert_struct!(
+        response,
+        Response {
+            data: Ok([10, 20, ..]),
+        }
+    );
+
+    assert_struct!(response, Response { data: Ok([.., 40]) });
+}
+
+#[test]
+fn test_result_vec_err() {
+    let response = Response {
+        data: Err("error".to_string()),
+    };
+
+    assert_struct!(response, Response { data: Err("error") });
+}
+
+// Test nested slices (Vec<Vec<T>>)
+#[derive(Debug)]
+struct Matrix {
+    rows: Vec<Vec<i32>>,
+}
+
+#[test]
+fn test_nested_slices() {
+    let matrix = Matrix {
+        rows: vec![vec![1, 2, 3], vec![4, 5, 6], vec![7, 8, 9]],
+    };
+
+    assert_struct!(
+        matrix,
+        Matrix {
+            rows: [[1, 2, 3], [4, 5, 6], [7, 8, 9],],
+        }
+    );
+}
+
+#[test]
+fn test_nested_slices_partial() {
+    let matrix = Matrix {
+        rows: vec![vec![1, 2, 3, 4], vec![5, 6, 7, 8], vec![9, 10, 11, 12]],
+    };
+
+    // Partial matching on outer slice
+    assert_struct!(
+        matrix,
+        Matrix {
+            rows: [[1, 2, 3, 4], [5, 6, 7, 8], ..,],
+        }
+    );
+
+    // Partial matching on inner slices
+    assert_struct!(
+        matrix,
+        Matrix {
+            rows: [[1, 2, ..], [5, 6, ..], [9, 10, ..],],
+        }
+    );
+
+    // Mixed partial matching
+    assert_struct!(
+        matrix,
+        Matrix {
+            rows: [[1, .., 4], ..,],
+        }
+    );
+}
+
+#[test]
+fn test_nested_slices_with_comparisons() {
+    let matrix = Matrix {
+        rows: vec![vec![10, 20, 30], vec![40, 50, 60]],
+    };
+
+    assert_struct!(matrix, Matrix {
+        rows: [
+            [> 5, < 25, == 30],
+            [>= 40, <= 50, > 55],
+        ],
+    });
+}
+
 // Multiple .. patterns should cause a compilation error
 // This test ensures that our macro correctly rejects multiple .. patterns
 // by generating invalid Rust code that the compiler will catch
