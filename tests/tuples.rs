@@ -232,7 +232,7 @@ fn test_tuple_field_mismatch() {
 }
 
 #[test]
-#[should_panic(expected = "Element failed comparison")]
+#[should_panic(expected = "Failed comparison")]
 fn test_tuple_comparison_failure() {
     let coords = Coordinates {
         point2d: (5, 20),

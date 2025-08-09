@@ -200,7 +200,7 @@ fn test_option_none_with_collections() {
 // Failure cases
 
 #[test]
-#[should_panic(expected = "expected None, got Some")]
+#[should_panic(expected = "Expected None, got Some")]
 fn test_some_none_mismatch() {
     let user = User {
         id: 7,
@@ -223,7 +223,7 @@ fn test_some_none_mismatch() {
 }
 
 #[test]
-#[should_panic(expected = "expected Some(...), got None")]
+#[should_panic(expected = "Expected Some(...), got None")]
 fn test_none_some_mismatch() {
     let user = User {
         id: 8,

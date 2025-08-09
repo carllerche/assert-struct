@@ -489,11 +489,38 @@ use syn::{Expr, Token, punctuated::Punctuated};
 mod expand;
 mod parse;
 
-// Root-level structs that track input details
+// Root-level struct that tracks the assertion
 struct AssertStruct {
     value: Expr,
-    type_name: syn::Path,
-    expected: Expected,
+    pattern: Pattern,
+}
+
+// Unified pattern type that can represent any pattern
+enum Pattern {
+    // Simple value: 42, "hello", true
+    Simple(Expr),
+    // Struct pattern: User { name: "Alice", age: 30, .. }
+    Struct {
+        path: syn::Path,
+        fields: Punctuated<FieldAssertion, Token![,]>,
+        rest: bool,
+    },
+    // Tuple pattern: (10, 20) or Some(42) or None
+    Tuple {
+        path: Option<syn::Path>,
+        elements: Vec<Pattern>,
+    },
+    // Slice pattern: [1, 2, 3] or [1, .., 5]
+    Slice(Vec<Pattern>),
+    // Comparison: > 30, <= 100
+    Comparison(ComparisonOp, Expr),
+    // Range: 10..20, 0..=100
+    Range(Expr),
+    // Regex: =~ r"pattern"
+    #[cfg(feature = "regex")]
+    Regex(String),
+    // Rest pattern: .. for partial matching
+    Rest,
 }
 
 struct Expected {
@@ -501,61 +528,10 @@ struct Expected {
     rest: bool, // true if ".." was present
 }
 
-enum FieldAssertion {
-    Simple {
-        field_name: syn::Ident,
-        expected_value: Expr,
-    },
-    // Handles both standalone structs and enum struct variants
-    // e.g., User { ... } or Status::Active { ... }
-    StructPattern {
-        field_name: syn::Ident,
-        path: syn::Path,
-        nested: Expected,
-    },
-    // Handles both standalone tuples and enum tuple variants
-    // e.g., (1, 2) or Some(value)
-    TuplePattern {
-        field_name: syn::Ident,
-        path: Option<syn::Path>, // None for plain tuples, Some for enum variants
-        elements: Vec<PatternElement>,
-    },
-    // Unit enum variants like None or Status::Inactive
-    UnitPattern {
-        field_name: syn::Ident,
-        path: syn::Path,
-    },
-    #[cfg(feature = "regex")]
-    Regex {
-        field_name: syn::Ident,
-        pattern: String,
-    },
-    Comparison {
-        field_name: syn::Ident,
-        op: ComparisonOp,
-        value: Expr,
-    },
-    Range {
-        field_name: syn::Ident,
-        range: Expr,
-    },
-    // Slice patterns for Vec fields: [1, 2, > 3]
-    SlicePattern {
-        field_name: syn::Ident,
-        elements: Vec<PatternElement>,
-    },
-}
-
-// Elements that can appear inside tuple patterns and slice patterns
-enum PatternElement {
-    Simple(Expr),                   // 42 or "hello"
-    Comparison(ComparisonOp, Expr), // > 30
-    #[cfg(feature = "regex")]
-    Regex(String), // =~ r"pattern"
-    Struct(syn::Path, Expected),    // Location { ... }
-    Tuple(Option<syn::Path>, Vec<PatternElement>), // (10, 20) or Some(42) or None
-    Rest,                           // .. for partial matching
-    SlicePattern(Vec<PatternElement>), // [1, 2, 3] or [1, .., 5]
+// Field assertion - a field name paired with its expected pattern
+struct FieldAssertion {
+    field_name: syn::Ident,
+    pattern: Pattern,
 }
 
 #[derive(Clone, Copy)]

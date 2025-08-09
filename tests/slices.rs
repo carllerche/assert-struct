@@ -163,7 +163,7 @@ fn test_empty_slice() {
 }
 
 #[test]
-#[should_panic(expected = "pattern mismatch")]
+#[should_panic(expected = "Pattern mismatch")]
 fn test_slice_length_mismatch() {
     let container = Container {
         items: vec![1, 2, 3],
