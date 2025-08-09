@@ -116,7 +116,7 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
                 // =~ operator for pattern matching
                 let _: Token![=] = input.parse()?;
                 let _: Token![~] = input.parse()?;
-                
+
                 // Performance optimization: if it's a string literal, we can compile
                 // the regex at macro expansion time and provide better error messages
                 let fork = input.fork();

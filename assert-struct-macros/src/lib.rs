@@ -40,7 +40,7 @@ enum Pattern {
     Range(Expr),
     // Regex: =~ "pattern" - string literal optimized at compile time
     #[cfg(feature = "regex")]
-    Regex(String),  // String literal regex pattern (performance optimization)
+    Regex(String), // String literal regex pattern (performance optimization)
     // Like pattern: =~ expr - arbitrary expression using Like trait
     #[cfg(feature = "regex")]
     Like(Expr),
