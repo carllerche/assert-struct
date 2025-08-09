@@ -113,11 +113,23 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             }
             #[cfg(feature = "regex")]
             if fork.peek(Token![~]) {
-                // =~ regex operator
+                // =~ operator for pattern matching
                 let _: Token![=] = input.parse()?;
                 let _: Token![~] = input.parse()?;
-                let lit: syn::LitStr = input.parse()?;
-                return Ok(Pattern::Regex(lit.value()));
+
+                // Performance optimization: if it's a string literal, we can compile
+                // the regex at macro expansion time and provide better error messages
+                let fork = input.fork();
+                if let Ok(lit) = fork.parse::<syn::LitStr>() {
+                    // String literal - compile as regex at expansion time for performance
+                    // This allows compile-time validation and avoids runtime compilation
+                    input.parse::<syn::LitStr>()?;
+                    return Ok(Pattern::Regex(lit.value()));
+                } else {
+                    // Arbitrary expression - use Like trait at runtime
+                    let expr = input.parse::<syn::Expr>()?;
+                    return Ok(Pattern::Like(expr));
+                }
             }
         }
     }

@@ -15,11 +15,20 @@ dependencies = [
 name = "assert-struct"
 version = "0.1.0"
 dependencies = [
+ "assert-struct-macros",
+ "regex",
+ "trybuild",
+]
+
+[[package]]
+name = "assert-struct-macros"
+version = "0.1.0"
+dependencies = [
+ "assert-struct",
  "proc-macro2",
  "quote",
  "regex",
  "syn",
- "trybuild",
 ]
 
 [[package]]

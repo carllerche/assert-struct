@@ -6,6 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `assert-struct` is a procedural macro library for ergonomic structural assertions in Rust tests. It enables deep, partial matching of complex data structures without manually referencing every field - particularly useful for testing typed JSON responses and other nested data structures.
 
+**Important:** This is a new, experimental crate in early development. We are NOT concerned with:
+- Backward compatibility (we can make breaking changes freely)
+- Migration guides (no existing users to migrate)
+- Performance benchmarks (premature optimization)
+- Semantic versioning constraints
+
+Focus on clean design, good architecture, and comprehensive functionality rather than compatibility concerns.
+
 ### Core Features (Implemented)
 - **Partial matching**: Check only the fields you care about with `..`
 - **Nested struct support**: Deep assertions without verbose field access chains

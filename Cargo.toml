@@ -1,42 +1,17 @@
-[package]
-name = "assert-struct"
-version = "0.1.0"
+[workspace]
+members = ["assert-struct", "assert-struct-macros"]
+resolver = "2"
+
+[workspace.package]
 authors = ["Carl Lerche <me@carllerche.com>"]
 edition = "2024"
 rust-version = "1.85"
-description = "A procedural macro for ergonomic structural assertions in tests"
-documentation = "https://docs.rs/assert-struct"
-homepage = "https://github.com/carllerche/assert-struct"
-repository = "https://github.com/carllerche/assert-struct"
-readme = "README.md"
 license = "MIT"
-keywords = ["testing", "assert", "macro", "test", "struct"]
-categories = ["development-tools::testing", "development-tools"]
-exclude = [
-    ".github/",
-    "tests/",
-    ".gitignore",
-]
+repository = "https://github.com/carllerche/assert-struct"
+homepage = "https://github.com/carllerche/assert-struct"
 
-[lib]
-proc-macro = true
-
-[features]
-default = ["regex"]
-regex = ["dep:regex"]
-
-[dependencies]
+[workspace.dependencies]
 syn = { version = "2.0", features = ["full", "extra-traits"] }
 quote = "1.0"
 proc-macro2 = "1.0"
-regex = { version = "1.10", optional = true }
-
-[dev-dependencies]
-trybuild = "1.0"
-
-[package.metadata.docs.rs]
-all-features = true
-rustdoc-args = ["--cfg", "docsrs"]
-
-[badges]
-maintenance = { status = "actively-developed" }
+regex = "1.10"
