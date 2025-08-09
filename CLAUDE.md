@@ -14,6 +14,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Focus on clean design, good architecture, and comprehensive functionality rather than compatibility concerns.
 
+### Design Philosophy
+
+1. **Simplicity First**: Resist adding features just because they're possible. Ship minimal valuable functionality, then expand based on real user needs.
+2. **No Speculative Features**: Don't implement "nice to have" features without clear use cases. Examples of avoided complexity:
+   - Utility types (CaseInsensitive, Prefix, Suffix) - users can implement these if needed
+   - Complex pattern combinators (Vec for OR, tuples for AND) - adds complexity without proven value
+   - Wildcard patterns (Option as wildcard) - clever but unnecessary
+3. **Performance Optimization**: Only optimize the common case (string literals compiled at macro expansion time), not every possible case.
+
 ### Core Features (Implemented)
 - **Partial matching**: Check only the fields you care about with `..`
 - **Nested struct support**: Deep assertions without verbose field access chains
@@ -21,6 +30,7 @@ Focus on clean design, good architecture, and comprehensive functionality rather
 - **Equality operators**: `==`, `!=` for explicit equality checks
 - **Range patterns**: `18..=65`, `0.0..100.0` for range matching
 - **Regex patterns**: `=~ r"pattern"` for string matching (feature-gated)
+- **Like trait**: `=~ expr` for flexible pattern matching with variables/expressions
 - **Slice patterns**: Element-wise patterns for Vec fields `[> 0, < 10, == 5]`
 - **Enum support**: Full support for Option, Result, and custom enums (all variant types)
 - **Tuple support**: Multi-field tuples with advanced patterns `(> 10, < 30)`
@@ -81,28 +91,36 @@ RUST_BACKTRACE=1 cargo test  # Debug macro panics
 
 ## Architecture
 
-### Project Structure
-- **src/lib.rs**: Main entry point, defines core types and macro
+### Workspace Structure
+```
+assert-struct/
+├── assert-struct/              # Main crate (provides Like trait, re-exports macro)
+│   ├── src/lib.rs             # Like trait definition and implementations
+│   └── tests/                 # Integration tests
+├── assert-struct-macros/       # Procedural macro crate
+│   ├── src/
+│   │   ├── lib.rs            # Macro entry point, Pattern enum
+│   │   ├── parse.rs          # Token parsing and syntax validation
+│   │   └── expand.rs         # Code generation
+│   └── Cargo.toml            # Has assert-struct as dev-dependency for testing
+└── Cargo.toml                 # Workspace root
+```
+
+### Key Components
+- **assert-struct-macros/src/lib.rs**: Defines core types
   - `AssertStruct`, `Expected`, `FieldAssertion` - core parsing structures
-  - `PatternElement` enum - unified abstraction for all pattern types
+  - `Pattern` enum - unified abstraction for all pattern types
   - `ComparisonOp` - comparison operator types
-- **src/parse.rs**: Token parsing and syntax validation
-  - `parse_variant_tuple_contents` - handles special syntax like `Some(> 30)`
+- **assert-struct-macros/src/parse.rs**: Token parsing and syntax validation
   - `check_for_special_syntax` - disambiguates patterns from expressions
-  - `parse_tuple_elements` - recursive tuple pattern parsing
-- **src/expand.rs**: Code generation
+  - Dual-path for regex: `Pattern::Regex(String)` for literals, `Pattern::Like(Expr)` for expressions
+- **assert-struct-macros/src/expand.rs**: Code generation
   - Generates match expressions for enums (not let bindings) for exhaustive matching
   - Handles recursive pattern expansion for nested structures
-  - Transforms string literals to `.to_string()` automatically
-- **tests/**: Integration tests demonstrating all features
-  - `basic.rs` - fundamental struct matching
-  - `comparison.rs` - comparison operators
-  - `enums.rs` - Result, custom enums, tuple/struct variants
-  - `option*.rs` - Option type tests (basic, advanced, nested)
-  - `tuples.rs` - multi-field tuple support
-  - `regex.rs` - regex pattern matching (feature-gated)
-  - `ranges.rs` - range pattern matching
-  - `slices.rs` - slice/Vec pattern matching with element-wise assertions
+  - Optimizes string literal regexes at compile time
+- **assert-struct/src/lib.rs**: Runtime support
+  - `Like` trait for flexible pattern matching
+  - Implementations for String/&str with regex patterns
 
 ### Implementation Strategy
 
@@ -150,9 +168,8 @@ RUST_BACKTRACE=1 cargo test  # Debug macro panics
 2. **Fork and peek pattern**: Using `fork()` to look ahead without consuming tokens is essential for complex parsing
 3. **Enum variant detection**: Checking if a path has multiple segments (e.g., `Status::Active` vs `Location`) helps distinguish enum variants from structs
 4. **Special handling for Option/Result**: Custom logic for `Some`, `None`, `Ok`, `Err` provides better error messages
-5. **NO EXPRESSIONS IN PATTERNS**: By design, we do NOT accept arbitrary expressions in pattern positions (e.g., `Some(vec![1, 2, 3])` is not allowed). This is a deliberate architectural choice that eliminates parsing ambiguities and enables our complex pattern syntax
-6. **Expressions after operators**: While patterns themselves cannot be expressions, we CAN accept arbitrary expressions AFTER comparison operators (`>`, `>=`, `<`, `<=`, and in the future `!=`, `==`). For example: `age: > compute_min_age()` would be valid
-7. **Special operator handling**: `=~` is treated specially and currently only accepts regex literals, not arbitrary expressions (though this could be improved later)
+5. **Dual-path regex optimization**: String literals compile at macro expansion time (`Pattern::Regex`), while expressions use Like trait at runtime (`Pattern::Like`)
+6. **Workspace circular dependency solution**: assert-struct-macros has assert-struct as a dev-dependency, allowing doc tests to work
 
 ### Development Best Practices
 1. **Incremental feature development**: Build features progressively (Option → Result → custom enums → tuples)
@@ -181,10 +198,26 @@ When implementing proc macros, prefer generating code that uses Rust's native sy
   - Leverages Rust compiler's full capabilities
 - **Application**: Before implementing complex logic, ask "Can Rust's syntax already do this for us?"
 
-### Future Extension Points
-The architecture is well-positioned for these potential additions:
-- **Range patterns**: `age: 18..=65` ✅ (Implemented using match expressions)
-- **Custom matcher functions**: `score: |s| s > 90 && s < 100`
-- **HashMap/BTreeMap support**: Key-value matching
-- **Performance optimization**: Cache compiled regex patterns
-- **Better error recovery**: More helpful messages for invalid macro syntax
+### Key Learnings & Patterns
+
+#### Workspace Organization
+- **Dev-dependency pattern**: Procedural macro crates can depend on their parent crate as a dev-dependency for testing
+- **Separation of concerns**: Runtime functionality (Like trait) in main crate, compile-time (macro) in separate crate
+
+#### Feature Development  
+- **Start minimal**: Ship core functionality first, add features based on real user needs
+- **Avoid speculative features**: Don't add "nice to have" features without clear use cases
+- **Question every addition**: Before adding a feature, ask "Is this solving a real problem?"
+
+#### Performance Patterns
+- **Optimize the common case**: String literal regexes compile at macro expansion time
+- **Don't over-optimize**: Runtime compilation for expression patterns is acceptable
+
+#### Communication
+- **Precise terminology**: "Performance optimization" not "backward compatibility"
+- **Clear project stage**: Early/experimental projects don't need migration guides or compatibility concerns
+
+### Potential Future Extensions (Only If Needed)
+- **Custom matcher functions**: `score: |s| s > 90 && s < 100` - only if users request it
+- **HashMap/BTreeMap support**: Key-value matching - wait for use cases
+- **Better error recovery**: More helpful messages for invalid macro syntax - as issues arise
