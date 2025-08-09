@@ -69,12 +69,14 @@ assert_struct!(response, Response {
 - **Deep nesting** - Assert on nested structs without manual field access chains
 - **String literals** - Compare `String` fields directly with `"text"` literals
 - **Collections** - Assert on `Vec` fields using slice syntax `[1, 2, 3]`
-- **Tuples** - Destructure and compare tuple fields element by element
+- **Tuples** - Full support for multi-field tuples with advanced patterns
+- **Enum support** - Match on `Option`, `Result`, and custom enum variants
 
 ### Advanced Matchers
 
 - **Comparison operators** - Use `<`, `<=`, `>`, `>=` for numeric field assertions
 - **Regex patterns** - Match string fields with regular expressions using `=~ r"pattern"`
+- **Advanced enum patterns** - Use comparison operators and regex inside `Some()` and other variants
 
 ## Installation
 
@@ -195,23 +197,54 @@ assert_struct!(data, Data {
 
 ### Tuples
 
-Tuples are destructured and compared element by element:
+Full support for multi-field tuples with advanced pattern matching:
 
 ```rust
 #[derive(Debug)]
-struct Container {
-    data: (u32, String),
-    id: u32,
+struct Data {
+    point: (i32, i32),
+    metadata: (String, u32, bool),
+    nested: ((f64, f64), (String, bool)),
 }
 
-let container = Container {
-    data: (100, "hello".to_string()),
-    id: 1,
+let data = Data {
+    point: (15, 25),
+    metadata: ("info".to_string(), 100, true),
+    nested: ((1.5, 2.5), ("test".to_string(), false)),
 };
 
-assert_struct!(container, Container {
-    data: (100, "hello"),  // String literal works!
-    id: 1,
+// Basic tuple matching
+assert_struct!(data, Data {
+    point: (15, 25),
+    metadata: ("info", 100, true),  // String literals work!
+    nested: ((1.5, 2.5), ("test", false)),  // Nested tuples!
+});
+
+// Advanced patterns with comparisons
+assert_struct!(data, Data {
+    point: (> 10, < 30),  // Comparison operators in tuples
+    metadata: ("info", >= 50, true),
+    nested: ((> 1.0, <= 3.0), ("test", false)),
+});
+
+// Enum tuple variants with multiple fields
+#[derive(Debug, PartialEq)]
+enum Event {
+    Click(i32, i32),
+    Drag(i32, i32, i32, i32),
+    Scroll(f64, String),
+}
+
+struct Log {
+    event: Event,
+}
+
+let log = Log {
+    event: Event::Drag(10, 20, 110, 120),
+};
+
+assert_struct!(log, Log {
+    event: Event::Drag(>= 0, >= 0, < 200, < 200),  // Comparisons in enum tuples
 });
 ```
 
@@ -239,6 +272,89 @@ assert_struct!(user, User {
 
 Note: Regex support is enabled by default but can be disabled by turning off
 default features.
+
+### Option and Result Types
+
+Native support for Rust's standard `Option` and `Result` types:
+
+```rust
+#[derive(Debug)]
+struct UserProfile {
+    name: String,
+    age: Option<u32>,
+    email_verified: Result<bool, String>,
+}
+
+let profile = UserProfile {
+    name: "Alice".to_string(),
+    age: Some(30),
+    email_verified: Ok(true),
+};
+
+assert_struct!(profile, UserProfile {
+    name: "Alice",
+    age: Some(30),
+    email_verified: Ok(true),
+});
+
+// Advanced patterns with Option
+assert_struct!(profile, UserProfile {
+    name: "Alice",
+    age: Some(>= 18),  // Adult check inside Some
+    email_verified: Ok(true),
+});
+```
+
+### Custom Enums
+
+Full support for custom enum types with all variant types:
+
+```rust
+#[derive(Debug, PartialEq)]
+enum Status {
+    Active,
+    Inactive,
+    Pending { since: String },
+    Error { code: i32, message: String },
+}
+
+#[derive(Debug)]
+struct Account {
+    id: u32,
+    status: Status,
+}
+
+let account = Account {
+    id: 1,
+    status: Status::Pending {
+        since: "2024-01-01".to_string(),
+    },
+};
+
+assert_struct!(account, Account {
+    id: 1,
+    status: Status::Pending {
+        since: "2024-01-01",
+    },
+});
+
+// Partial matching on enum fields
+let error_account = Account {
+    id: 2,
+    status: Status::Error {
+        code: 500,
+        message: "Internal error".to_string(),
+    },
+};
+
+assert_struct!(error_account, Account {
+    id: 2,
+    status: Status::Error {
+        code: 500,
+        ..  // Ignore the message field
+    },
+});
+```
 
 ### Comparison Operators
 
