@@ -10,6 +10,7 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
     // Generate the assertion for the root pattern
     let assertion = generate_pattern_assertion(&quote! { #value }, pattern, false);
 
+    // Wrap in a block to avoid variable name conflicts
     quote! {
         {
             #assertion
@@ -17,8 +18,24 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
     }
 }
 
-// Generate assertion code for any pattern
-// is_ref indicates whether value_expr is already a reference
+/// Generate assertion code for any pattern type.
+///
+/// The `is_ref` parameter tracks whether `value_expr` is already a reference.
+/// This is crucial for correct code generation - we need to know when to add `&`.
+///
+/// # Example Transformations
+///
+/// Simple value:
+/// ```rust
+/// // Input: age: 30
+/// // Output: assert_eq!(&value.age, &30);
+/// ```
+///
+/// Comparison:
+/// ```rust
+/// // Input: age: >= 18
+/// // Output: assert!(value.age >= 18, "age: expected >= 18, got {:?}", value.age);
+/// ```
 fn generate_pattern_assertion(
     value_expr: &TokenStream,
     pattern: &Pattern,
@@ -26,23 +43,31 @@ fn generate_pattern_assertion(
 ) -> TokenStream {
     match pattern {
         Pattern::Simple(expected) => {
-            // Simple value comparison
+            // Direct equality check
+            // Transform string literals to String for comparison with String fields
             let transformed = transform_expected_value(expected);
             if is_ref {
+                // value_expr is already a reference (e.g., from destructuring)
                 quote! {
                     assert_eq!(#value_expr, &#transformed);
                 }
             } else {
+                // value_expr needs to be referenced
                 quote! {
                     assert_eq!(&#value_expr, &#transformed);
                 }
             }
         }
         Pattern::Struct { path, fields, rest } => {
-            // Check if this is an enum variant (path has multiple segments or starts with uppercase)
+            // Distinguish between enum struct variants and regular structs
+            // WHY: Enums require match expressions for exhaustive checking,
+            // while structs can use let destructuring
             let is_enum_variant = if path.segments.len() > 1 {
+                // Multi-segment paths like `Status::Active` are always enum variants
                 true
             } else if let Some(segment) = path.segments.first() {
+                // Single segment starting with uppercase likely an enum variant
+                // This heuristic handles `Some`, `None`, `Ok`, `Err`
                 segment
                     .ident
                     .to_string()
@@ -54,10 +79,14 @@ fn generate_pattern_assertion(
             };
 
             if is_enum_variant {
-                // Enum struct variant - generate match expression
+                // Enum struct variant requires match for exhaustive checking
+                // Example input: Status::Error { code: 500, message: "Internal" }
+                // Generates: match value { Status::Error { code, message } => { ... } _ => panic!() }
                 generate_enum_struct_assertion(value_expr, path, fields, *rest, is_ref)
             } else {
-                // Regular struct - use let destructuring
+                // Regular struct uses let destructuring
+                // Example input: User { name: "Alice", age: 30, .. }
+                // Generates: let User { name, age, .. } = &value; assert_eq!(name, &"Alice"); ...
                 let field_names: Vec<_> = fields.iter().map(|f| &f.field_name).collect();
 
                 let rest_pattern = if *rest {
@@ -71,7 +100,7 @@ fn generate_pattern_assertion(
                     .map(|f| {
                         let field_name = &f.field_name;
                         let field_pattern = &f.pattern;
-                        // Fields from destructuring are references
+                        // Fields from destructuring are already references
                         generate_pattern_assertion(&quote! { #field_name }, field_pattern, true)
                     })
                     .collect();
@@ -103,11 +132,16 @@ fn generate_pattern_assertion(
             generate_slice_assertion(value_expr, elements, is_ref)
         }
         Pattern::Comparison(op, value) => {
-            // Comparison operators
+            // Generate comparison assertions with clear error messages
             generate_comparison_assertion(value_expr, op, value, is_ref)
         }
         Pattern::Range(range) => {
-            // Range pattern
+            // Use Rust's native range matching in match expressions
+            // WHY: Match expressions handle all edge cases automatically
+            // (reference levels, type coercion, inclusive/exclusive bounds)
+            //
+            // Example input: age: 18..=65
+            // Generates: match &age { 18..=65 => {}, _ => panic!(...) }
             if is_ref {
                 quote! {
                     match #value_expr {
@@ -132,8 +166,10 @@ fn generate_pattern_assertion(
         }
         #[cfg(feature = "regex")]
         Pattern::Regex(pattern_str) => {
-            // String literal regex pattern - compile at expansion time for performance
-            // but still use Like trait for consistency
+            // PERFORMANCE OPTIMIZATION: String literal patterns compile at macro expansion
+            // This path handles: email: =~ r".*@example\.com"
+            // The regex compiles once at expansion time, not at runtime
+            // We still use Like trait for consistency with the Like(Expr) path
             if is_ref {
                 quote! {
                     {
@@ -168,7 +204,8 @@ fn generate_pattern_assertion(
         }
         #[cfg(feature = "regex")]
         Pattern::Like(pattern_expr) => {
-            // Use the Like trait for pattern matching
+            // Runtime pattern matching via Like trait
+            // This path handles: email: =~ my_pattern_var
             if is_ref {
                 quote! {
                     {
@@ -385,12 +422,22 @@ fn generate_enum_tuple_assertion(
     }
 }
 
-// Generate assertion for plain tuples
+/// Generate assertion for plain tuples.
+///
+/// # Example
+/// ```rust
+/// // Input: point: (15, 25)
+/// // Generates:
+/// // let (__tuple_elem_0, __tuple_elem_1) = &point;
+/// // assert_eq!(__tuple_elem_0, &15);
+/// // assert_eq!(__tuple_elem_1, &25);
+/// ```
 fn generate_plain_tuple_assertion(
     value_expr: &TokenStream,
     elements: &[Pattern],
     is_ref: bool,
 ) -> TokenStream {
+    // Generate unique names to avoid conflicts
     let element_names: Vec<_> = (0..elements.len())
         .map(|i| quote::format_ident!("__tuple_elem_{}", i))
         .collect();
@@ -419,7 +466,21 @@ fn generate_plain_tuple_assertion(
     }
 }
 
-// Generate assertion for slice patterns
+/// Generate assertion for slice patterns using Rust's native slice matching.
+///
+/// # Example
+/// ```rust
+/// // Input: values: [> 0, < 10, == 5]
+/// // Generates:
+/// // match values.as_slice() {
+/// //     [__elem_0, __elem_1, __elem_2] => {
+/// //         assert!(__elem_0 > 0);
+/// //         assert!(__elem_1 < 10);
+/// //         assert_eq!(__elem_2, &5);
+/// //     }
+/// //     _ => panic!("Pattern mismatch...")
+/// // }
+/// ```
 fn generate_slice_assertion(
     value_expr: &TokenStream,
     elements: &[Pattern],
@@ -431,6 +492,7 @@ fn generate_slice_assertion(
     for (i, elem) in elements.iter().enumerate() {
         match elem {
             Pattern::Rest => {
+                // Rest pattern allows variable-length matching
                 pattern_parts.push(quote! { .. });
             }
             _ => {
@@ -443,6 +505,7 @@ fn generate_slice_assertion(
         }
     }
 
+    // Convert Vec to slice for matching
     let slice_expr = quote! { (#value_expr).as_slice() };
 
     quote! {
@@ -458,7 +521,7 @@ fn generate_slice_assertion(
     }
 }
 
-// Generate comparison assertion
+/// Generate comparison assertion with descriptive error messages.
 fn generate_comparison_assertion(
     value_expr: &TokenStream,
     op: &ComparisonOp,
@@ -519,11 +582,22 @@ fn generate_comparison_assertion(
     }
 }
 
-// Transform expected values (e.g., string literals to String)
+/// Transform expected values for better ergonomics.
+///
+/// WHY: This allows users to write `name: "Alice"` instead of `name: "Alice".to_string()`
+/// when comparing against String fields. The macro automatically adds `.to_string()`
+/// to string literals, making the syntax cleaner.
+///
+/// # Example
+/// ```rust
+/// // User writes: name: "Alice"
+/// // We transform to: name: "Alice".to_string()
+/// // So it can compare with String fields
+/// ```
 fn transform_expected_value(expr: &Expr) -> Expr {
     match expr {
         Expr::Lit(lit) if matches!(lit.lit, syn::Lit::Str(_)) => {
-            // Transform "literal" to "literal".to_string() for String fields
+            // Transform string literal to String for comparison
             syn::parse_quote! { #expr.to_string() }
         }
         _ => expr.clone(),

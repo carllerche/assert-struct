@@ -3,6 +3,21 @@
 //! This crate provides the procedural macro implementation for the `assert-struct` crate.
 //! Users should use the main `assert-struct` crate which re-exports this macro.
 //!
+//! # Architecture Overview
+//!
+//! The macro transformation happens in three phases:
+//!
+//! 1. **Parse** (`parse.rs`): Tokenize the macro input into a Pattern AST
+//! 2. **Expand** (`expand.rs`): Transform patterns into assertion code
+//! 3. **Execute**: Generated code runs the actual assertions
+//!
+//! # Key Design Decisions
+//!
+//! - **Pattern enum**: Unified abstraction for all pattern types (struct, tuple, slice, etc.)
+//! - **Disambiguation**: `check_for_special_syntax` solves `Some(> 30)` vs `Some(my_var)`
+//! - **Dual-path optimization**: String literal regexes compile at expansion time
+//! - **Native Rust syntax**: Use match expressions for ranges, slices, and enums
+//!
 //! See the main `assert-struct` crate for documentation and examples.
 
 use proc_macro::TokenStream;
