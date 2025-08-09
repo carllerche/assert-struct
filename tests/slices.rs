@@ -271,7 +271,6 @@ fn test_slice_with_nested_struct_patterns() {
             Item { id: > 2, value: "potion" },  // Check both with comparison
         ],
     });
-
 }
 
 #[test]
@@ -298,21 +297,33 @@ fn test_slice_with_nested_struct_partial_slice() {
     };
 
     // Test combining partial slice matching with partial struct matching
-    assert_struct!(inventory, Inventory {
-        items: [
-            Item { id: 1, .. },  // First item, only check id
-            Item { value: "shield", .. },  // Second item, only check value
-            ..,  // Ignore the rest
-        ],
-    });
-    
+    assert_struct!(
+        inventory,
+        Inventory {
+            items: [
+                Item { id: 1, .. }, // First item, only check id
+                Item {
+                    value: "shield",
+                    ..
+                }, // Second item, only check value
+                ..,                 // Ignore the rest
+            ],
+        }
+    );
+
     // Test suffix pattern with struct matching
-    assert_struct!(inventory, Inventory {
-        items: [
-            ..,  // Ignore initial items
-            Item { id: 4, value: "bow" },  // Last item, check all fields
-        ],
-    });
+    assert_struct!(
+        inventory,
+        Inventory {
+            items: [
+                .., // Ignore initial items
+                Item {
+                    id: 4,
+                    value: "bow"
+                }, // Last item, check all fields
+            ],
+        }
+    );
 }
 
 // Test with Option<Vec<T>>
@@ -327,9 +338,12 @@ fn test_option_vec_some() {
         values: Some(vec![1, 2, 3]),
     };
 
-    assert_struct!(config, Config {
-        values: Some([1, 2, 3]),
-    });
+    assert_struct!(
+        config,
+        Config {
+            values: Some([1, 2, 3]),
+        }
+    );
 }
 
 #[test]
@@ -338,17 +352,26 @@ fn test_option_vec_some_partial() {
         values: Some(vec![1, 2, 3, 4, 5]),
     };
 
-    assert_struct!(config, Config {
-        values: Some([1, 2, ..]),
-    });
-    
-    assert_struct!(config, Config {
-        values: Some([.., 5]),
-    });
-    
-    assert_struct!(config, Config {
-        values: Some([1, .., 5]),
-    });
+    assert_struct!(
+        config,
+        Config {
+            values: Some([1, 2, ..]),
+        }
+    );
+
+    assert_struct!(
+        config,
+        Config {
+            values: Some([.., 5]),
+        }
+    );
+
+    assert_struct!(
+        config,
+        Config {
+            values: Some([1, .., 5]),
+        }
+    );
 }
 
 #[test]
@@ -392,20 +415,20 @@ fn test_slice_multiple_rest_patterns_fails() {
     // This test exists to document that multiple .. patterns are not allowed
     // The actual test is commented out because it would fail to compile
     // which is the expected behavior
-    
+
     // The following would fail to compile:
     // let container = Container {
     //     items: vec![1, 2, 3, 4, 5],
     //     names: vec!["a".to_string()],
     //     data: vec![10],
     // };
-    // 
+    //
     // assert_struct!(container, Container {
     //     items: [1, .., 3, .., 5],  // Multiple .. not allowed
     //     names: ["a"],
     //     data: [10],
     // });
-    
+
     // For now, we'll just panic to have a test that documents this limitation
     panic!("Multiple .. patterns in slices are not allowed - this is enforced at compile time");
 }
