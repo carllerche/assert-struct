@@ -486,7 +486,107 @@
 // Re-export the procedural macro
 pub use assert_struct_macros::assert_struct;
 
-// Future: Like trait will be defined here
-// pub trait Like<Rhs = Self> {
-//     fn like(&self, other: &Rhs) -> bool;
-// }
+/// A trait for pattern matching, similar to `PartialEq` but for flexible matching.
+///
+/// The `Like` trait enables custom pattern matching logic beyond simple equality.
+/// It's primarily used with the `=~` operator in `assert_struct!` macro to support
+/// regex patterns, custom matching logic, and other pattern-based comparisons.
+///
+/// # Examples
+///
+/// ## Basic String Pattern Matching
+///
+/// ```
+/// use assert_struct::Like;
+///
+/// // Using Like trait directly
+/// let text = "hello@example.com";
+/// assert!(text.like(&r".*@example\.com"));
+/// ```
+///
+/// ## Custom Implementation
+///
+/// ```
+/// use assert_struct::Like;
+///
+/// struct EmailAddress(String);
+///
+/// struct DomainPattern {
+///     domain: String,
+/// }
+///
+/// impl Like<DomainPattern> for EmailAddress {
+///     fn like(&self, pattern: &DomainPattern) -> bool {
+///         self.0.ends_with(&format!("@{}", pattern.domain))
+///     }
+/// }
+///
+/// let email = EmailAddress("user@example.com".to_string());
+/// let pattern = DomainPattern { domain: "example.com".to_string() };
+/// assert!(email.like(&pattern));
+/// ```
+pub trait Like<Rhs = Self> {
+    /// Returns `true` if `self` matches the pattern `other`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use assert_struct::Like;
+    ///
+    /// let s = "test123";
+    /// assert!(s.like(&r"\w+\d+"));
+    /// ```
+    fn like(&self, other: &Rhs) -> bool;
+}
+
+// String/&str implementations for regex pattern matching
+#[cfg(feature = "regex")]
+mod like_impls {
+    use super::Like;
+
+    /// Implementation of Like for String with &str patterns (interpreted as regex)
+    impl Like<&str> for String {
+        fn like(&self, pattern: &&str) -> bool {
+            regex::Regex::new(pattern)
+                .map(|re| re.is_match(self))
+                .unwrap_or(false)
+        }
+    }
+
+    /// Implementation of Like for String with String patterns (interpreted as regex)
+    impl Like<String> for String {
+        fn like(&self, pattern: &String) -> bool {
+            self.like(&pattern.as_str())
+        }
+    }
+
+    /// Implementation of Like for &str with &str patterns (interpreted as regex)
+    impl Like<&str> for &str {
+        fn like(&self, pattern: &&str) -> bool {
+            regex::Regex::new(pattern)
+                .map(|re| re.is_match(self))
+                .unwrap_or(false)
+        }
+    }
+
+    /// Implementation of Like for &str with String patterns (interpreted as regex)
+    impl Like<String> for &str {
+        fn like(&self, pattern: &String) -> bool {
+            self.like(&pattern.as_str())
+        }
+    }
+
+    /// Implementation of Like for String with pre-compiled Regex
+    impl Like<regex::Regex> for String {
+        fn like(&self, pattern: &regex::Regex) -> bool {
+            pattern.is_match(self)
+        }
+    }
+
+    /// Implementation of Like for &str with pre-compiled Regex
+    impl Like<regex::Regex> for &str {
+        fn like(&self, pattern: &regex::Regex) -> bool {
+            pattern.is_match(self)
+        }
+    }
+}
