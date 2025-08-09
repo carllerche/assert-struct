@@ -283,6 +283,81 @@ assert_struct!(user, User {
 Note: Regex support is enabled by default but can be disabled by turning off
 default features.
 
+### Advanced Pattern Matching with Like Trait
+
+The `Like` trait enables flexible pattern matching beyond simple equality. You can use regex patterns from variables, pre-compiled regex, or even implement custom matching logic:
+
+```rust
+use assert_struct::{assert_struct, Like};
+use regex::Regex;
+
+#[derive(Debug)]
+struct User {
+    email: String,
+    username: String,
+}
+
+let user = User {
+    email: "alice@example.com".to_string(),
+    username: "alice_doe".to_string(),
+};
+
+// Use pre-compiled regex for better performance
+let email_regex = Regex::new(r"^[^@]+@example\.com$").unwrap();
+assert_struct!(user, User {
+    email: =~ email_regex,
+    ..
+});
+
+// Use patterns from variables
+let username_pattern = r"^[a-z_]+$";
+assert_struct!(user, User {
+    username: =~ username_pattern,
+    ..
+});
+
+// Custom Like implementation
+struct DomainPattern {
+    domain: String,
+}
+
+impl Like<DomainPattern> for String {
+    fn like(&self, pattern: &DomainPattern) -> bool {
+        self.ends_with(&format!("@{}", pattern.domain))
+    }
+}
+
+let domain = DomainPattern { domain: "example.com".to_string() };
+assert_struct!(user, User {
+    email: =~ domain,
+    ..
+});
+```
+
+The Like trait also includes advanced utility types for common patterns:
+
+```rust
+use assert_struct::{CaseInsensitive, Prefix, Suffix};
+
+#[derive(Debug)]
+struct Data {
+    name: String,
+    code: String,
+    path: String,
+}
+
+let data = Data {
+    name: "Alice Smith".to_string(),
+    code: "PREFIX_123_SUFFIX".to_string(),
+    path: "/home/user/file.txt".to_string(),
+};
+
+assert_struct!(data, Data {
+    name: =~ CaseInsensitive("alice smith".to_string()),  // Case-insensitive match
+    code: =~ Prefix("PREFIX".to_string()),                 // Starts with PREFIX
+    path: =~ Suffix(".txt".to_string()),                   // Ends with .txt
+});
+
 ### Option and Result Types
 
 Native support for Rust's standard `Option` and `Result` types:
