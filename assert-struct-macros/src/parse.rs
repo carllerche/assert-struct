@@ -6,6 +6,16 @@ pub fn parse(input: proc_macro::TokenStream) -> syn::Result<AssertStruct> {
 }
 
 impl Parse for AssertStruct {
+    /// Parses the top-level macro invocation.
+    ///
+    /// # Example Input
+    /// ```text
+    /// assert_struct!(value, Pattern { field: matcher, .. })
+    /// assert_struct!(value, Some(> 30))
+    /// assert_struct!(value, [1, 2, 3])
+    /// ```
+    ///
+    /// The macro always expects: `expression`, `pattern`
     fn parse(input: ParseStream) -> Result<Self> {
         let value = input.parse()?;
         let _: Token![,] = input.parse()?;
@@ -16,11 +26,23 @@ impl Parse for AssertStruct {
 }
 
 impl Parse for Expected {
+    /// Parses struct field patterns inside braces.
+    ///
+    /// # Example Input
+    /// ```text
+    /// // Inside: User { ... }
+    /// name: "Alice", age: 30, ..
+    /// name: "Bob", age: >= 18
+    /// email: =~ r".*@example\.com", ..
+    /// ```
+    ///
+    /// The `..` token enables partial matching - only specified fields are checked.
     fn parse(input: ParseStream) -> Result<Self> {
         let mut fields = Punctuated::new();
         let mut rest = false;
 
         while !input.is_empty() {
+            // Check for rest pattern (..) which allows partial matching
             if input.peek(Token![..]) {
                 let _: Token![..] = input.parse()?;
                 rest = true;
@@ -36,6 +58,7 @@ impl Parse for Expected {
             let comma: Token![,] = input.parse()?;
             fields.push_punct(comma);
 
+            // Rest pattern can appear after a comma
             if input.peek(Token![..]) {
                 let _: Token![..] = input.parse()?;
                 rest = true;
@@ -47,24 +70,37 @@ impl Parse for Expected {
     }
 }
 
-// Parse any pattern at any level
+/// Parse any pattern at any level - the heart of the macro's flexibility.
+///
+/// This function handles all pattern types in a specific order to avoid ambiguity.
+/// The order matters because some patterns share prefixes (e.g., `..` vs `..n`).
 fn parse_pattern(input: ParseStream) -> Result<Pattern> {
-    // Check for .. but need to distinguish from range patterns (..n, ..=n)
+    // AMBIGUITY: `..` could be a rest pattern OR start of a range like `..10`
+    // Example inputs:
+    //   `..`        -> rest pattern (partial matching)
+    //   `..10`      -> range pattern (exclusive upper bound)
+    //   `..=10`     -> range pattern (inclusive upper bound)
     if input.peek(Token![..]) {
         let fork = input.fork();
         let _: Token![..] = fork.parse()?;
 
-        // Check if this is a range pattern (..n or ..=n)
+        // Distinguish by looking ahead after the `..`
         if fork.peek(Token![=]) || (!fork.is_empty() && !fork.peek(Token![,])) {
-            // This is a range pattern, fall through to parse as expression
+            // This is a range pattern like `..10` or `..=10`
+            // Fall through to parse as expression later
         } else {
-            // This is a rest pattern
+            // This is a rest pattern for partial matching
             let _: Token![..] = input.parse()?;
             return Ok(Pattern::Rest);
         }
     }
 
-    // Check for comparison operators: <, <=, >, >=
+    // Comparison operators are checked early to capture them before
+    // they could be parsed as part of an expression
+    // Examples:
+    //   `< 100`     -> less than 100
+    //   `>= 18`     -> greater than or equal to 18
+    //   `> compute_threshold()` -> comparison with function result
     if input.peek(Token![<]) {
         let _: Token![<] = input.parse()?;
         if input.peek(Token![=]) {
@@ -89,7 +125,8 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         }
     }
 
-    // Check for != operator
+    // `!=` needs special handling because `!` could start other expressions
+    // Example: `!= "error"` vs `!flag` (not pattern vs boolean negation)
     if input.peek(Token![!]) {
         let fork = input.fork();
         if fork.parse::<Token![!]>().is_ok() && fork.peek(Token![=]) {
@@ -100,12 +137,13 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         }
     }
 
-    // Check for == or =~ operators
+    // `=` could start `==` (equality) or `=~` (regex pattern)
     if input.peek(Token![=]) {
         let fork = input.fork();
         if fork.parse::<Token![=]>().is_ok() {
             if fork.peek(Token![=]) {
-                // == operator
+                // Explicit equality check
+                // Example: `status: == "ok"`
                 let _: Token![=] = input.parse()?;
                 let _: Token![=] = input.parse()?;
                 let value = input.parse()?;
@@ -113,20 +151,21 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             }
             #[cfg(feature = "regex")]
             if fork.peek(Token![~]) {
-                // =~ operator for pattern matching
+                // Regex pattern matching with dual-path optimization
                 let _: Token![=] = input.parse()?;
                 let _: Token![~] = input.parse()?;
 
-                // Performance optimization: if it's a string literal, we can compile
-                // the regex at macro expansion time and provide better error messages
+                // PERFORMANCE OPTIMIZATION: String literals are compiled at macro expansion time
+                // This avoids runtime regex compilation for the common case
                 let fork = input.fork();
                 if let Ok(lit) = fork.parse::<syn::LitStr>() {
-                    // String literal - compile as regex at expansion time for performance
-                    // This allows compile-time validation and avoids runtime compilation
+                    // Example: `email: =~ r".*@example\.com"`
+                    // Compiles regex at macro expansion, fails early if invalid
                     input.parse::<syn::LitStr>()?;
                     return Ok(Pattern::Regex(lit.value()));
                 } else {
-                    // Arbitrary expression - use Like trait at runtime
+                    // Example: `email: =~ email_pattern` where email_pattern is a variable
+                    // Uses Like trait for runtime pattern matching
                     let expr = input.parse::<syn::Expr>()?;
                     return Ok(Pattern::Like(expr));
                 }
@@ -134,7 +173,8 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         }
     }
 
-    // Check for slice pattern [...]
+    // Slice patterns for Vec/array matching
+    // Example: `[1, 2, 3]` or `[> 0, < 10, == 5]`
     if input.peek(syn::token::Bracket) {
         let content;
         syn::bracketed!(content in input);
@@ -142,7 +182,8 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         return Ok(Pattern::Slice(elements));
     }
 
-    // Check for tuple pattern (...)
+    // Standalone tuple pattern (no type prefix)
+    // Example: `(10, 20)` or `(> 10, < 30)`
     if input.peek(syn::token::Paren) {
         let content;
         syn::parenthesized!(content in input);
@@ -153,12 +194,13 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         });
     }
 
-    // Try to parse a path (could be Type, Some, Status::Active, etc.)
+    // Complex path-based patterns: structs, enums, tuple variants
+    // This is where disambiguation becomes critical
     let fork = input.fork();
     if let Ok(path) = fork.parse::<syn::Path>() {
-        // Check for struct pattern: Path { fields }
+        // Path followed by braces is a struct pattern
+        // Example: `User { name: "Alice", age: 30 }`
         if fork.peek(syn::token::Brace) {
-            // Commit to parsing the path
             let path: syn::Path = input.parse()?;
             let content;
             syn::braced!(content in input);
@@ -170,25 +212,31 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             });
         }
 
-        // Check for tuple pattern: Path(...)
+        // Path followed by parens could be:
+        // 1. Enum with patterns: `Some(> 30)` - needs special parsing
+        // 2. Simple expression: `Some(value)` - parse as single expression
         if fork.peek(syn::token::Paren) {
-            // Commit to parsing the path
             let path: syn::Path = input.parse()?;
             let content;
             syn::parenthesized!(content in input);
 
-            // Check if the content contains special syntax
+            // CRITICAL DISAMBIGUATION: Is this `Some(> 30)` or `Some(my_var)`?
+            // We need to check if the content has special pattern syntax
             let fork = content.fork();
             let has_special = check_for_special_syntax(&fork);
 
             if has_special {
+                // Contains pattern syntax like `>`, `==`, nested patterns
+                // Example: `Some(> 30)`, `Event::Click(>= 0, < 100)`
                 let elements = parse_pattern_list(&content)?;
                 return Ok(Pattern::Tuple {
                     path: Some(path),
                     elements,
                 });
             } else {
-                // Simple expression like Some(vec![1, 2, 3])
+                // Simple expression without pattern syntax
+                // Example: `Some(expected_value)`, `Ok(result)`
+                // We treat the whole content as a single expression
                 let expr = content.parse()?;
                 return Ok(Pattern::Tuple {
                     path: Some(path),
@@ -197,12 +245,12 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             }
         }
 
-        // Check if it's a unit variant (path with no brackets)
-        // Heuristic: starts with uppercase
+        // Unit variants (no parens or braces)
+        // Heuristic: If it starts with uppercase, likely an enum variant
+        // Examples: `None`, `Status::Active`, `Color::Red`
         if let Some(segment) = path.segments.last() {
             let name = segment.ident.to_string();
             if name.chars().next().is_some_and(|c| c.is_uppercase()) {
-                // Likely a unit variant like None or Status::Inactive
                 let path: syn::Path = input.parse()?;
                 return Ok(Pattern::Tuple {
                     path: Some(path),
@@ -212,18 +260,21 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         }
     }
 
-    // Fall back to simple expression or range
+    // Everything else is either a simple expression or range
     let expr: syn::Expr = input.parse()?;
 
-    // Check if it's a range expression
+    // Range expressions like `18..65` or `0.0..100.0`
     if matches!(expr, syn::Expr::Range(_)) {
         Ok(Pattern::Range(expr))
     } else {
+        // Simple value or expression
+        // Examples: `42`, `"hello"`, `my_variable`, `compute_value()`
         Ok(Pattern::Simple(expr))
     }
 }
 
-// Parse a list of patterns separated by commas
+/// Parse a comma-separated list of patterns.
+/// Used inside tuples, slices, and enum variants.
 fn parse_pattern_list(input: ParseStream) -> Result<Vec<Pattern>> {
     let mut patterns = Vec::new();
 
@@ -239,6 +290,14 @@ fn parse_pattern_list(input: ParseStream) -> Result<Vec<Pattern>> {
 }
 
 impl Parse for FieldAssertion {
+    /// Parses a single field assertion within a struct pattern.
+    ///
+    /// # Example Input
+    /// ```text
+    /// name: "Alice"
+    /// age: >= 18
+    /// email: =~ r".*@example\.com"
+    /// ```
     fn parse(input: ParseStream) -> Result<Self> {
         let field_name: syn::Ident = input.parse()?;
         let _: Token![:] = input.parse()?;
@@ -251,14 +310,24 @@ impl Parse for FieldAssertion {
     }
 }
 
-// Helper to check if content contains special syntax that needs pattern parsing
+/// Critical disambiguation function that determines whether parenthesized content
+/// contains special pattern syntax or is just a simple expression.
+///
+/// This solves the ambiguity between:
+/// - `Some(> 30)` - contains pattern syntax, needs special parsing
+/// - `Some(my_var)` - simple expression, parse as-is
+/// - `Some((true, false))` - tuple expression, parse as-is
+/// - `Event::Click(>= 0, < 100)` - multiple patterns, needs special parsing
+///
+/// The fork-and-peek pattern is essential here - we look ahead without
+/// consuming tokens to make the decision.
 fn check_for_special_syntax(content: ParseStream) -> bool {
-    // Check for comparison operators
+    // Comparison operators indicate pattern syntax
     if content.peek(Token![<]) || content.peek(Token![>]) {
         return true;
     }
 
-    // Check for != operator
+    // Check for != operator (but not just ! which could be boolean negation)
     if content.peek(Token![!]) {
         let fork = content.fork();
         if fork.parse::<Token![!]>().is_ok() && fork.peek(Token![=]) {
@@ -274,12 +343,12 @@ fn check_for_special_syntax(content: ParseStream) -> bool {
         }
     }
 
-    // Check for brackets (slice pattern)
+    // Nested slice patterns like `Some([1, 2, 3])`
     if content.peek(syn::token::Bracket) {
         return true;
     }
 
-    // Check for path followed by braces or parens (struct/enum patterns)
+    // Nested struct/enum patterns like `Some(User { ... })`
     let fork = content.fork();
     if let Ok(_path) = fork.parse::<syn::Path>() {
         if fork.peek(syn::token::Brace) || fork.peek(syn::token::Paren) {
@@ -287,10 +356,12 @@ fn check_for_special_syntax(content: ParseStream) -> bool {
         }
     }
 
-    // Check if there's a comma at the top level - if so, it's multiple elements
+    // Multiple comma-separated elements indicate tuple pattern
+    // BUT: Be careful! `(true, false)` is a valid tuple expression
+    // We only treat it as special if it would contain patterns
     let fork = content.fork();
     if fork.parse::<syn::Expr>().is_ok() && fork.peek(Token![,]) {
-        return true; // Multiple elements, needs tuple parsing
+        return true;
     }
 
     false
