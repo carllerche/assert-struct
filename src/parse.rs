@@ -319,8 +319,13 @@ fn parse_pattern_elements(content: ParseStream) -> Result<Vec<PatternElement>> {
     let mut elements = Vec::new();
 
     while !content.is_empty() {
+        // Check for .. (rest pattern)
+        if content.peek(Token![..]) {
+            let _: Token![..] = content.parse()?;
+            elements.push(PatternElement::Rest);
+        }
         // Check for nested parentheses (nested tuple)
-        if content.peek(syn::token::Paren) {
+        else if content.peek(syn::token::Paren) {
             // It's a nested tuple like ((10, 20), ...)
             let inner_content;
             syn::parenthesized!(inner_content in content);
