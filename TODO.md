@@ -22,7 +22,22 @@
 - [x] Test with various expression types
 - [x] Update documentation with examples
 
-### 3. Improved regex operator
+### 3. Range support (Partially Implemented) ⚠️
+- [x] Add range syntax recognition in parser
+- [x] Add `Range` variant to `FieldAssertion` and `PatternElement`
+- [x] Implement basic code generation for range assertions
+- [ ] **Issue**: Reference handling needs architectural changes
+  - The current destructuring with `&` creates reference fields
+  - Range construction happens at parse time with literals
+  - This creates type mismatches (`&u32` vs `Range<u32>`)
+- [ ] Potential solutions:
+  - Clone/dereference fields before range checking
+  - Use a different assertion approach
+  - Generate custom range checking code
+- [ ] Test with all numeric types once working
+- [ ] Update documentation
+
+### 4. Improved regex operator
 - [ ] Consider allowing variables containing regex patterns
 - [ ] Consider function calls returning regex patterns
 - [ ] Need to carefully design compile-time vs runtime behavior
