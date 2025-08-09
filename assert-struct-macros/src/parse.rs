@@ -15,7 +15,7 @@ impl Parse for AssertStruct {
     /// assert_struct!(value, [1, 2, 3])
     /// ```
     ///
-    /// The macro always expects: <expression>, <pattern>
+    /// The macro always expects: `expression`, `pattern`
     fn parse(input: ParseStream) -> Result<Self> {
         let value = input.parse()?;
         let _: Token![,] = input.parse()?;
