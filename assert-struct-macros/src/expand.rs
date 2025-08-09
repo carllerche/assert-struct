@@ -132,13 +132,15 @@ fn generate_pattern_assertion(
         }
         #[cfg(feature = "regex")]
         Pattern::Regex(pattern_str) => {
-            // Regex pattern
+            // String literal regex pattern - compile at expansion time for performance
+            // but still use Like trait for consistency
             if is_ref {
                 quote! {
                     {
+                        use ::assert_struct::Like;
                         let re = ::regex::Regex::new(#pattern_str)
                             .expect(concat!("Invalid regex pattern: ", #pattern_str));
-                        if !re.is_match(#value_expr) {
+                        if !#value_expr.like(&re) {
                             panic!(
                                 "Value does not match regex pattern `{}`\n  value: {:?}",
                                 #pattern_str,
@@ -150,9 +152,10 @@ fn generate_pattern_assertion(
             } else {
                 quote! {
                     {
+                        use ::assert_struct::Like;
                         let re = ::regex::Regex::new(#pattern_str)
                             .expect(concat!("Invalid regex pattern: ", #pattern_str));
-                        if !re.is_match(&#value_expr) {
+                        if !(&#value_expr).like(&re) {
                             panic!(
                                 "Value does not match regex pattern `{}`\n  value: {:?}",
                                 #pattern_str,

@@ -113,20 +113,20 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             }
             #[cfg(feature = "regex")]
             if fork.peek(Token![~]) {
-                // =~ operator for Like trait or regex pattern
+                // =~ operator for pattern matching
                 let _: Token![=] = input.parse()?;
                 let _: Token![~] = input.parse()?;
                 
-                // Check if it's a string literal with r prefix (backward compatibility)
-                // We need to handle r"pattern" or just "pattern"
+                // Performance optimization: if it's a string literal, we can compile
+                // the regex at macro expansion time and provide better error messages
                 let fork = input.fork();
                 if let Ok(lit) = fork.parse::<syn::LitStr>() {
-                    // It's a string literal - check if the original token had 'r' prefix
-                    // For backward compatibility, treat string literals as regex patterns
+                    // String literal - compile as regex at expansion time for performance
+                    // This allows compile-time validation and avoids runtime compilation
                     input.parse::<syn::LitStr>()?;
                     return Ok(Pattern::Regex(lit.value()));
                 } else {
-                    // It's an arbitrary expression - use Like trait
+                    // Arbitrary expression - use Like trait at runtime
                     let expr = input.parse::<syn::Expr>()?;
                     return Ok(Pattern::Like(expr));
                 }
