@@ -146,6 +146,19 @@ impl Parse for FieldAssertion {
             }
         }
 
+        // Check if this is a slice pattern [...]
+        if input.peek(syn::token::Bracket) {
+            let content;
+            syn::bracketed!(content in input);
+
+            let elements = parse_slice_elements(&content)?;
+
+            return Ok(FieldAssertion::SlicePattern {
+                field_name,
+                elements,
+            });
+        }
+
         // Check if this is a plain tuple (no path prefix)
         if input.peek(syn::token::Paren) {
             let content;
@@ -289,8 +302,20 @@ fn check_for_special_syntax(content: ParseStream) -> bool {
     false
 }
 
+// Parse the contents of a slice pattern [...]
+fn parse_slice_elements(content: ParseStream) -> Result<Vec<PatternElement>> {
+    // Similar to parse_tuple_elements but for slice patterns
+    // This allows comparison operators, regex, and nested patterns in slices
+    parse_pattern_elements(content)
+}
+
 // Parse the contents of a tuple pattern (for plain tuples without a variant)
 fn parse_tuple_elements(content: ParseStream) -> Result<Vec<PatternElement>> {
+    parse_pattern_elements(content)
+}
+
+// Common pattern element parsing used by both slices and tuples
+fn parse_pattern_elements(content: ParseStream) -> Result<Vec<PatternElement>> {
     let mut elements = Vec::new();
 
     while !content.is_empty() {
@@ -299,7 +324,7 @@ fn parse_tuple_elements(content: ParseStream) -> Result<Vec<PatternElement>> {
             // It's a nested tuple like ((10, 20), ...)
             let inner_content;
             syn::parenthesized!(inner_content in content);
-            let inner_elements = parse_tuple_elements(&inner_content)?;
+            let inner_elements = parse_pattern_elements(&inner_content)?;
             // Wrap in a TuplePattern without a path
             elements.push(PatternElement::Tuple(None, inner_elements));
         }

@@ -68,7 +68,7 @@ assert_struct!(response, Response {
 - **Partial matching** - Use `..` to check only the fields you care about
 - **Deep nesting** - Assert on nested structs without manual field access chains
 - **String literals** - Compare `String` fields directly with `"text"` literals
-- **Collections** - Assert on `Vec` fields using slice syntax `[1, 2, 3]`
+- **Collections** - Assert on `Vec` fields with element-wise patterns
 - **Tuples** - Full support for multi-field tuples with advanced patterns
 - **Enum support** - Match on `Option`, `Result`, and custom enum variants
 
@@ -76,7 +76,9 @@ assert_struct!(response, Response {
 
 - **Comparison operators** - Use `<`, `<=`, `>`, `>=` for numeric field assertions
 - **Equality operators** - Use `==` and `!=` for explicit equality/inequality checks
+- **Range patterns** - Use `18..=65`, `0.0..100.0` for range matching
 - **Regex patterns** - Match string fields with regular expressions using `=~ r"pattern"`
+- **Slice patterns** - Element-wise patterns for `Vec` fields like `[> 0, < 10, == 5]`
 - **Advanced enum patterns** - Use comparison operators and regex inside `Some()` and other variants
 
 ## Installation
@@ -176,23 +178,30 @@ assert_struct!(person, Person {
 
 ### Collections
 
-Compare vectors with slice syntax:
+Element-wise pattern matching for vectors:
 
 ```rust
 #[derive(Debug)]
 struct Data {
     values: Vec<u32>,
-    name: String,
+    names: Vec<String>,
 }
 
 let data = Data {
-    values: vec![1, 2, 3],
-    name: "test".to_string(),
+    values: vec![5, 15, 25],
+    names: vec!["alice".to_string(), "bob".to_string()],
 };
 
+// Exact matching
 assert_struct!(data, Data {
-    values: [1, 2, 3],  // Use slice syntax for Vec
-    name: "test",
+    values: [5, 15, 25],
+    names: ["alice", "bob"],  // String literals work!
+});
+
+// Advanced patterns with comparison operators
+assert_struct!(data, Data {
+    values: [> 0, < 20, == 25],  // Different matcher for each element
+    names: ["alice", "bob"],
 });
 ```
 
@@ -419,7 +428,7 @@ assert_struct!(response, ApiResponse {
     status: "success",
     data: UserData {
         username: "testuser",
-        permissions: ["read", "write"],
+        permissions: vec!["read".to_string(), "write".to_string()],
         ..  // Don't check the generated ID
     },
     ..  // Don't check timestamp
@@ -448,7 +457,7 @@ assert_struct!(state, GameState {
     level: 3,            // Reached level 3
     player: Player {
         health: > 0,     // Still alive
-        inventory: ["sword", "shield"],  // Has required items
+        inventory: vec!["sword".to_string(), "shield".to_string()],  // Has required items
         ..  // Position doesn't matter
     },
 });

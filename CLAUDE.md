@@ -10,8 +10,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Partial matching**: Check only the fields you care about with `..`
 - **Nested struct support**: Deep assertions without verbose field access chains
 - **Comparison operators**: `<`, `<=`, `>`, `>=` for numeric assertions
+- **Equality operators**: `==`, `!=` for explicit equality checks
+- **Range patterns**: `18..=65`, `0.0..100.0` for range matching
 - **Regex patterns**: `=~ r"pattern"` for string matching (feature-gated)
-- **Collection support**: Assert on Vec using slice syntax `[1, 2, 3]`
+- **Slice patterns**: Element-wise patterns for Vec fields `[> 0, < 10, == 5]`
 - **Enum support**: Full support for Option, Result, and custom enums (all variant types)
 - **Tuple support**: Multi-field tuples with advanced patterns `(> 10, < 30)`
 - **Pattern composition**: Combine all features (e.g., `Some(> 30)`, `Event::Click(>= 0, < 100)`)
@@ -32,7 +34,7 @@ assert_struct!(response, Response {
         },
         ..
     },
-    items: [_, _, _],  // At least 3 items
+    items: [> 0, < 100, > 0],  // Element-wise patterns
     ..
 });
 ```
@@ -91,6 +93,8 @@ RUST_BACKTRACE=1 cargo test  # Debug macro panics
   - `option*.rs` - Option type tests (basic, advanced, nested)
   - `tuples.rs` - multi-field tuple support
   - `regex.rs` - regex pattern matching (feature-gated)
+  - `ranges.rs` - range pattern matching
+  - `slices.rs` - slice/Vec pattern matching with element-wise assertions
 
 ### Implementation Strategy
 
