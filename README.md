@@ -332,31 +332,6 @@ assert_struct!(user, User {
     email: =~ domain,
     ..
 });
-```
-
-The Like trait also includes advanced utility types for common patterns:
-
-```rust
-use assert_struct::{CaseInsensitive, Prefix, Suffix};
-
-#[derive(Debug)]
-struct Data {
-    name: String,
-    code: String,
-    path: String,
-}
-
-let data = Data {
-    name: "Alice Smith".to_string(),
-    code: "PREFIX_123_SUFFIX".to_string(),
-    path: "/home/user/file.txt".to_string(),
-};
-
-assert_struct!(data, Data {
-    name: =~ CaseInsensitive("alice smith".to_string()),  // Case-insensitive match
-    code: =~ Prefix("PREFIX".to_string()),                 // Starts with PREFIX
-    path: =~ Suffix(".txt".to_string()),                   // Ends with .txt
-});
 
 ### Option and Result Types
 
