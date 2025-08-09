@@ -75,6 +75,7 @@ assert_struct!(response, Response {
 ### Advanced Matchers
 
 - **Comparison operators** - Use `<`, `<=`, `>`, `>=` for numeric field assertions
+- **Equality operators** - Use `==` and `!=` for explicit equality/inequality checks
 - **Regex patterns** - Match string fields with regular expressions using `=~ r"pattern"`
 - **Advanced enum patterns** - Use comparison operators and regex inside `Some()` and other variants
 
@@ -356,9 +357,9 @@ assert_struct!(error_account, Account {
 });
 ```
 
-### Comparison Operators
+### Comparison and Equality Operators
 
-Perfect for range checks and threshold validations:
+Perfect for range checks, threshold validations, and explicit equality tests:
 
 ```rust
 #[derive(Debug)]
@@ -366,18 +367,28 @@ struct Metrics {
     cpu_usage: f64,
     memory_mb: u32,
     response_time_ms: u32,
+    status: String,
 }
 
 let metrics = Metrics {
     cpu_usage: 75.5,
     memory_mb: 1024,
     response_time_ms: 150,
+    status: "ok".to_string(),
 };
 
 assert_struct!(metrics, Metrics {
-    cpu_usage: < 80.0,        // Less than 80%
-    memory_mb: <= 2048,        // At most 2GB
-    response_time_ms: < 200,   // Under 200ms
+    cpu_usage: < 80.0,         // Less than 80%
+    memory_mb: <= 2048,         // At most 2GB
+    response_time_ms: < 200,    // Under 200ms
+    status: == "ok",            // Exact equality
+});
+
+// Inequality checks
+assert_struct!(metrics, Metrics {
+    status: != "error",         // Not equal to "error"
+    memory_mb: != 0,            // Not zero
+    ..
 });
 ```
 

@@ -1,0 +1,10 @@
+error[E0797]: base expression required after `..`
+  --> tests/compile_fail/equality_with_rest_pattern.rs:22:30
+   |
+22 |         origin: == Point { .. },
+   |                              ^
+   |
+help: add a base expression here
+   |
+22 |         origin: == Point { ../* expr */ },
+   |                              ++++++++++

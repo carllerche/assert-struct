@@ -114,6 +114,7 @@
 //! ## Advanced Matchers
 //!
 //! - **Comparison Operators** - Use `<`, `<=`, `>`, `>=` for numeric field assertions
+//! - **Equality Operators** - Use `==` and `!=` for explicit equality/inequality checks
 //! - **Regex Patterns** - Match string fields with regular expressions using `=~ r"pattern"`
 //! - **Advanced Enum Patterns** - Use comparison operators and regex inside `Some()` and other variants
 //!
@@ -523,6 +524,8 @@ enum ComparisonOp {
     LessEqual,
     Greater,
     GreaterEqual,
+    Equal,
+    NotEqual,
 }
 
 /// Asserts that a struct matches an expected pattern.
@@ -546,6 +549,7 @@ enum ComparisonOp {
 /// | Matcher | Description | Example |
 /// |---------|-------------|---------|
 /// | Exact value | Direct equality comparison | `name: "Alice"` |
+/// | Equality | Explicit equality/inequality | `age: == 30`, `status: != "error"` |
 /// | Comparison | Numeric comparisons | `age: >= 18` |
 /// | Regex | Pattern matching (requires `regex` feature) | `email: =~ r"@.*\.com$"` |
 /// | Option | Match `Some` and `None` variants | `age: Some(30)`, `bio: None` |
@@ -590,16 +594,22 @@ enum ComparisonOp {
 /// });
 /// ```
 ///
-/// ## Comparison Operators
+/// ## Comparison and Equality Operators
 ///
 /// ```
 /// # use assert_struct::assert_struct;
-/// # #[derive(Debug)]
-/// # struct Score { value: i32, bonus: f64 }
-/// # let score = Score { value: 95, bonus: 1.5 };
+/// # #[derive(Debug, PartialEq)]
+/// # struct Score { value: i32, bonus: f64, grade: String }
+/// # let score = Score { value: 95, bonus: 1.5, grade: "A".to_string() };
 /// assert_struct!(score, Score {
-///     value: > 90,
-///     bonus: >= 1.0,
+///     value: > 90,        // Greater than
+///     bonus: >= 1.0,      // Greater or equal
+///     grade: == "A",      // Explicit equality
+/// });
+///
+/// assert_struct!(score, Score {
+///     grade: != "F",      // Not equal
+///     ..
 /// });
 /// ```
 ///

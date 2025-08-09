@@ -118,11 +118,13 @@ fn generate_assertions(expected: &Expected) -> TokenStream {
                 ..
             } => {
                 // Comparison: generate appropriate comparison assertion
-                let op_str = match op {
-                    ComparisonOp::Less => "<",
-                    ComparisonOp::LessEqual => "<=",
-                    ComparisonOp::Greater => ">",
-                    ComparisonOp::GreaterEqual => ">=",
+                let (op_str, error_msg) = match op {
+                    ComparisonOp::Less => ("<", "comparison"),
+                    ComparisonOp::LessEqual => ("<=", "comparison"),
+                    ComparisonOp::Greater => (">", "comparison"),
+                    ComparisonOp::GreaterEqual => (">=", "comparison"),
+                    ComparisonOp::Equal => ("==", "equality"),
+                    ComparisonOp::NotEqual => ("!=", "inequality"),
                 };
 
                 let comparison = match op {
@@ -130,13 +132,16 @@ fn generate_assertions(expected: &Expected) -> TokenStream {
                     ComparisonOp::LessEqual => quote! { #field_name <= &#value },
                     ComparisonOp::Greater => quote! { #field_name > &#value },
                     ComparisonOp::GreaterEqual => quote! { #field_name >= &#value },
+                    ComparisonOp::Equal => quote! { #field_name == &#value },
+                    ComparisonOp::NotEqual => quote! { #field_name != &#value },
                 };
 
                 assertions.push(quote! {
                     if !(#comparison) {
                         panic!(
-                            "Field `{}` failed comparison: {:?} {} {}",
+                            "Field `{}` failed {}: {:?} {} {:?}",
                             stringify!(#field_name),
+                            #error_msg,
                             #field_name,
                             #op_str,
                             &#value
@@ -301,11 +306,13 @@ fn generate_pattern_element_assertion(
             }
         }
         PatternElement::Comparison(op, value) => {
-            let op_str = match op {
-                ComparisonOp::Less => "<",
-                ComparisonOp::LessEqual => "<=",
-                ComparisonOp::Greater => ">",
-                ComparisonOp::GreaterEqual => ">=",
+            let (op_str, error_msg) = match op {
+                ComparisonOp::Less => ("<", "comparison"),
+                ComparisonOp::LessEqual => ("<=", "comparison"),
+                ComparisonOp::Greater => (">", "comparison"),
+                ComparisonOp::GreaterEqual => (">=", "comparison"),
+                ComparisonOp::Equal => ("==", "equality"),
+                ComparisonOp::NotEqual => ("!=", "inequality"),
             };
 
             let comparison = match op {
@@ -313,12 +320,15 @@ fn generate_pattern_element_assertion(
                 ComparisonOp::LessEqual => quote! { #elem_name <= &#value },
                 ComparisonOp::Greater => quote! { #elem_name > &#value },
                 ComparisonOp::GreaterEqual => quote! { #elem_name >= &#value },
+                ComparisonOp::Equal => quote! { #elem_name == &#value },
+                ComparisonOp::NotEqual => quote! { #elem_name != &#value },
             };
 
             quote! {
                 if !(#comparison) {
                     panic!(
-                        "Element failed comparison: {:?} {} {}",
+                        "Element failed {}: {:?} {} {:?}",
+                        #error_msg,
                         #elem_name,
                         #op_str,
                         &#value
@@ -545,11 +555,13 @@ fn generate_option_assertion(field_name: &syn::Ident, element: &PatternElement) 
             }
         }
         PatternElement::Comparison(op, value) => {
-            let op_str = match op {
-                ComparisonOp::Less => "<",
-                ComparisonOp::LessEqual => "<=",
-                ComparisonOp::Greater => ">",
-                ComparisonOp::GreaterEqual => ">=",
+            let (op_str, error_msg) = match op {
+                ComparisonOp::Less => ("<", "comparison"),
+                ComparisonOp::LessEqual => ("<=", "comparison"),
+                ComparisonOp::Greater => (">", "comparison"),
+                ComparisonOp::GreaterEqual => (">=", "comparison"),
+                ComparisonOp::Equal => ("==", "equality"),
+                ComparisonOp::NotEqual => ("!=", "inequality"),
             };
 
             let comparison = match op {
@@ -557,6 +569,8 @@ fn generate_option_assertion(field_name: &syn::Ident, element: &PatternElement) 
                 ComparisonOp::LessEqual => quote! { inner <= &#value },
                 ComparisonOp::Greater => quote! { inner > &#value },
                 ComparisonOp::GreaterEqual => quote! { inner >= &#value },
+                ComparisonOp::Equal => quote! { inner == &#value },
+                ComparisonOp::NotEqual => quote! { inner != &#value },
             };
 
             quote! {
@@ -564,8 +578,9 @@ fn generate_option_assertion(field_name: &syn::Ident, element: &PatternElement) 
                     Some(inner) => {
                         if !(#comparison) {
                             panic!(
-                                "Field `{}` failed comparison: Some({:?}) {} {}",
+                                "Field `{}` failed {}: Some({:?}) {} {:?}",
                                 stringify!(#field_name),
+                                #error_msg,
                                 inner,
                                 #op_str,
                                 &#value
@@ -694,6 +709,8 @@ fn generate_struct_field_assignments(nested: &Expected) -> Vec<TokenStream> {
                                     ComparisonOp::LessEqual => quote! { <= },
                                     ComparisonOp::Greater => quote! { > },
                                     ComparisonOp::GreaterEqual => quote! { >= },
+                                    ComparisonOp::Equal => quote! { == },
+                                    ComparisonOp::NotEqual => quote! { != },
                                 };
                                 quote! { #op_tokens #value }
                             }
@@ -738,6 +755,8 @@ fn generate_struct_field_assignments(nested: &Expected) -> Vec<TokenStream> {
                                     ComparisonOp::LessEqual => quote! { <= },
                                     ComparisonOp::Greater => quote! { > },
                                     ComparisonOp::GreaterEqual => quote! { >= },
+                                    ComparisonOp::Equal => quote! { == },
+                                    ComparisonOp::NotEqual => quote! { != },
                                 };
                                 quote! { #op_tokens #value }
                             }
@@ -796,6 +815,8 @@ fn generate_struct_field_assignments(nested: &Expected) -> Vec<TokenStream> {
                     ComparisonOp::LessEqual => quote! { <= },
                     ComparisonOp::Greater => quote! { > },
                     ComparisonOp::GreaterEqual => quote! { >= },
+                    ComparisonOp::Equal => quote! { == },
+                    ComparisonOp::NotEqual => quote! { != },
                 };
                 field_assignments.push(quote! {
                     #field_name: #op_tokens #value
@@ -819,6 +840,8 @@ fn generate_pattern_element_values(elements: &[PatternElement]) -> Vec<TokenStre
                     ComparisonOp::LessEqual => quote! { <= },
                     ComparisonOp::Greater => quote! { > },
                     ComparisonOp::GreaterEqual => quote! { >= },
+                    ComparisonOp::Equal => quote! { == },
+                    ComparisonOp::NotEqual => quote! { != },
                 };
                 quote! { #op_tokens #value }
             }
