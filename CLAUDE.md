@@ -154,9 +154,24 @@ RUST_BACKTRACE=1 cargo test  # Debug macro panics
 3. **Feature gates**: Add `#[cfg(feature = "...")]` when first adding feature-dependent tests
 4. **Dead code warnings**: Use `#[allow(dead_code)]` for fields/variants only used with certain features
 
+### Key Learning: Leverage Rust's Native Syntax When Possible
+When implementing proc macros, prefer generating code that uses Rust's native syntax rather than method calls:
+- **Principle**: Rust's built-in syntax (patterns, match expressions, operators) handles many complexities automatically
+- **Example**: Range matching
+  ```rust
+  // Instead of: if !(18..=65).contains(age) { panic!() }  // Requires managing types/references manually
+  // Generate:  match age { 18..=65 => {}, _ => panic!() }  // Rust handles everything!
+  ```
+- **Benefits**:
+  - Automatic reference level handling
+  - Type inference works better
+  - More idiomatic generated code
+  - Leverages Rust compiler's full capabilities
+- **Application**: Before implementing complex logic, ask "Can Rust's syntax already do this for us?"
+
 ### Future Extension Points
 The architecture is well-positioned for these potential additions:
-- **Range patterns**: `age: 18..=65`
+- **Range patterns**: `age: 18..=65` ✅ (Implemented using match expressions)
 - **Custom matcher functions**: `score: |s| s > 90 && s < 100`
 - **HashMap/BTreeMap support**: Key-value matching
 - **Performance optimization**: Cache compiled regex patterns
