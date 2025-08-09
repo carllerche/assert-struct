@@ -59,7 +59,8 @@ Target error:
 assert_struct! failed:
    | User {
 
-string pattern mismatch at `user.name`:
+string pattern mismatch:
+  --> `user.name`
    |     name: "Bob",
    |           ^^^^^ actual: "Alice"
    |     ..
@@ -93,8 +94,9 @@ Target error:
 assert_struct! failed:
    | User {
 
-string pattern mismatch at `user.name`:
-3  |     name: == name,
+string pattern mismatch:
+  --> `user.name`
+   |     name: == name,
    |           ^^^^^ actual: "Alice"
    |               expected: "Bob"
    |     ..
@@ -143,7 +145,7 @@ assert_struct! failed:
 
 comparison mismatch:
   --> `user.profile.age`
-3  |     age: >= 18,
+   |     age: >= 18,
    |          ^^^^^ actual: 17
    |                failed: 17 >= 18
    |     ..
@@ -172,6 +174,7 @@ Target error:
 assert_struct! failed:
 
 enum variant mismatch:
+  --> `status`
    | Status::Active { since: > 0 }
    | ^^^^^^^^^^^^^^ actual: Status::Inactive
 ```
@@ -189,7 +192,8 @@ Target error:
 ```
 assert_struct! failed:
 
-comparison mismatch at `scores[2]`:
+comparison mismatch:
+  --> `scores[2]`
    | [>= 80, >= 80, >= 80, >= 80]
    |         ^^^^^
    |         actual: 78
@@ -221,8 +225,9 @@ Target error:
 assert_struct! failed:
    | Person {
 
-range mismatch at `person.age`:
-3  |     age: 18..=65,
+range mismatch:
+  --> `person.age`
+   |     age: 18..=65,
    |          ^^^^^^^^ actual: 75
    |     ..
    | }
@@ -250,8 +255,9 @@ Target error:
 assert_struct! failed:
    | Config {
 
-comparison mismatch at `config.timeout`:
-3  |     timeout: Some(>= 10),
+comparison mismatch:
+  --> `config.timeout`
+   |     timeout: Some(>= 10),
    |              ^^^^^^^^^^^^ actual: Some(5)
    | }
 ```
@@ -277,7 +283,8 @@ Target error:
 ```
 assert_struct! failed:
 
-comparison mismatch at `data[15]`:
+comparison mismatch:
+  --> `data[15]`
    | [..., > 200, ...]
    |       ^^^^^^ actual: 160
    |              failed: > 200
@@ -363,11 +370,197 @@ assert_struct! failed:
 
 string pattern mismatch:
   --> `user.profile.contact.address.postal_code`
-5  |     postal_code: "90210",
+   |     postal_code: "90210",
    |                  ^^^^^^^ actual: "98101"
    |     ..
    | } ... }
 ```
+
+### Example 10: Slice with pattern comparisons (multiple failures)
+
+Code:
+```rust
+struct Metrics {
+    cpu_usage: Vec<u32>,
+    memory_mb: u32,
+    disk_io: u32,
+}
+
+struct Performance {
+    baseline: Metrics,
+    current: Metrics,
+    peak: Metrics,
+}
+
+struct System {
+    name: String,
+    version: String,
+    performance: Performance,
+}
+
+let system = System {
+    name: "prod-server".to_string(),
+    version: "2.1.0".to_string(),
+    performance: Performance {
+        baseline: Metrics {
+            cpu_usage: vec![10, 20, 15, 25, 30],
+            memory_mb: 512,
+            disk_io: 100,
+        },
+        current: Metrics {
+            cpu_usage: vec![
+                45, 50, 48, 52, 95, 55, 58, 60, 62, 65,
+                68, 70, 72, 98, 78, 80, 82, 85, 88, 90,
+                92, 94, 96, 99, 100, 45, 50, 48, 52, 55
+            ],
+            memory_mb: 1024,
+            disk_io: 200,
+        },
+        peak: Metrics {
+            cpu_usage: vec![90, 92, 95, 98, 100],
+            memory_mb: 2048,
+            disk_io: 500,
+        },
+    },
+};
+
+assert_struct!(system, System {
+    performance: Performance {
+        current: Metrics {
+            cpu_usage: [
+                < 90, < 90, < 90, < 90, < 90, < 90, < 90, < 90, < 90, < 90,
+                < 90, < 90, < 90, < 90, < 90, < 90, < 90, < 90, < 90, < 90,
+                < 90, < 90, < 90, < 90, < 90, < 90, < 90, < 90, < 90, < 90
+            ],
+            ..
+        },
+        ..
+    },
+    ..
+});
+```
+
+Target error:
+```
+assert_struct! failed:
+   | System { ... Metrics {
+
+4 comparison mismatches:
+  --> `system.performance.current.cpu_usage`
+
+   | [..., < 90, ...]  // [4]
+   |       ^^^^^ actual: 95
+   |             failed: 95 < 90
+
+   | [..., < 90, ...]  // [13]
+   |       ^^^^^ actual: 98
+   |             failed: 98 < 90
+
+   | [..., < 90, ...]  // [23]
+   |       ^^^^^ actual: 99
+   |             failed: 99 < 90
+
+   | [..., < 90, ...]  // [24]
+   |       ^^^^^ actual: 100
+   |             failed: 100 < 90
+
+   |     ..
+   | } ... }
+
+   = note: 4 of 30 elements failed to match
+```
+
+**Why this format:** When slice elements use pattern comparisons (`< 90`, `>= 100`, etc.), we show
+each failure individually because the user needs to see why each comparison failed. The "failed: 95 < 90"
+line is crucial for understanding the mismatch.
+
+### Example 11: Slice with literal values (diff style)
+
+Code:
+```rust
+struct Config {
+    name: String,
+    thresholds: Vec<u32>,
+    enabled: bool,
+}
+
+struct Settings {
+    defaults: Config,
+    overrides: Config,
+}
+
+struct Application {
+    version: String,
+    settings: Settings,
+}
+
+let app = Application {
+    version: "1.0.0".to_string(),
+    settings: Settings {
+        defaults: Config {
+            name: "default".to_string(),
+            thresholds: vec![10, 20, 30, 40, 50],
+            enabled: true,
+        },
+        overrides: Config {
+            name: "custom".to_string(),
+            thresholds: vec![
+                10, 20, 30, 45, 50, 60, 70, 80, 90, 100,
+                110, 120, 130, 140, 155, 160, 170, 180, 190, 200
+            ],
+            enabled: false,
+        },
+    },
+};
+
+assert_struct!(app, Application {
+    settings: Settings {
+        overrides: Config {
+            thresholds: [
+                10, 20, 30, 40, 50, 60, 70, 80, 90, 100,
+                110, 120, 130, 140, 150, 160, 170, 180, 190, 200
+            ],
+            ..
+        },
+        ..
+    },
+    ..
+});
+```
+
+Target error:
+```
+assert_struct! failed:
+   | Application { ... Config {
+
+slice mismatch:
+  --> `app.settings.overrides.thresholds`
+
+  Diff < expected / actual >:
+    | [
+    |     ...
+  2 |     30,
+  3 |-    40,
+    |+    45,
+  4 |     50,
+    |     ...
+ 13 |     140,
+ 14 |-    150,
+    |+    155,
+ 15 |     160,
+    |     ...
+    | ]
+
+   |     ..
+   | } ... }
+```
+
+**Why diff format:** When slice elements are literal values or equality comparisons (`[10, 20, 30]` or `== expected_slice`),
+we use a unified diff because the user just needs to see which values differ. The diff format is more
+compact and easier to scan for differences in concrete values. We show only a context window (1 element
+before/after changes) to keep the output focused, using `...` to indicate elided matching elements.
+
+
 
 ### More examples to add:
 - TODO: Regex pattern mismatch
