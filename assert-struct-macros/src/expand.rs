@@ -26,13 +26,13 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
 /// # Example Transformations
 ///
 /// Simple value:
-/// ```rust
+/// ```text
 /// // Input: age: 30
 /// // Output: assert_eq!(&value.age, &30);
 /// ```
 ///
 /// Comparison:
-/// ```rust
+/// ```text
 /// // Input: age: >= 18
 /// // Output: assert!(value.age >= 18, "age: expected >= 18, got {:?}", value.age);
 /// ```
@@ -425,7 +425,7 @@ fn generate_enum_tuple_assertion(
 /// Generate assertion for plain tuples.
 ///
 /// # Example
-/// ```rust
+/// ```text
 /// // Input: point: (15, 25)
 /// // Generates:
 /// // let (__tuple_elem_0, __tuple_elem_1) = &point;
@@ -469,7 +469,7 @@ fn generate_plain_tuple_assertion(
 /// Generate assertion for slice patterns using Rust's native slice matching.
 ///
 /// # Example
-/// ```rust
+/// ```text
 /// // Input: values: [> 0, < 10, == 5]
 /// // Generates:
 /// // match values.as_slice() {
@@ -589,7 +589,7 @@ fn generate_comparison_assertion(
 /// to string literals, making the syntax cleaner.
 ///
 /// # Example
-/// ```rust
+/// ```text
 /// // User writes: name: "Alice"
 /// // We transform to: name: "Alice".to_string()
 /// // So it can compare with String fields

@@ -9,7 +9,7 @@ impl Parse for AssertStruct {
     /// Parses the top-level macro invocation.
     ///
     /// # Example Input
-    /// ```rust
+    /// ```text
     /// assert_struct!(value, Pattern { field: matcher, .. })
     /// assert_struct!(value, Some(> 30))
     /// assert_struct!(value, [1, 2, 3])
@@ -29,7 +29,7 @@ impl Parse for Expected {
     /// Parses struct field patterns inside braces.
     ///
     /// # Example Input
-    /// ```rust
+    /// ```text
     /// // Inside: User { ... }
     /// name: "Alice", age: 30, ..
     /// name: "Bob", age: >= 18
@@ -293,7 +293,7 @@ impl Parse for FieldAssertion {
     /// Parses a single field assertion within a struct pattern.
     ///
     /// # Example Input
-    /// ```rust
+    /// ```text
     /// name: "Alice"
     /// age: >= 18
     /// email: =~ r".*@example\.com"
