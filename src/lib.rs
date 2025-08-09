@@ -555,6 +555,7 @@ enum PatternElement {
     Struct(syn::Path, Expected),    // Location { ... }
     Tuple(Option<syn::Path>, Vec<PatternElement>), // (10, 20) or Some(42) or None
     Rest,                           // .. for partial matching
+    SlicePattern(Vec<PatternElement>), // [1, 2, 3] or [1, .., 5]
 }
 
 #[derive(Clone, Copy)]

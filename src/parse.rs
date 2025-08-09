@@ -285,6 +285,11 @@ fn check_for_special_syntax(content: ParseStream) -> bool {
         }
     }
 
+    // Check for brackets (slice pattern)
+    if content.peek(syn::token::Bracket) {
+        return true;
+    }
+
     // Check for path followed by braces or parens (struct/enum patterns)
     let fork = content.fork();
     if let Ok(_path) = fork.parse::<syn::Path>() {
@@ -323,6 +328,15 @@ fn parse_pattern_elements(content: ParseStream) -> Result<Vec<PatternElement>> {
         if content.peek(Token![..]) {
             let _: Token![..] = content.parse()?;
             elements.push(PatternElement::Rest);
+        }
+        // Check for brackets (slice pattern)
+        else if content.peek(syn::token::Bracket) {
+            // It's a slice pattern like [1, 2, 3]
+            let inner_content;
+            syn::bracketed!(inner_content in content);
+            let inner_elements = parse_pattern_elements(&inner_content)?;
+            // Create a SlicePattern element
+            elements.push(PatternElement::SlicePattern(inner_elements));
         }
         // Check for nested parentheses (nested tuple)
         else if content.peek(syn::token::Paren) {

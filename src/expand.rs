@@ -477,6 +477,40 @@ fn generate_pattern_element_assertion(
             // They're handled in the slice pattern logic
             quote! {}
         }
+        PatternElement::SlicePattern(elements) => {
+            // Handle slice patterns inside other patterns (e.g., Some([1, 2, 3]))
+            // Generate pattern bindings and assertions for each element
+            let mut pattern_parts = Vec::new();
+            let mut bindings_and_assertions = Vec::new();
+
+            for (i, elem) in elements.iter().enumerate() {
+                match elem {
+                    PatternElement::Rest => {
+                        pattern_parts.push(quote! { .. });
+                    }
+                    _ => {
+                        let binding = quote::format_ident!("__slice_elem_{}", i);
+                        pattern_parts.push(quote! { #binding });
+
+                        let assertion = generate_pattern_element_assertion(&binding, elem);
+                        bindings_and_assertions.push(assertion);
+                    }
+                }
+            }
+
+            // Use Rust's slice pattern matching in a match expression
+            quote! {
+                match #elem_name.as_slice() {
+                    [#(#pattern_parts),*] => {
+                        #(#bindings_and_assertions)*
+                    }
+                    _ => panic!(
+                        "Element pattern mismatch: {:?} doesn't match expected slice pattern",
+                        #elem_name
+                    ),
+                }
+            }
+        }
         PatternElement::Tuple(path, elements) => {
             // Handle nested tuples or enum variants within tuples
             if let Some(variant_path) = path {
@@ -710,6 +744,46 @@ fn generate_option_assertion(field_name: &syn::Ident, element: &PatternElement) 
             // Rest patterns don't make sense inside Option
             panic!("Rest patterns (..) are not supported inside Option");
         }
+        PatternElement::SlicePattern(elements) => {
+            // Handle Some([1, 2, 3]) patterns
+            let mut pattern_parts = Vec::new();
+            let mut bindings_and_assertions = Vec::new();
+
+            for (i, elem) in elements.iter().enumerate() {
+                match elem {
+                    PatternElement::Rest => {
+                        pattern_parts.push(quote! { .. });
+                    }
+                    _ => {
+                        let binding = quote::format_ident!("__opt_slice_elem_{}", i);
+                        pattern_parts.push(quote! { #binding });
+
+                        let assertion = generate_pattern_element_assertion(&binding, elem);
+                        bindings_and_assertions.push(assertion);
+                    }
+                }
+            }
+
+            quote! {
+                match #field_name {
+                    Some(inner) => {
+                        match inner.as_slice() {
+                            [#(#pattern_parts),*] => {
+                                #(#bindings_and_assertions)*
+                            }
+                            _ => panic!(
+                                "Field `{}` pattern mismatch: Some({:?}) doesn't match expected slice pattern",
+                                stringify!(#field_name),
+                                inner
+                            ),
+                        }
+                    },
+                    None => panic!(
+                        concat!("Field `", stringify!(#field_name), "` expected Some([...]), got None")
+                    ),
+                }
+            }
+        }
         PatternElement::Tuple(_path, _elements) => {
             // This shouldn't happen - Tuple patterns inside Some() should be handled differently
             // But for completeness, we can just panic with an error message
@@ -793,6 +867,11 @@ fn generate_struct_field_assignments(nested: &Expected) -> Vec<TokenStream> {
                             PatternElement::Rest => {
                                 quote! { .. }
                             }
+                            PatternElement::SlicePattern(inner_elements) => {
+                                // For nested slice patterns in field assignments
+                                let inner_values = generate_pattern_element_values(inner_elements);
+                                quote! { [#(#inner_values),*] }
+                            }
                             PatternElement::Tuple(path, inner_elements) => {
                                 // For nested tuples/enums in field assignments, generate the pattern
                                 if let Some(variant_path) = path {
@@ -841,6 +920,11 @@ fn generate_struct_field_assignments(nested: &Expected) -> Vec<TokenStream> {
                             }
                             PatternElement::Rest => {
                                 quote! { .. }
+                            }
+                            PatternElement::SlicePattern(inner_elements) => {
+                                // For nested slice patterns in field assignments
+                                let inner_values = generate_pattern_element_values(inner_elements);
+                                quote! { [#(#inner_values),*] }
                             }
                             PatternElement::Tuple(path, inner_elements) => {
                                 // For nested tuples/enums in field assignments, generate the pattern
@@ -952,6 +1036,10 @@ fn generate_pattern_element_values(elements: &[PatternElement]) -> Vec<TokenStre
             }
             PatternElement::Rest => {
                 quote! { .. }
+            }
+            PatternElement::SlicePattern(inner_elements) => {
+                let inner_values = generate_pattern_element_values(inner_elements);
+                quote! { [#(#inner_values),*] }
             }
             PatternElement::Tuple(path, inner_elements) => {
                 if let Some(variant_path) = path {
