@@ -90,8 +90,8 @@ fn test_field_access() {
         score: > config.threshold,
         ..
     });
-    
-    // Also check max value separately  
+
+    // Also check max value separately
     assert_struct!(user, User {
         level: <= config.max_value,
         ..
@@ -223,9 +223,7 @@ fn test_expressions_in_tuples() {
     let origin_x = 10;
     let origin_y = 20;
 
-    let point = Point {
-        coords: (15, 25),
-    };
+    let point = Point { coords: (15, 25) };
 
     assert_struct!(point, Point {
         coords: (> origin_x, > origin_y),
@@ -242,9 +240,7 @@ struct Container {
 fn test_expression_in_option() {
     let min_value = 10;
 
-    let container = Container {
-        value: Some(20),
-    };
+    let container = Container { value: Some(20) };
 
     assert_struct!(container, Container {
         value: Some(> min_value),
