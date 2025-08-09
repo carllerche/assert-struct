@@ -107,7 +107,7 @@
 //! - **Partial Matching** - Use `..` to check only the fields you care about
 //! - **Deep Nesting** - Assert on nested structs without manual field access chains
 //! - **String Literals** - Compare `String` fields directly with `"text"` literals
-//! - **Collections** - Assert on `Vec` fields using slice syntax `[1, 2, 3]`
+//! - **Collections** - Assert on `Vec` fields with element-wise patterns `[> 0, < 10, == 5]`
 //! - **Tuples** - Full support for multi-field tuples with advanced patterns
 //! - **Enum Support** - Match on `Option`, `Result`, and custom enum variants
 //!
@@ -243,6 +243,34 @@
 //! });
 //! ```
 //!
+//! ## Slices and Vectors
+//!
+//! Element-wise pattern matching for `Vec` fields:
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct Data {
+//! #     values: Vec<i32>,
+//! #     names: Vec<String>,
+//! # }
+//! # let data = Data {
+//! #     values: vec![5, 15, 25],
+//! #     names: vec!["alice".to_string(), "bob".to_string()],
+//! # };
+//! // Exact matching
+//! assert_struct!(data, Data {
+//!     values: [5, 15, 25],
+//!     names: ["alice", "bob"],
+//! });
+//!
+//! // Comparison patterns for each element
+//! assert_struct!(data, Data {
+//!     values: [> 0, < 20, == 25],  // Different matcher for each element
+//!     names: ["alice", "bob"],
+//! });
+//! ```
+//!
 //! ## Tuples
 //!
 //! Full support for multi-field tuples with advanced pattern matching:
@@ -361,7 +389,7 @@
 //!     status: "success",
 //!     data: UserData {
 //!         username: "testuser",
-//!         permissions: ["read", "write"],
+//!         permissions: vec!["read".to_string(), "write".to_string()],
 //!         ..  // Don't check the generated ID
 //!     },
 //!     ..  // Don't check timestamp
@@ -428,7 +456,7 @@
 //!     level: 3,            // Reached level 3
 //!     player: Player {
 //!         health: > 0,     // Still alive
-//!         inventory: ["sword", "shield"],  // Has required items
+//!         inventory: vec!["sword".to_string(), "shield".to_string()],  // Has required items
 //!         ..  // Position doesn't matter
 //!     },
 //! });
@@ -511,6 +539,11 @@ enum FieldAssertion {
         field_name: syn::Ident,
         range: Expr,
     },
+    // Slice patterns for Vec fields: [1, 2, > 3]
+    SlicePattern {
+        field_name: syn::Ident,
+        elements: Vec<PatternElement>,
+    },
 }
 
 // Elements that can appear inside tuple patterns
@@ -563,7 +596,7 @@ enum ComparisonOp {
 /// | Custom enum | Match custom enum variants | `status: Status::Active` |
 /// | Nested struct | Recursive structural matching | `address: Address { city: "Boston", .. }` |
 /// | Tuple | Element-wise comparison | `point: (10, 20)` |
-/// | Vec/slice | Collection comparison | `items: [1, 2, 3]` |
+/// | Vec/slice | Element-wise patterns | `items: [1, 2, 3]` or `items: [> 0, < 10, == 5]` |
 /// | Partial | Ignore remaining fields | `..` |
 ///
 /// # Parameters

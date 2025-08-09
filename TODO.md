@@ -37,7 +37,28 @@
   - It would be semantically confusing (different meaning than struct-level `..`)
   - No practical value (just omit the assertion or use struct-level `..`)
 
-### 4. Improved regex operator
+### 4. Slice patterns ✅
+- [x] Add `SlicePattern` variant to `FieldAssertion`
+- [x] Parse bracket syntax `[...]` for slice patterns
+- [x] Support element-wise patterns in slices
+  - Example: `[1, 2, 3]` for exact matching
+  - Example: `[> 0, < 20, == 25]` with comparison operators
+  - Example: `[=~ r"^alice", =~ r"^bob"]` with regex patterns
+- [x] Generate proper assertions for each element
+- [x] Add length checking with clear error messages
+- [x] Test with various element types and patterns
+- [x] Update documentation with slice examples
+
+### 5. Enhanced slice patterns (Future)
+- [ ] Support partial slice matching with `..`
+  - Example: `[1, 2, ..]` to match first N elements
+  - Example: `[.., 5]` to match last element
+  - Example: `[1, .., 5]` to match first and last
+- [ ] Support slice patterns inside Option/Result
+  - Example: `Some([1, 2, 3])`
+- [ ] Support empty slice syntax `[]` with type inference
+
+### 6. Improved regex operator
 - [ ] Consider allowing variables containing regex patterns
 - [ ] Consider function calls returning regex patterns
 - [ ] Need to carefully design compile-time vs runtime behavior

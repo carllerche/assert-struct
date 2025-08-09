@@ -21,6 +21,7 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
             FieldAssertion::Regex { field_name, .. } => field_name.clone(),
             FieldAssertion::Comparison { field_name, .. } => field_name.clone(),
             FieldAssertion::Range { field_name, .. } => field_name.clone(),
+            FieldAssertion::SlicePattern { field_name, .. } => field_name.clone(),
         })
         .collect();
 
@@ -167,6 +168,41 @@ fn generate_assertions(expected: &Expected) -> TokenStream {
                     }
                 });
             }
+            FieldAssertion::SlicePattern {
+                field_name,
+                elements,
+                ..
+            } => {
+                // Slice pattern: check length and then each element
+                let num_elements = elements.len();
+
+                // Generate element assertions
+                let element_assertions: Vec<_> = elements
+                    .iter()
+                    .enumerate()
+                    .map(|(i, elem)| {
+                        let index = syn::Index::from(i);
+                        let elem_name = quote::format_ident!("__slice_elem_{}", i);
+                        let elem_assert = generate_pattern_element_assertion(&elem_name, elem);
+                        quote! {
+                            let #elem_name = &#field_name[#index];
+                            #elem_assert
+                        }
+                    })
+                    .collect();
+
+                assertions.push(quote! {
+                    if #field_name.len() != #num_elements {
+                        panic!(
+                            "Field `{}` length mismatch: expected {}, got {}",
+                            stringify!(#field_name),
+                            #num_elements,
+                            #field_name.len()
+                        );
+                    }
+                    #(#element_assertions)*
+                });
+            }
         }
     }
 
@@ -203,6 +239,7 @@ fn generate_struct_pattern_assert(
                 FieldAssertion::Regex { field_name, .. } => field_name.clone(),
                 FieldAssertion::Comparison { field_name, .. } => field_name.clone(),
                 FieldAssertion::Range { field_name, .. } => field_name.clone(),
+                FieldAssertion::SlicePattern { field_name, .. } => field_name.clone(),
             })
             .collect();
 
@@ -389,6 +426,7 @@ fn generate_pattern_element_assertion(
                         FieldAssertion::Regex { field_name, .. } => field_name.clone(),
                         FieldAssertion::Comparison { field_name, .. } => field_name.clone(),
                         FieldAssertion::Range { field_name, .. } => field_name.clone(),
+                        FieldAssertion::SlicePattern { field_name, .. } => field_name.clone(),
                     })
                     .collect();
 
@@ -848,6 +886,17 @@ fn generate_struct_field_assignments(nested: &Expected) -> Vec<TokenStream> {
                 // For ranges in nested structs, pass through the range expression
                 field_assignments.push(quote! {
                     #field_name: #range
+                });
+            }
+            FieldAssertion::SlicePattern {
+                field_name,
+                elements,
+                ..
+            } => {
+                // For slice patterns in nested structs, generate array literal with pattern elements
+                let element_values = generate_pattern_element_values(elements);
+                field_assignments.push(quote! {
+                    #field_name: [#(#element_values),*]
                 });
             }
         }
