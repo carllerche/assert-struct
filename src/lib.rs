@@ -546,7 +546,7 @@ enum FieldAssertion {
     },
 }
 
-// Elements that can appear inside tuple patterns
+// Elements that can appear inside tuple patterns and slice patterns
 enum PatternElement {
     Simple(Expr),                   // 42 or "hello"
     Comparison(ComparisonOp, Expr), // > 30
@@ -554,6 +554,8 @@ enum PatternElement {
     Regex(String), // =~ r"pattern"
     Struct(syn::Path, Expected),    // Location { ... }
     Tuple(Option<syn::Path>, Vec<PatternElement>), // (10, 20) or Some(42) or None
+    Rest,                           // .. for partial matching
+    SlicePattern(Vec<PatternElement>), // [1, 2, 3] or [1, .., 5]
 }
 
 #[derive(Clone, Copy)]

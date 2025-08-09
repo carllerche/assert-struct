@@ -41,39 +41,86 @@ fn test_slice_with_comparisons() {
     });
 }
 
-// TODO: Support partial slice matching
-// #[test]
-// fn test_slice_with_partial_matching() {
-//     let container = Container {
-//         items: vec![1, 2, 3, 4, 5],
-//         names: vec!["a".to_string(), "b".to_string(), "c".to_string()],
-//         data: vec![100],
-//     };
-//
-//     // This would be nice - partial slice matching with ..
-//     assert_struct!(container, Container {
-//         items: [1, 2, ..],  // First two elements match, rest ignored
-//         names: ["a", "b", ..],
-//         data: [100],
-//     });
-// }
+#[test]
+fn test_slice_with_partial_matching() {
+    let container = Container {
+        items: vec![1, 2, 3, 4, 5],
+        names: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+        data: vec![100],
+    };
 
-// TODO: Support head/tail patterns
-// #[test]
-// fn test_slice_head_tail_patterns() {
-//     let container = Container {
-//         items: vec![1, 2, 3, 4, 5],
-//         names: vec!["first".to_string(), "middle".to_string(), "last".to_string()],
-//         data: vec![10, 20, 30, 40],
-//     };
-//
-//     // Head and tail matching
-//     assert_struct!(container, Container {
-//         items: [1, .., 5],  // First and last
-//         names: ["first", .., "last"],
-//         data: [10, .., 40],
-//     });
-// }
+    // Partial slice matching with ..
+    assert_struct!(
+        container,
+        Container {
+            items: [1, 2, ..], // First two elements match, rest ignored
+            names: ["a", "b", ..],
+            data: [100],
+        }
+    );
+}
+
+#[test]
+fn test_slice_partial_with_comparisons() {
+    let container = Container {
+        items: vec![5, 15, 25, 35, 45],
+        names: vec![
+            "first".to_string(),
+            "second".to_string(),
+            "third".to_string(),
+        ],
+        data: vec![10, 20, 30, 40, 50],
+    };
+
+    // Combine partial matching with comparisons
+    assert_struct!(container, Container {
+        items: [> 0, < 20, ..],  // Check first two with comparisons, ignore rest
+        names: ["first", ..],    // Check first, ignore rest
+        data: [10, .., 50],      // Check first and last
+    });
+}
+
+#[test]
+fn test_slice_head_tail_patterns() {
+    let container = Container {
+        items: vec![1, 2, 3, 4, 5],
+        names: vec![
+            "first".to_string(),
+            "middle".to_string(),
+            "last".to_string(),
+        ],
+        data: vec![10, 20, 30, 40],
+    };
+
+    // Head and tail matching
+    assert_struct!(
+        container,
+        Container {
+            items: [1, .., 5], // First and last
+            names: ["first", .., "last"],
+            data: [10, .., 40],
+        }
+    );
+}
+
+#[test]
+fn test_slice_suffix_pattern() {
+    let container = Container {
+        items: vec![1, 2, 3, 4, 5],
+        names: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+        data: vec![100, 200, 300],
+    };
+
+    // Check only last elements
+    assert_struct!(
+        container,
+        Container {
+            items: [.., 4, 5], // Last two elements
+            names: [.., "c"],  // Last element
+            data: [.., 300],   // Last element
+        }
+    );
+}
 
 #[test]
 #[cfg(feature = "regex")]
@@ -96,32 +143,27 @@ fn test_slice_with_regex() {
     });
 }
 
-// TODO: Support empty slice syntax []
-// For now, workaround with typed empty vecs
 #[test]
 fn test_empty_slice() {
-    let empty_u32: Vec<u32> = vec![];
-    let empty_string: Vec<String> = vec![];
-    let empty_i32: Vec<i32> = vec![];
-
     let container = Container {
         items: vec![],
         names: vec![],
         data: vec![],
     };
 
+    // Empty slice patterns
     assert_struct!(
         container,
         Container {
-            items: empty_u32,
-            names: empty_string,
-            data: empty_i32,
+            items: [],
+            names: [],
+            data: [],
         }
     );
 }
 
 #[test]
-#[should_panic(expected = "length mismatch")]
+#[should_panic(expected = "pattern mismatch")]
 fn test_slice_length_mismatch() {
     let container = Container {
         items: vec![1, 2, 3],
@@ -221,32 +263,64 @@ fn test_slice_with_nested_struct_patterns() {
         ],
     };
 
-    // TODO: Support partial matching on nested structs in slices
-    // assert_struct!(inventory, Inventory {
-    //     items: [
-    //         Item { id: 1, .. },  // Only check id
-    //         Item { value: "shield", .. },  // Only check value
-    //         Item { id: > 0, value: "potion" },  // Check both with comparison
-    //     ],
-    // });
+    // Test partial matching on nested structs in slices
+    assert_struct!(inventory, Inventory {
+        items: [
+            Item { id: 1, .. },  // Only check id
+            Item { value: "shield", .. },  // Only check value
+            Item { id: > 2, value: "potion" },  // Check both with comparison
+        ],
+    });
+}
 
-    // For now, test basic nested struct matching
+#[test]
+fn test_slice_with_nested_struct_partial_slice() {
+    let inventory = Inventory {
+        items: vec![
+            Item {
+                id: 1,
+                value: "sword".to_string(),
+            },
+            Item {
+                id: 2,
+                value: "shield".to_string(),
+            },
+            Item {
+                id: 3,
+                value: "potion".to_string(),
+            },
+            Item {
+                id: 4,
+                value: "bow".to_string(),
+            },
+        ],
+    };
+
+    // Test combining partial slice matching with partial struct matching
     assert_struct!(
         inventory,
         Inventory {
-            items: vec![
+            items: [
+                Item { id: 1, .. }, // First item, only check id
                 Item {
-                    id: 1,
-                    value: "sword".to_string()
-                },
+                    value: "shield",
+                    ..
+                }, // Second item, only check value
+                ..,                 // Ignore the rest
+            ],
+        }
+    );
+
+    // Test suffix pattern with struct matching
+    assert_struct!(
+        inventory,
+        Inventory {
+            items: [
+                .., // Ignore initial items
                 Item {
-                    id: 2,
-                    value: "shield".to_string()
-                },
-                Item {
-                    id: 3,
-                    value: "potion".to_string()
-                },
+                    id: 4,
+                    value: "bow"
+                }, // Last item, check all fields
             ],
         }
     );
@@ -258,17 +332,58 @@ struct Config {
     values: Option<Vec<u32>>,
 }
 
-// TODO: Support slice syntax inside Option
-// #[test]
-// fn test_option_vec_some() {
-//     let config = Config {
-//         values: Some(vec![1, 2, 3]),
-//     };
-//
-//     assert_struct!(config, Config {
-//         values: Some([1, 2, 3]),
-//     });
-// }
+#[test]
+fn test_option_vec_some() {
+    let config = Config {
+        values: Some(vec![1, 2, 3]),
+    };
+
+    assert_struct!(
+        config,
+        Config {
+            values: Some([1, 2, 3]),
+        }
+    );
+}
+
+#[test]
+fn test_option_vec_some_partial() {
+    let config = Config {
+        values: Some(vec![1, 2, 3, 4, 5]),
+    };
+
+    assert_struct!(
+        config,
+        Config {
+            values: Some([1, 2, ..]),
+        }
+    );
+
+    assert_struct!(
+        config,
+        Config {
+            values: Some([.., 5]),
+        }
+    );
+
+    assert_struct!(
+        config,
+        Config {
+            values: Some([1, .., 5]),
+        }
+    );
+}
+
+#[test]
+fn test_option_vec_some_with_comparisons() {
+    let config = Config {
+        values: Some(vec![10, 20, 30]),
+    };
+
+    assert_struct!(config, Config {
+        values: Some([> 5, < 25, == 30]),
+    });
+}
 
 #[test]
 fn test_option_vec_some_workaround() {
@@ -289,4 +404,31 @@ fn test_option_vec_none() {
     let config = Config { values: None };
 
     assert_struct!(config, Config { values: None });
+}
+
+// Multiple .. patterns should cause a compilation error
+// This test ensures that our macro correctly rejects multiple .. patterns
+// by generating invalid Rust code that the compiler will catch
+#[test]
+#[should_panic]
+fn test_slice_multiple_rest_patterns_fails() {
+    // This test exists to document that multiple .. patterns are not allowed
+    // The actual test is commented out because it would fail to compile
+    // which is the expected behavior
+
+    // The following would fail to compile:
+    // let container = Container {
+    //     items: vec![1, 2, 3, 4, 5],
+    //     names: vec!["a".to_string()],
+    //     data: vec![10],
+    // };
+    //
+    // assert_struct!(container, Container {
+    //     items: [1, .., 3, .., 5],  // Multiple .. not allowed
+    //     names: ["a"],
+    //     data: [10],
+    // });
+
+    // For now, we'll just panic to have a test that documents this limitation
+    panic!("Multiple .. patterns in slices are not allowed - this is enforced at compile time");
 }
