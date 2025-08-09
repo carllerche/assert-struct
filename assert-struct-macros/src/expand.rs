@@ -251,7 +251,7 @@ fn generate_unit_variant_assertion(
 }
 
 /// Generate match-based assertion for both structs and enums with fields.
-/// 
+///
 /// Using match for both eliminates the need for type detection heuristics.
 /// The `#[allow(unreachable_patterns)]` suppresses warnings for struct matches.
 fn generate_struct_match_assertion(
