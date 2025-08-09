@@ -13,14 +13,14 @@
 - [x] Add comprehensive tests
 - [x] Update documentation
 
-### 2. Arbitrary expressions after operators
-- [ ] Allow complex expressions after comparison operators
+### 2. Arbitrary expressions after operators ✅
+- [x] Allow complex expressions after comparison operators
   - Example: `age: > compute_min_age()`
   - Example: `score: < get_threshold() + 10`
   - Example: `value: >= some_struct.field`
-- [ ] Ensure proper parsing of function calls, field access, method calls
-- [ ] Test with various expression types
-- [ ] Update documentation with examples
+- [x] Ensure proper parsing of function calls, field access, method calls
+- [x] Test with various expression types
+- [x] Update documentation with examples
 
 ### 3. Improved regex operator
 - [ ] Consider allowing variables containing regex patterns

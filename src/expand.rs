@@ -128,12 +128,12 @@ fn generate_assertions(expected: &Expected) -> TokenStream {
                 };
 
                 let comparison = match op {
-                    ComparisonOp::Less => quote! { #field_name < &#value },
-                    ComparisonOp::LessEqual => quote! { #field_name <= &#value },
-                    ComparisonOp::Greater => quote! { #field_name > &#value },
-                    ComparisonOp::GreaterEqual => quote! { #field_name >= &#value },
-                    ComparisonOp::Equal => quote! { #field_name == &#value },
-                    ComparisonOp::NotEqual => quote! { #field_name != &#value },
+                    ComparisonOp::Less => quote! { #field_name < &(#value) },
+                    ComparisonOp::LessEqual => quote! { #field_name <= &(#value) },
+                    ComparisonOp::Greater => quote! { #field_name > &(#value) },
+                    ComparisonOp::GreaterEqual => quote! { #field_name >= &(#value) },
+                    ComparisonOp::Equal => quote! { #field_name == &(#value) },
+                    ComparisonOp::NotEqual => quote! { #field_name != &(#value) },
                 };
 
                 assertions.push(quote! {
@@ -144,7 +144,7 @@ fn generate_assertions(expected: &Expected) -> TokenStream {
                             #error_msg,
                             #field_name,
                             #op_str,
-                            &#value
+                            &(#value)
                         );
                     }
                 });
@@ -316,12 +316,12 @@ fn generate_pattern_element_assertion(
             };
 
             let comparison = match op {
-                ComparisonOp::Less => quote! { #elem_name < &#value },
-                ComparisonOp::LessEqual => quote! { #elem_name <= &#value },
-                ComparisonOp::Greater => quote! { #elem_name > &#value },
-                ComparisonOp::GreaterEqual => quote! { #elem_name >= &#value },
-                ComparisonOp::Equal => quote! { #elem_name == &#value },
-                ComparisonOp::NotEqual => quote! { #elem_name != &#value },
+                ComparisonOp::Less => quote! { #elem_name < &(#value) },
+                ComparisonOp::LessEqual => quote! { #elem_name <= &(#value) },
+                ComparisonOp::Greater => quote! { #elem_name > &(#value) },
+                ComparisonOp::GreaterEqual => quote! { #elem_name >= &(#value) },
+                ComparisonOp::Equal => quote! { #elem_name == &(#value) },
+                ComparisonOp::NotEqual => quote! { #elem_name != &(#value) },
             };
 
             quote! {
@@ -331,7 +331,7 @@ fn generate_pattern_element_assertion(
                         #error_msg,
                         #elem_name,
                         #op_str,
-                        &#value
+                        &(#value)
                     );
                 }
             }
@@ -565,12 +565,12 @@ fn generate_option_assertion(field_name: &syn::Ident, element: &PatternElement) 
             };
 
             let comparison = match op {
-                ComparisonOp::Less => quote! { inner < &#value },
-                ComparisonOp::LessEqual => quote! { inner <= &#value },
-                ComparisonOp::Greater => quote! { inner > &#value },
-                ComparisonOp::GreaterEqual => quote! { inner >= &#value },
-                ComparisonOp::Equal => quote! { inner == &#value },
-                ComparisonOp::NotEqual => quote! { inner != &#value },
+                ComparisonOp::Less => quote! { inner < &(#value) },
+                ComparisonOp::LessEqual => quote! { inner <= &(#value) },
+                ComparisonOp::Greater => quote! { inner > &(#value) },
+                ComparisonOp::GreaterEqual => quote! { inner >= &(#value) },
+                ComparisonOp::Equal => quote! { inner == &(#value) },
+                ComparisonOp::NotEqual => quote! { inner != &(#value) },
             };
 
             quote! {
@@ -583,7 +583,7 @@ fn generate_option_assertion(field_name: &syn::Ident, element: &PatternElement) 
                                 #error_msg,
                                 inner,
                                 #op_str,
-                                &#value
+                                &(#value)
                             );
                         }
                     },

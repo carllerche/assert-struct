@@ -390,6 +390,16 @@ assert_struct!(metrics, Metrics {
     memory_mb: != 0,            // Not zero
     ..
 });
+
+// Complex expressions
+fn get_threshold() -> f64 { 75.0 }
+
+assert_struct!(metrics, Metrics {
+    cpu_usage: < get_threshold() + 5.0,  // Function calls and arithmetic
+    memory_mb: >= config.min_memory,     // Field access
+    response_time_ms: < limits[2],       // Array indexing
+    ..
+});
 ```
 
 ## Real-World Examples

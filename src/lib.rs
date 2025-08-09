@@ -613,6 +613,32 @@ enum ComparisonOp {
 /// });
 /// ```
 ///
+/// ## Complex Expressions
+///
+/// ```
+/// # use assert_struct::assert_struct;
+/// # #[derive(Debug)]
+/// # struct Metrics {
+/// #     cpu_usage: f64,
+/// #     memory_mb: u32,
+/// #     response_time_ms: u32,
+/// # }
+/// # struct Config { min_memory: u32 }
+/// # fn get_threshold() -> f64 { 75.0 }
+/// # let config = Config { min_memory: 512 };
+/// # let limits = [100, 200, 300];
+/// # let metrics = Metrics {
+/// #     cpu_usage: 70.0,
+/// #     memory_mb: 1024,
+/// #     response_time_ms: 150,
+/// # };
+/// assert_struct!(metrics, Metrics {
+///     cpu_usage: < get_threshold() + 5.0,  // Function calls with arithmetic
+///     memory_mb: >= config.min_memory,     // Field access
+///     response_time_ms: < limits[2],       // Array indexing
+/// });
+/// ```
+///
 /// ## Regex Patterns
 ///
 /// ```
