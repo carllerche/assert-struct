@@ -1,0 +1,37 @@
+[package]
+name = "assert-struct"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "A procedural macro for ergonomic structural assertions in tests"
+documentation = "https://docs.rs/assert-struct"
+readme = "../README.md"
+keywords = ["testing", "assert", "macro", "test", "struct"]
+categories = ["development-tools::testing", "development-tools"]
+exclude = [
+    ".github/",
+    "tests/",
+    ".gitignore",
+]
+
+[features]
+default = ["regex"]
+regex = ["assert-struct-macros/regex", "dep:regex"]
+
+[dependencies]
+assert-struct-macros = { version = "0.1.0", path = "../assert-struct-macros" }
+regex = { workspace = true, optional = true }
+
+[dev-dependencies]
+trybuild = "1.0"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[badges]
+maintenance = { status = "actively-developed" }
