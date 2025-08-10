@@ -564,11 +564,95 @@ before/after changes) to keep the output focused, using `...` to indicate elided
 
 
 
+### Example 12: Regex pattern mismatch
+
+Code:
+```rust
+struct ValidationResult {
+    email: String,
+    phone: String,
+    postal_code: String,
+}
+
+let result = ValidationResult {
+    email: "invalid.email@".to_string(),
+    phone: "+1-555-CALL-ME".to_string(),
+    postal_code: "9021A".to_string(),
+};
+
+assert_struct!(result, ValidationResult {
+    email: =~ r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
+    phone: =~ r"^\+?[0-9]{1,3}-?[0-9]{3}-?[0-9]{4}$",
+    postal_code: =~ r"^\d{5}(-\d{4})?$",
+});
+```
+
+Target error:
+```
+assert_struct! failed:
+   | ValidationResult {
+
+regex pattern mismatch:
+  --> `result.email`
+3  |     email: =~ r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
+   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |            actual: "invalid.email@"
+   |            pattern failed to match
+   |
+   = note: regex pattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+   |     ..
+   | }
+```
+
+
+### Example 13: Tuple pattern mismatch
+
+Code:
+```rust
+let coordinates = (45.5231, -122.6765, 100.0);  // lat, lon, altitude
+
+assert_struct!(coordinates, (< 40.0, > -120.0, 50.0..=200.0));
+```
+
+Target error:
+```
+assert_struct! failed:
+   | (
+
+comparison mismatch:
+  --> `coordinates.0`
+3  |     < 40.0,
+   |     ^^^^^^ actual: 45.5231
+   |            failed: 45.5231 < 40.0
+   |     > -120.0,
+   |     50.0..=200.0
+   | )
+```
+
+Example with literal values:
+```rust
+let point = (10, 20, 30);
+
+assert_struct!(point, (10, 25, 30));
+```
+
+Target error:
+```
+assert_struct! failed:
+   | (
+   |     10,
+
+value mismatch:
+  --> `point.1`
+3  |     25,
+   |     ^^ actual: 20
+   |     30
+   | )
+```
+
 ### More examples to add:
 
 #### Pattern-specific examples:
-- TODO: Regex pattern mismatch - How to show when a string doesn't match a regex pattern (with `=~ r"pattern"` syntax)
-- TODO: Tuple pattern mismatch - Standalone tuples (we've only covered tuples in enum variants)
 - TODO: Complex nested Option/Result combinations - e.g., `Option<Result<T, E>>` patterns
 - TODO: Like trait custom matcher failure - When using `=~ custom_matcher` with a variable/expression
 
