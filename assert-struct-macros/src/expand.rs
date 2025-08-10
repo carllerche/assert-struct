@@ -60,6 +60,10 @@ fn generate_pattern_assertion_with_path(
                 &pattern_str,
             )
         }
+        Pattern::Range(range) => {
+            // Generate improved range assertion
+            generate_range_assertion_with_path(value_expr, range, is_ref, path, &pattern_str)
+        }
         _ => {
             // For now, delegate other patterns to the original function
             generate_pattern_assertion(value_expr, pattern, is_ref)
@@ -791,6 +795,45 @@ fn generate_comparison_assertion_with_path(
             };
 
             panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+        }
+    }
+}
+
+/// Generate range assertion with enhanced error message
+fn generate_range_assertion_with_path(
+    value_expr: &TokenStream,
+    range: &syn::Expr,
+    is_ref: bool,
+    path: &[String],
+    pattern_str: &str,
+) -> TokenStream {
+    let field_path = path.join(".");
+    let match_expr = if is_ref {
+        quote! { #value_expr }
+    } else {
+        quote! { &#value_expr }
+    };
+
+    quote! {
+        match #match_expr {
+            #range => {},
+            _ => {
+                // Capture line number and file info
+                let __line = line!();
+                let __file = file!();
+
+                // Build error context
+                let __error = ::assert_struct::__macro_support::ErrorContext {
+                    field_path: #field_path.to_string(),
+                    pattern_str: #pattern_str.to_string(),
+                    actual_value: format!("{:?}", #match_expr),
+                    line_number: __line,
+                    file_name: __file,
+                    error_type: ::assert_struct::__macro_support::ErrorType::Range,
+                };
+
+                panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+            }
         }
     }
 }

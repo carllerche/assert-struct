@@ -23,7 +23,7 @@ fn test_range() {
 }
 
 #[test]
-#[should_panic(expected = "Value not in range")]
+#[should_panic(expected = "range mismatch")]
 fn test_range_failure() {
     let person = Person {
         age: 70,
