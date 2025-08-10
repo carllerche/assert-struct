@@ -51,6 +51,41 @@ The critical insight is that we can defer ALL error message construction to the 
 3. **Error Collection**: Gather failure information before panicking
 4. **Message Formatting**: Generate readable, aligned error output
 
+## Implementation Process Instructions
+
+### Development Workflow
+
+For each phase:
+1. Implement the changes described
+2. Run validation steps:
+   ```bash
+   cargo test --no-default-features
+   cargo test --all-features
+   cargo clippy --workspace --all-targets -- -D warnings
+   cargo fmt
+   ```
+3. Fix any issues found
+4. Commit with descriptive message (no Claude references)
+5. Move to next phase
+
+### Testing Requirements
+
+- **Existing tests must pass**: Never break backwards compatibility
+- **UI tests for line numbers**: When implementing line number capture, add tests that verify correct line numbers in error messages
+- **Test both with and without features**: Especially important for regex feature
+- **Add tests incrementally**: Each phase should add relevant tests
+
+### Commit Message Format
+```
+<type>: <description>
+
+<optional body explaining why, not what>
+```
+Examples:
+- `feat: Add ErrorContext struct for rich error messages`
+- `refactor: Thread path components through macro expansion`
+- `test: Add UI tests for line number accuracy`
+
 ## Implementation Strategy
 
 ### Phase 1: Infrastructure (Keep existing tests passing)
