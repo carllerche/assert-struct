@@ -753,10 +753,140 @@ regex pattern mismatch:
    = note: regex pattern: ^Internal
 ```
 
+### Example 15: Like trait custom matcher failure
+
+Code:
+```rust
+struct User {
+    email: String,
+    username: String,
+}
+
+// Custom matcher that checks if string contains only alphanumeric chars
+let alphanumeric_only = Regex::new(r"^[a-zA-Z0-9]+$").unwrap();
+
+let user = User {
+    email: "user@example.com".to_string(),
+    username: "user_123".to_string(),
+};
+
+assert_struct!(user, User {
+    email: =~ alphanumeric_only,
+    username: =~ alphanumeric_only,
+});
+```
+
+Target error (with enhanced Like trait):
+```
+assert_struct! failed:
+   | User {
+
+pattern mismatch:
+  --> `user.email`
+3  |     email: =~ alphanumeric_only,
+   |            ^^^^^^^^^^^^^^^^^^^^^ actual: "user@example.com"
+   |                                 pattern failed to match
+   |
+   = note: expected alphanumeric characters only (^[a-zA-Z0-9]+$)
+   = note: found '@' at position 4
+   |     username: =~ alphanumeric_only,
+   | }
+```
+
+**Proposed Like trait enhancement:**
+```rust
+// Enhanced trait with Result:
+pub trait Like<T> {
+    fn matches(&self, actual: &T) -> Result<(), String>;
+    // Ok(()) means match succeeded
+    // Err(msg) means match failed with explanation
+}
+
+// Example implementation for Regex:
+impl Like<String> for Regex {
+    fn matches(&self, actual: &String) -> Result<(), String> {
+        if self.is_match(actual) {
+            Ok(())
+        } else {
+            // Can provide detailed error in single pass
+            Err(format!("expected pattern {}", self.as_str()))
+        }
+    }
+}
+
+// Custom matcher with helpful errors:
+struct AlphanumericMatcher;
+impl Like<String> for AlphanumericMatcher {
+    fn matches(&self, actual: &String) -> Result<(), String> {
+        for (i, ch) in actual.chars().enumerate() {
+            if !ch.is_alphanumeric() {
+                // Single pass - we know exactly why it failed
+                return Err(format!("expected alphanumeric only, found '{}' at position {}", ch, i));
+            }
+        }
+        Ok(())
+    }
+}
+```
+
+With this enhancement, the error would show the custom message from the matcher:
+```
+assert_struct! failed:
+   | User {
+
+pattern mismatch:
+  --> `user.email`
+3  |     email: =~ alphanumeric_only,
+   |            ^^^^^^^^^^^^^^^^^^^^^ actual: "user@example.com"
+   |                                 pattern failed to match
+   |
+   = note: expected alphanumeric only, found '@' at position 4
+   |     username: =~ alphanumeric_only,
+   | }
+```
+
+Example with custom matcher and better error context:
+```rust
+struct Score {
+    value: u32,
+    grade: String,
+}
+
+fn passing_grade() -> impl Like<String> {
+    // Returns a matcher that checks for grades A, B, or C
+    regex::Regex::new(r"^[ABC]$").unwrap()
+}
+
+let score = Score {
+    value: 72,
+    grade: "D".to_string(),
+};
+
+assert_struct!(score, Score {
+    value: >= 70,
+    grade: =~ passing_grade(),
+});
+```
+
+Target error:
+```
+assert_struct! failed:
+   | Score {
+   |     value: >= 70,
+
+pattern mismatch:
+  --> `score.grade`
+3  |     grade: =~ passing_grade(),
+   |            ^^^^^^^^^^^^^^^^^^^ actual: "D"
+   |                               pattern failed to match
+   |
+   = note: Like trait matcher returned false
+   | }
+```
+
 ### More examples to add:
 
 #### Pattern-specific examples:
-- TODO: Like trait custom matcher failure - When using `=~ custom_matcher` with a variable/expression
 
 #### Error handling strategies:
 - TODO: Multiple field failures - When multiple struct fields fail (not in a slice). Options:
