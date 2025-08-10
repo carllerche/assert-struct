@@ -30,6 +30,9 @@ fn generate_pattern_assertion_with_path(
     is_ref: bool,
     path: &[String],
 ) -> TokenStream {
+    // Capture pattern string representation for error messages
+    let pattern_str = pattern_to_string(pattern);
+
     match pattern {
         Pattern::Struct {
             path: struct_path,
@@ -44,6 +47,17 @@ fn generate_pattern_assertion_with_path(
                 *rest,
                 is_ref,
                 path,
+            )
+        }
+        Pattern::Comparison(op, expected) => {
+            // Generate improved comparison assertion
+            generate_comparison_assertion_with_path(
+                value_expr,
+                op,
+                expected,
+                is_ref,
+                path,
+                &pattern_str,
             )
         }
         _ => {
@@ -683,4 +697,54 @@ fn is_option_none_path(path: &syn::Path) -> bool {
     } else {
         false
     }
+}
+
+/// Convert a pattern to its string representation for error messages
+fn pattern_to_string(pattern: &Pattern) -> String {
+    match pattern {
+        Pattern::Simple(expr) => quote! { #expr }.to_string(),
+        Pattern::Comparison(op, expr) => {
+            let op_str = match op {
+                ComparisonOp::Less => "<",
+                ComparisonOp::LessEqual => "<=",
+                ComparisonOp::Greater => ">",
+                ComparisonOp::GreaterEqual => ">=",
+                ComparisonOp::Equal => "==",
+                ComparisonOp::NotEqual => "!=",
+            };
+            format!("{} {}", op_str, quote! { #expr })
+        }
+        Pattern::Range(range) => quote! { #range }.to_string(),
+        #[cfg(feature = "regex")]
+        Pattern::Regex(s) => format!("=~ r\"{}\"", s),
+        #[cfg(feature = "regex")]
+        Pattern::Like(expr) => format!("=~ {}", quote! { #expr }),
+        Pattern::Rest => "..".to_string(),
+        Pattern::Struct { path, .. } => quote! { #path { .. } }.to_string(),
+        Pattern::Tuple { path, elements } => {
+            if let Some(p) = path {
+                if elements.is_empty() {
+                    quote! { #p }.to_string()
+                } else {
+                    format!("{}(...)", quote! { #p })
+                }
+            } else {
+                format!("({} elements)", elements.len())
+            }
+        }
+        Pattern::Slice(elements) => format!("[{} elements]", elements.len()),
+    }
+}
+
+/// Generate comparison assertion with enhanced error message
+fn generate_comparison_assertion_with_path(
+    value_expr: &TokenStream,
+    op: &ComparisonOp,
+    expected: &syn::Expr,
+    is_ref: bool,
+    _path: &[String],
+    _pattern_str: &str,
+) -> TokenStream {
+    // For now, delegate to original function
+    generate_comparison_assertion(value_expr, op, expected, is_ref)
 }
