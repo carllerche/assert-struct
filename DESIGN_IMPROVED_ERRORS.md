@@ -454,7 +454,26 @@ Refer to ERRORS.md for the complete specifications during implementation.
 1. **Compile time**: Minimal impact - just generating const arrays
 2. **Runtime**: Zero overhead on success path - all path building happens only on failure
 3. **Binary size**: Slightly larger due to error formatting code (error path only)
-4. **String deduplication**: Rust compiler handles deduplication of string literals
+4. **String deduplication**: Rust compiler handles deduplication of string literals (verified through testing - identical literals share memory)
+
+## Known Issues from ERRORS.md
+
+During design review, we identified several inconsistencies in the error message specifications that need attention during implementation:
+
+1. **Formatting inconsistencies**:
+   - Inconsistent use of `failed:` line for comparisons
+   - Varying approaches to showing expected values (when to include, when to omit)
+   - Alignment issues between `actual:` and `expected:` labels
+
+2. **Index notation**:
+   - Slice paths sometimes show `scores[2]` vs `system.performance.current.cpu_usage` without index
+   - Need consistent approach for collection element paths
+
+3. **Pattern-specific formatting**:
+   - When to underline just the literal vs the operator and literal
+   - When to include `= note:` sections
+
+These should be resolved consistently during implementation.
 
 ## Future Enhancements
 
@@ -484,3 +503,86 @@ Total: ~20-25 hours of implementation
 ## Conclusion
 
 This design provides a clear path to dramatically improved error messages while maintaining backwards compatibility and allowing incremental implementation. The phased approach ensures we can validate each enhancement and maintain a working codebase throughout development.
+
+## Appendix: Design Evolution and Context
+
+### Path Building Evolution
+
+The design went through several iterations before arriving at the zero-cost lazy approach:
+
+1. **Initial approach (rejected)**: Build paths eagerly during traversal
+   ```rust
+   let mut path = String::from("user");
+   path.push_str(".profile");  // Built even on success
+   ```
+   Problem: Runtime cost on success path
+
+2. **Complex deduplication (considered)**: Registry pattern with explicit deduplication
+   ```rust
+   mod __paths {
+       pub const USER: &str = "user";
+       pub const PROFILE: &str = "profile";  // Deduplicated
+   }
+   ```
+   Problem: Over-engineered for the benefit
+
+3. **Final approach**: Lazy const arrays with compiler deduplication
+   ```rust
+   const PATH: &[&str] = &["user", "profile", "age"];
+   let path = PATH.join(".");  // Only on failure
+   ```
+   Success: Zero-cost, simple, relies on Rust's string literal handling
+
+### Line Number Capture Journey
+
+We explored multiple approaches for capturing source locations:
+
+1. **First attempt**: `#[track_caller]` with `Location` type
+   - Required library support function
+   - More complex than necessary
+
+2. **Second iteration**: Library-provided `capture_location()`
+   - Cleaner generated code
+   - Still required runtime function calls
+
+3. **Final solution**: `line!()` with `quote_spanned!`
+   - Simplest approach
+   - Uses built-in Rust macros
+   - No runtime overhead
+   - The key insight: `quote_spanned!` preserves the original source location
+
+### String Literal Deduplication Discovery
+
+We tested whether Rust deduplicates string literals:
+
+```rust
+// Test showed identical literals share memory:
+let s1 = "hello";
+let s2 = "hello";
+assert_eq!(s1.as_ptr(), s2.as_ptr()); // Same address!
+```
+
+While not guaranteed by the language spec, this behavior is consistent enough to rely on for binary size optimization (not correctness).
+
+### Design Principles Crystallized
+
+Through this design process, we articulated key principles:
+
+1. **Zero-cost where it matters**: Common paths must have no overhead
+2. **Rich UX on error paths**: Better to have helpful errors than "fast" panics
+3. **API simplicity über alles**: Never compromise user experience for micro-optimizations
+
+### Multiple Failure Collection Decision
+
+Initially considered optional, we decided to make multiple failure collection a core feature because:
+- Users debugging tests want to see all problems at once
+- The implementation complexity is manageable
+- It significantly improves the debugging experience
+- Modern test frameworks (like Jest) set this expectation
+
+### Lessons for Future Macro Design
+
+1. **Leverage built-in macros**: `line!()`, `file!()`, etc. are powerful with proper spanning
+2. **Defer work to error paths**: Build expensive context only on failure
+3. **Trust the compiler**: Rust's optimizations (like string deduplication) can simplify design
+4. **Start with user experience**: Work backwards from desired error messages to implementation
