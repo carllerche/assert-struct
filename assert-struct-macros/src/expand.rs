@@ -34,6 +34,10 @@ fn generate_pattern_assertion_with_path(
     let pattern_str = pattern_to_string(pattern);
 
     match pattern {
+        Pattern::Simple(expected) => {
+            // Generate simple assertion with path tracking
+            generate_simple_assertion_with_path(value_expr, expected, is_ref, path)
+        }
         Pattern::Struct {
             path: struct_path,
             fields,
@@ -83,6 +87,10 @@ fn generate_pattern_assertion_with_path(
                 // Plain tuple - use old version for now
                 generate_plain_tuple_assertion(value_expr, elements, is_ref)
             }
+        }
+        Pattern::Slice(elements) => {
+            // Generate slice assertion with path tracking
+            generate_slice_assertion_with_path(value_expr, elements, is_ref, path)
         }
         _ => {
             // For now, delegate other patterns to the original function
@@ -924,6 +932,115 @@ fn generate_range_assertion_with_path(
                     error_type: ::assert_struct::__macro_support::ErrorType::Range,
                 };
 
+                panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+            }
+        }
+    }
+}
+
+/// Generate simple assertion with path tracking
+fn generate_simple_assertion_with_path(
+    value_expr: &TokenStream,
+    expected: &syn::Expr,
+    is_ref: bool,
+    path: &[String],
+) -> TokenStream {
+    // Transform string literals for String comparison
+    let transformed = transform_expected_value(expected);
+    let field_path_str = path.join(".");
+    let expected_str = quote! { #expected }.to_string();
+
+    if is_ref {
+        quote! {
+            if #value_expr != &#transformed {
+                let __line = line!();
+                let __file = file!();
+                let __error = ::assert_struct::__macro_support::ErrorContext {
+                    field_path: #field_path_str.to_string(),
+                    pattern_str: #expected_str.to_string(),
+                    actual_value: format!("{:?}", #value_expr),
+                    line_number: __line,
+                    file_name: __file,
+                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
+                };
+                panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+            }
+        }
+    } else {
+        quote! {
+            if &#value_expr != &#transformed {
+                let __line = line!();
+                let __file = file!();
+                let __error = ::assert_struct::__macro_support::ErrorContext {
+                    field_path: #field_path_str.to_string(),
+                    pattern_str: #expected_str.to_string(),
+                    actual_value: format!("{:?}", &#value_expr),
+                    line_number: __line,
+                    file_name: __file,
+                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
+                };
+                panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+            }
+        }
+    }
+}
+
+/// Generate slice assertion with path tracking
+fn generate_slice_assertion_with_path(
+    value_expr: &TokenStream,
+    elements: &[Pattern],
+    _is_ref: bool,
+    field_path: &[String],
+) -> TokenStream {
+    let mut pattern_parts = Vec::new();
+    let mut bindings_and_assertions = Vec::new();
+
+    for (i, elem) in elements.iter().enumerate() {
+        match elem {
+            Pattern::Rest => {
+                // Rest pattern allows variable-length matching
+                pattern_parts.push(quote! { .. });
+            }
+            _ => {
+                let binding = quote::format_ident!("__elem_{}", i);
+                pattern_parts.push(quote! { #binding });
+
+                // Build path for this slice element
+                let mut elem_path = field_path.to_vec();
+                elem_path.push(format!("[{}]", i));
+
+                let assertion = generate_pattern_assertion_with_path(
+                    &quote! { #binding },
+                    elem,
+                    true, // elements from slice matching are references
+                    &elem_path,
+                );
+                bindings_and_assertions.push(assertion);
+            }
+        }
+    }
+
+    // Convert Vec to slice for matching
+    let slice_expr = quote! { (#value_expr).as_slice() };
+    let field_path_str = field_path.join(".");
+    let elements_len = elements.len();
+
+    quote! {
+        match #slice_expr {
+            [#(#pattern_parts),*] => {
+                #(#bindings_and_assertions)*
+            }
+            _ => {
+                let __line = line!();
+                let __file = file!();
+                let __error = ::assert_struct::__macro_support::ErrorContext {
+                    field_path: #field_path_str.to_string(),
+                    pattern_str: format!("[{} elements]", #elements_len),
+                    actual_value: format!("{:?}", &#value_expr),
+                    line_number: __line,
+                    file_name: __file,
+                    error_type: ::assert_struct::__macro_support::ErrorType::Slice,
+                };
                 panic!("{}", ::assert_struct::__macro_support::format_error(__error));
             }
         }

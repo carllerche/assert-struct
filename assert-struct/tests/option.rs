@@ -223,7 +223,7 @@ fn test_some_none_mismatch() {
 }
 
 #[test]
-#[should_panic(expected = "Expected Some(...), got None")]
+#[should_panic(expected = "enum variant mismatch")]
 fn test_none_some_mismatch() {
     let user = User {
         id: 8,
@@ -246,7 +246,7 @@ fn test_none_some_mismatch() {
 }
 
 #[test]
-#[should_panic(expected = "assertion `left == right` failed")]
+#[should_panic(expected = "value mismatch")]
 fn test_some_value_mismatch() {
     let user = User {
         id: 9,

@@ -141,7 +141,7 @@ fn test_deeply_nested_with_partial_matching() {
 // Failure tests
 
 #[test]
-#[should_panic(expected = "assertion `left == right` failed")]
+#[should_panic(expected = "value mismatch")]
 fn test_nested_field_mismatch() {
     let profile = Profile {
         bio: Some("Developer".to_string()),
@@ -164,7 +164,7 @@ fn test_nested_field_mismatch() {
 }
 
 #[test]
-#[should_panic(expected = "Expected Some(...), got None")]
+#[should_panic(expected = "enum variant mismatch")]
 fn test_expected_some_got_none_nested() {
     let profile = Profile {
         bio: Some("Developer".to_string()),
