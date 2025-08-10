@@ -311,18 +311,45 @@ enum ComparisonOp {
 /// });
 /// ```
 ///
-/// # Panics
+/// # Error Messages
 ///
-/// Panics with a descriptive message when the assertion fails:
+/// When assertions fail, the macro provides detailed error messages showing exactly what went wrong:
 ///
 /// ```should_panic
 /// # use assert_struct::assert_struct;
 /// # #[derive(Debug)]
-/// # struct User { name: String }
-/// # let user = User { name: "Alice".to_string() };
+/// # struct User { name: String, age: u32 }
+/// # let user = User { name: "Alice".to_string(), age: 25 };
 /// assert_struct!(user, User {
-///     name: "Bob",  // Panics: expected "Bob", got "Alice"
+///     name: "Bob",  // This assertion will fail
+///     age: 25,
 /// });
+/// // Error output:
+/// // assert_struct! failed:
+/// //
+/// // value mismatch:
+/// //   --> `user.name` (src/lib.rs:319)
+/// //   actual: "Alice"
+/// //   expected: "Bob"
+/// ```
+///
+/// For comparison patterns, the error clearly shows the failed condition:
+///
+/// ```should_panic
+/// # use assert_struct::assert_struct;
+/// # #[derive(Debug)]
+/// # struct Account { balance: f64 }
+/// # let account = Account { balance: 50.0 };
+/// assert_struct!(account, Account {
+///     balance: > 100.0,  // This will fail
+/// });
+/// // Error output:
+/// // assert_struct! failed:
+/// //
+/// // comparison mismatch:
+/// //   --> `account.balance` (src/lib.rs:334)
+/// //   actual: 50.0
+/// //   expected: > 100.0
 /// ```
 ///
 /// # Compilation Errors

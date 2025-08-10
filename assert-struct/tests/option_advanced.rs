@@ -164,7 +164,7 @@ fn test_option_comparison_none_failure() {
 
 #[test]
 #[cfg(feature = "regex")]
-#[should_panic(expected = "does not match regex pattern")]
+#[should_panic(expected = "regex pattern mismatch")]
 fn test_option_regex_failure() {
     let user = User {
         name: "Iris".to_string(),

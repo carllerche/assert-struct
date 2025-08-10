@@ -45,7 +45,7 @@ fn test_regex_partial_match() {
 }
 
 #[test]
-#[should_panic(expected = "does not match regex pattern")]
+#[should_panic(expected = "regex pattern mismatch")]
 fn test_regex_mismatch() {
     let msg = Message {
         id: "invalid".to_string(),

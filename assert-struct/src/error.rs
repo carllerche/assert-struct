@@ -35,12 +35,59 @@ impl fmt::Display for ErrorType {
     }
 }
 
+fn truncate_path(path: &str, max_len: usize) -> String {
+    if path.len() <= max_len {
+        return path.to_string();
+    }
+
+    // Try to truncate at a sensible boundary (field separator)
+    let ellipsis = "...";
+    let available = max_len.saturating_sub(ellipsis.len());
+
+    // Find the last complete field name that fits
+    let parts: Vec<&str> = path.split('.').collect();
+    if parts.len() <= 2 {
+        // If very few parts, just truncate with ellipsis
+        let start = path.len().saturating_sub(available);
+        return format!("{}{}", ellipsis, &path[start..]);
+    }
+
+    // Keep first part and as many last parts as possible
+    let first = parts[0];
+    let mut kept_parts = vec![first];
+    let mut length = first.len();
+
+    for part in parts.iter().rev() {
+        let part_len = part.len() + 1; // +1 for the dot
+        if length + ellipsis.len() + part_len <= max_len {
+            length += part_len;
+            kept_parts.insert(1, part); // Insert after first element
+        } else {
+            break;
+        }
+    }
+
+    if kept_parts.len() == parts.len() {
+        // All parts fit, no truncation needed
+        path.to_string()
+    } else {
+        // Join first part, ellipsis, and remaining parts
+        let first = kept_parts[0];
+        let rest = &kept_parts[1..];
+        if rest.is_empty() {
+            format!("{}...{}", first, parts.last().unwrap())
+        } else {
+            format!("{}...{}", first, rest.join("."))
+        }
+    }
+}
+
 pub fn format_error(error: ErrorContext) -> String {
-    // For now, simple formatting - will enhance in later phases
+    let truncated_path = truncate_path(&error.field_path, 60);
     format!(
         "assert_struct! failed:\n\n{} mismatch:\n  --> `{}` ({}:{})\n  actual: {}\n  expected: {}",
         error.error_type,
-        error.field_path,
+        truncated_path,
         error.file_name,
         error.line_number,
         error.actual_value,
@@ -63,10 +110,11 @@ pub fn format_multiple_errors(errors: Vec<ErrorContext>) -> String {
         if i > 0 {
             result.push('\n');
         }
+        let truncated_path = truncate_path(&error.field_path, 60);
         result.push_str(&format!(
             "{} mismatch:\n  --> `{}` ({}:{})\n  actual: {}\n  expected: {}\n",
             error.error_type,
-            error.field_path,
+            truncated_path,
             error.file_name,
             error.line_number,
             error.actual_value,

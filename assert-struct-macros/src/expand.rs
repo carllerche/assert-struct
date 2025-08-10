@@ -92,6 +92,16 @@ fn generate_pattern_assertion_with_path(
             // Generate slice assertion with path tracking
             generate_slice_assertion_with_path(value_expr, elements, is_ref, path)
         }
+        #[cfg(feature = "regex")]
+        Pattern::Regex(regex_str) => {
+            // Generate regex assertion with path tracking
+            generate_regex_assertion_with_path(value_expr, regex_str, is_ref, path, &pattern_str)
+        }
+        #[cfg(feature = "regex")]
+        Pattern::Like(pattern_expr) => {
+            // Generate Like trait assertion with path tracking
+            generate_like_assertion_with_path(value_expr, pattern_expr, is_ref, path)
+        }
         _ => {
             // For now, delegate other patterns to the original function
             generate_pattern_assertion(value_expr, pattern, is_ref)
@@ -1042,6 +1052,114 @@ fn generate_slice_assertion_with_path(
                     error_type: ::assert_struct::__macro_support::ErrorType::Slice,
                 };
                 panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+            }
+        }
+    }
+}
+
+#[cfg(feature = "regex")]
+/// Generate regex assertion with path tracking
+fn generate_regex_assertion_with_path(
+    value_expr: &TokenStream,
+    pattern_str: &str,
+    is_ref: bool,
+    path: &[String],
+    full_pattern_str: &str,
+) -> TokenStream {
+    let field_path_str = path.join(".");
+
+    if is_ref {
+        quote! {
+            {
+                use ::assert_struct::Like;
+                let re = ::regex::Regex::new(#pattern_str)
+                    .expect(concat!("Invalid regex pattern: ", #pattern_str));
+                if !#value_expr.like(&re) {
+                    let __line = line!();
+                    let __file = file!();
+                    let __error = ::assert_struct::__macro_support::ErrorContext {
+                        field_path: #field_path_str.to_string(),
+                        pattern_str: #full_pattern_str.to_string(),
+                        actual_value: format!("{:?}", #value_expr),
+                        line_number: __line,
+                        file_name: __file,
+                        error_type: ::assert_struct::__macro_support::ErrorType::Regex,
+                    };
+                    panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+                }
+            }
+        }
+    } else {
+        quote! {
+            {
+                use ::assert_struct::Like;
+                let re = ::regex::Regex::new(#pattern_str)
+                    .expect(concat!("Invalid regex pattern: ", #pattern_str));
+                if !(&#value_expr).like(&re) {
+                    let __line = line!();
+                    let __file = file!();
+                    let __error = ::assert_struct::__macro_support::ErrorContext {
+                        field_path: #field_path_str.to_string(),
+                        pattern_str: #full_pattern_str.to_string(),
+                        actual_value: format!("{:?}", &#value_expr),
+                        line_number: __line,
+                        file_name: __file,
+                        error_type: ::assert_struct::__macro_support::ErrorType::Regex,
+                    };
+                    panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+                }
+            }
+        }
+    }
+}
+
+#[cfg(feature = "regex")]
+/// Generate Like trait assertion with path tracking
+fn generate_like_assertion_with_path(
+    value_expr: &TokenStream,
+    pattern_expr: &syn::Expr,
+    is_ref: bool,
+    path: &[String],
+) -> TokenStream {
+    let field_path_str = path.join(".");
+    let pattern_str = format!("=~ {}", quote! { #pattern_expr });
+
+    if is_ref {
+        quote! {
+            {
+                use ::assert_struct::Like;
+                if !#value_expr.like(&#pattern_expr) {
+                    let __line = line!();
+                    let __file = file!();
+                    let __error = ::assert_struct::__macro_support::ErrorContext {
+                        field_path: #field_path_str.to_string(),
+                        pattern_str: #pattern_str.to_string(),
+                        actual_value: format!("{:?}", #value_expr),
+                        line_number: __line,
+                        file_name: __file,
+                        error_type: ::assert_struct::__macro_support::ErrorType::Regex,
+                    };
+                    panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+                }
+            }
+        }
+    } else {
+        quote! {
+            {
+                use ::assert_struct::Like;
+                if !(&#value_expr).like(&#pattern_expr) {
+                    let __line = line!();
+                    let __file = file!();
+                    let __error = ::assert_struct::__macro_support::ErrorContext {
+                        field_path: #field_path_str.to_string(),
+                        pattern_str: #pattern_str.to_string(),
+                        actual_value: format!("{:?}", &#value_expr),
+                        line_number: __line,
+                        file_name: __file,
+                        error_type: ::assert_struct::__macro_support::ErrorType::Regex,
+                    };
+                    panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+                }
             }
         }
     }
