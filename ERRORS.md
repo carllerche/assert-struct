@@ -913,13 +913,11 @@ comparison mismatch:
   --> `user.age` (line 914)
    |     age: >= 18,
    |          ^^^^^ actual: 15
-   |                failed: 15 >= 18
 
 comparison mismatch:
   --> `user.score` (line 915)
    |     score: > 0,
    |            ^^^ actual: -10
-   |                failed: -10 > 0
 
 value mismatch:
   --> `user.verified` (line 916)
