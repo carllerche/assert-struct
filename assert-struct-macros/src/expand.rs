@@ -742,9 +742,55 @@ fn generate_comparison_assertion_with_path(
     op: &ComparisonOp,
     expected: &syn::Expr,
     is_ref: bool,
-    _path: &[String],
-    _pattern_str: &str,
+    path: &[String],
+    pattern_str: &str,
 ) -> TokenStream {
-    // For now, delegate to original function
-    generate_comparison_assertion(value_expr, op, expected, is_ref)
+    // Build the comparison expression
+    let comparison = if is_ref {
+        match op {
+            ComparisonOp::Less => quote! { #value_expr < &(#expected) },
+            ComparisonOp::LessEqual => quote! { #value_expr <= &(#expected) },
+            ComparisonOp::Greater => quote! { #value_expr > &(#expected) },
+            ComparisonOp::GreaterEqual => quote! { #value_expr >= &(#expected) },
+            ComparisonOp::Equal => quote! { #value_expr == &(#expected) },
+            ComparisonOp::NotEqual => quote! { #value_expr != &(#expected) },
+        }
+    } else {
+        match op {
+            ComparisonOp::Less => quote! { &#value_expr < &(#expected) },
+            ComparisonOp::LessEqual => quote! { &#value_expr <= &(#expected) },
+            ComparisonOp::Greater => quote! { &#value_expr > &(#expected) },
+            ComparisonOp::GreaterEqual => quote! { &#value_expr >= &(#expected) },
+            ComparisonOp::Equal => quote! { &#value_expr == &(#expected) },
+            ComparisonOp::NotEqual => quote! { &#value_expr != &(#expected) },
+        }
+    };
+
+    // Use improved error reporting
+    let field_path = path.join(".");
+    let actual_expr = if is_ref {
+        quote! { #value_expr }
+    } else {
+        quote! { &#value_expr }
+    };
+
+    quote! {
+        if !(#comparison) {
+            // Capture line number using proper spanning
+            let __line = line!();
+            let __file = file!();
+
+            // Build error context
+            let __error = ::assert_struct::__macro_support::ErrorContext {
+                field_path: #field_path.to_string(),
+                pattern_str: #pattern_str.to_string(),
+                actual_value: format!("{:?}", #actual_expr),
+                line_number: __line,
+                file_name: __file,
+                error_type: ::assert_struct::__macro_support::ErrorType::Comparison,
+            };
+
+            panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+        }
+    }
 }

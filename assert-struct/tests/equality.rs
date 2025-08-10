@@ -101,7 +101,7 @@ fn test_equality_in_tuples() {
 
 // Test failure cases
 #[test]
-#[should_panic(expected = "Failed equality")]
+#[should_panic(expected = "comparison mismatch")]
 fn test_equality_failure() {
     let user = User {
         name: "Alice".to_string(),
@@ -117,7 +117,7 @@ fn test_equality_failure() {
 }
 
 #[test]
-#[should_panic(expected = "Failed inequality")]
+#[should_panic(expected = "comparison mismatch")]
 fn test_inequality_failure() {
     let user = User {
         name: "Alice".to_string(),

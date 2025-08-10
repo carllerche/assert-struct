@@ -109,7 +109,7 @@ fn test_mixed_comparisons() {
 }
 
 #[test]
-#[should_panic(expected = "Failed comparison")]
+#[should_panic(expected = "comparison mismatch")]
 fn test_greater_than_failure() {
     let person = Person {
         name: "Frank".to_string(),
@@ -128,7 +128,7 @@ fn test_greater_than_failure() {
 }
 
 #[test]
-#[should_panic(expected = "Failed comparison")]
+#[should_panic(expected = "comparison mismatch")]
 fn test_less_than_failure() {
     let person = Person {
         name: "Grace".to_string(),
