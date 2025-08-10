@@ -618,7 +618,6 @@ Target error:
 ```
 assert_struct! failed:
    | (
-
 comparison mismatch:
   --> `coordinates.0`
 3  |     < 40.0,
@@ -641,7 +640,6 @@ Target error:
 assert_struct! failed:
    | (
    |     10,
-
 value mismatch:
   --> `point.1`
 3  |     25,
@@ -650,10 +648,114 @@ value mismatch:
    | )
 ```
 
+### Example 14: Complex nested Option/Result combinations
+
+Code:
+```rust
+struct Response {
+    data: Option<Result<String, u32>>,
+    fallback: Option<Result<String, u32>>,
+}
+
+let response = Response {
+    data: Some(Err(404)),
+    fallback: Some(Ok("cached".to_string())),
+};
+
+assert_struct!(response, Response {
+    data: Some(Ok("success")),
+    fallback: Some(Ok("cached")),
+    ..
+});
+```
+
+Target error:
+```
+assert_struct! failed:
+   | Response {
+
+enum variant mismatch:
+  --> `response.data`
+3  |     data: Some(Ok("success")),
+   |           ^^^^^^^^^^^^^^^^^^^^ actual: Some(Err(404))
+   |     ..
+   | }
+```
+
+Example with deeper nesting:
+```rust
+type ApiResult = Option<Result<Vec<String>, (u32, String)>>;
+
+let result: ApiResult = Some(Ok(vec!["a".to_string(), "b".to_string(), "c".to_string()]));
+
+assert_struct!(result, Some(Ok([== "a", == "b", == "d"])));
+```
+
+Target error:
+```
+assert_struct! failed:
+   | Some(Ok([
+
+string pattern mismatch:
+  --> `result.Some.Ok[2]`
+   |     == "a",
+   |     == "b",
+3  |     == "d"
+   |     ^^^^^^ actual: "c"
+   |            expected: "d"
+   | ]))
+```
+
+Example with pattern matching inside error variant:
+```rust
+let error_response: Result<String, (u32, String)> = Err((500, "Internal Error".to_string()));
+
+assert_struct!(error_response, Err((>= 400, =~ r"^Internal")));
+```
+
+Target error:
+```
+assert_struct! failed:
+   | Err((
+
+regex pattern mismatch:
+  --> `error_response.Err.1`
+   |     >= 400,
+3  |     =~ r"^Internal"
+   |     ^^^^^^^^^^^^^^^ actual: "Internal Error"
+   |                     pattern failed to match
+   | ))
+
+   = note: regex pattern: ^Internal
+```
+
+Wait, that should pass. Let me fix:
+
+```rust
+let error_response: Result<String, (u32, String)> = Err((500, "Server Error".to_string()));
+
+assert_struct!(error_response, Err((>= 400, =~ r"^Internal")));
+```
+
+Target error:
+```
+assert_struct! failed:
+   | Err((
+
+regex pattern mismatch:
+  --> `error_response.Err.1`
+   |     >= 400,
+3  |     =~ r"^Internal"
+   |     ^^^^^^^^^^^^^^^ actual: "Server Error"
+   |                     pattern failed to match
+   | ))
+
+   = note: regex pattern: ^Internal
+```
+
 ### More examples to add:
 
 #### Pattern-specific examples:
-- TODO: Complex nested Option/Result combinations - e.g., `Option<Result<T, E>>` patterns
 - TODO: Like trait custom matcher failure - When using `=~ custom_matcher` with a variable/expression
 
 #### Error handling strategies:
