@@ -888,17 +888,205 @@ pattern mismatch:
 
 #### Pattern-specific examples:
 
-#### Error handling strategies:
-- TODO: Multiple field failures - When multiple struct fields fail (not in a slice). Options:
-  - Show all failures at once?
-  - Fail fast on the first one?
-  - Group them somehow?
+### Example 16: Multiple field failures
 
-#### Edge cases and formatting:
-- TODO: Very long field paths - What if path is extremely long like `app.config.database.connection_pool.settings.timeout.retry_policy.max_attempts`?
-  - Truncate with ellipsis?
-  - Wrap to multiple lines?
-  - Show abbreviated path?
+Code:
+```rust
+struct User {
+    name: String,
+    email: String,
+    age: u32,
+    score: i32,
+    verified: bool,
+}
+
+let user = User {
+    name: "".to_string(),
+    email: "invalid-email".to_string(),
+    age: 15,
+    score: -10,
+    verified: false,
+};
+
+assert_struct!(user, User {
+    name: != "",
+    email: =~ r"@.*\.",
+    age: >= 18,
+    score: > 0,
+    verified: true,
+});
+```
+
+Target error:
+```
+assert_struct! failed: 5 mismatches
+   | User {
+
+string mismatch:
+  --> `user.name`
+3  |     name: != "",
+   |           ^^^^^ actual: ""
+   |                 values are equal
+
+regex pattern mismatch:
+  --> `user.email`
+4  |     email: =~ r"@.*\.",
+   |            ^^^^^^^^^^^^ actual: "invalid-email"
+   |                        pattern failed to match
+
+comparison mismatch:
+  --> `user.age`
+5  |     age: >= 18,
+   |          ^^^^^ actual: 15
+   |                failed: 15 >= 18
+
+comparison mismatch:
+  --> `user.score`
+6  |     score: > 0,
+   |            ^^^ actual: -10
+   |                failed: -10 > 0
+
+value mismatch:
+  --> `user.verified`
+7  |     verified: true,
+   |               ^^^^ actual: false
+
+   | }
+```
+
+#### Error handling strategies:
+
+### Example 17: Very long field paths
+
+Code:
+```rust
+struct RetryPolicy {
+    max_attempts: u32,
+    backoff_ms: u32,
+}
+
+struct TimeoutSettings {
+    connect_ms: u32,
+    read_ms: u32,
+    write_ms: u32,
+    retry_policy: RetryPolicy,
+}
+
+struct ConnectionPool {
+    min_connections: u32,
+    max_connections: u32,
+    settings: TimeoutSettings,
+}
+
+struct DatabaseConfig {
+    host: String,
+    port: u16,
+    connection_pool: ConnectionPool,
+}
+
+struct AppConfig {
+    name: String,
+    version: String,
+    database: DatabaseConfig,
+}
+
+struct Application {
+    config: AppConfig,
+    status: String,
+}
+
+let app = Application {
+    config: AppConfig {
+        name: "myapp".to_string(),
+        version: "1.0.0".to_string(),
+        database: DatabaseConfig {
+            host: "localhost".to_string(),
+            port: 5432,
+            connection_pool: ConnectionPool {
+                min_connections: 5,
+                max_connections: 20,
+                settings: TimeoutSettings {
+                    connect_ms: 5000,
+                    read_ms: 30000,
+                    write_ms: 30000,
+                    retry_policy: RetryPolicy {
+                        max_attempts: 3,
+                        backoff_ms: 1000,
+                    },
+                },
+            },
+        },
+    },
+    status: "running".to_string(),
+};
+
+assert_struct!(app, Application {
+    config: AppConfig {
+        database: DatabaseConfig {
+            connection_pool: ConnectionPool {
+                settings: TimeoutSettings {
+                    retry_policy: RetryPolicy {
+                        max_attempts: >= 5,
+                        ..
+                    },
+                    ..
+                },
+                ..
+            },
+            ..
+        },
+        ..
+    },
+    ..
+});
+```
+
+Target error:
+```
+assert_struct! failed:
+   | Application { ... RetryPolicy {
+
+comparison mismatch:
+  --> `app.config.database...retry_policy.max_attempts`
+   |     max_attempts: >= 5,
+   |                   ^^^^^ actual: 3
+   |                         failed: 3 >= 5
+   |     ..
+   | } ... }
+```
+
+**Path truncation rules:**
+- Show first 2 components: `app.config`
+- Show last 2 components: `retry_policy.max_attempts`  
+- Connect with `...` in the middle
+- Full path would be: `app.config.database.connection_pool.settings.timeout.retry_policy.max_attempts`
+- Truncated to: `app.config.database...retry_policy.max_attempts`
+
+Another example with different nesting:
+```rust
+struct DeepStruct {
+    level1: Level1,
+}
+
+struct Level1 {
+    level2: Level2,
+}
+
+// ... levels 2-8 defined similarly ...
+
+struct Level9 {
+    level10: Level10,
+}
+
+struct Level10 {
+    final_value: u32,
+}
+
+// Path: deep.level1.level2.level3.level4.level5.level6.level7.level8.level9.level10.final_value
+// Truncated: deep.level1.level2...level10.final_value
+```
+
+#### Remaining considerations:
 
 - TODO: Line number consistency - We show line numbers for literals but not for expressions/patterns. Should we be consistent?
 
