@@ -64,6 +64,26 @@ fn generate_pattern_assertion_with_path(
             // Generate improved range assertion
             generate_range_assertion_with_path(value_expr, range, is_ref, path, &pattern_str)
         }
+        Pattern::Tuple {
+            path: variant_path,
+            elements,
+        } => {
+            // Handle enum tuples with path tracking
+            if let Some(vpath) = variant_path {
+                if elements.is_empty() {
+                    // Unit variant like None - use old version for now
+                    generate_unit_variant_assertion(value_expr, vpath, is_ref)
+                } else {
+                    // Tuple variant with data - generate with path tracking
+                    generate_enum_tuple_assertion_with_path(
+                        value_expr, vpath, elements, is_ref, path,
+                    )
+                }
+            } else {
+                // Plain tuple - use old version for now
+                generate_plain_tuple_assertion(value_expr, elements, is_ref)
+            }
+        }
         _ => {
             // For now, delegate other patterns to the original function
             generate_pattern_assertion(value_expr, pattern, is_ref)
@@ -797,6 +817,78 @@ fn generate_comparison_assertion_with_path(
             panic!("{}", ::assert_struct::__macro_support::format_error(__error));
         }
     }
+}
+
+/// Generate assertion for enum tuple variants with path tracking
+fn generate_enum_tuple_assertion_with_path(
+    value_expr: &TokenStream,
+    variant_path: &syn::Path,
+    elements: &[Pattern],
+    is_ref: bool,
+    field_path: &[String],
+) -> TokenStream {
+    // Special handling for Some with pattern inside
+    if is_option_some_path(variant_path) && elements.len() == 1 {
+        // Build path for the Some content
+        let mut inner_path = field_path.to_vec();
+        inner_path.push("Some".to_string());
+
+        let inner_assertion = generate_pattern_assertion_with_path(
+            &quote! { inner },
+            &elements[0],
+            true, // inner is a reference from the match
+            &inner_path,
+        );
+
+        let field_path_str = field_path.join(".");
+
+        if is_ref {
+            return quote! {
+                match #value_expr {
+                    Some(inner) => {
+                        #inner_assertion
+                    },
+                    None => {
+                        let __line = line!();
+                        let __file = file!();
+                        let __error = ::assert_struct::__macro_support::ErrorContext {
+                            field_path: #field_path_str.to_string(),
+                            pattern_str: "Some(...)".to_string(),
+                            actual_value: "None".to_string(),
+                            line_number: __line,
+                            file_name: __file,
+                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                        };
+                        panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+                    }
+                }
+            };
+        } else {
+            return quote! {
+                match &#value_expr {
+                    Some(inner) => {
+                        #inner_assertion
+                    },
+                    None => {
+                        let __line = line!();
+                        let __file = file!();
+                        let __error = ::assert_struct::__macro_support::ErrorContext {
+                            field_path: #field_path_str.to_string(),
+                            pattern_str: "Some(...)".to_string(),
+                            actual_value: "None".to_string(),
+                            line_number: __line,
+                            file_name: __file,
+                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                        };
+                        panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+                    }
+                }
+            };
+        }
+    }
+
+    // For other enum tuple variants, use the old version for now
+    generate_enum_tuple_assertion(value_expr, variant_path, elements, is_ref)
 }
 
 /// Generate range assertion with enhanced error message

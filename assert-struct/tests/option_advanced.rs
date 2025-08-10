@@ -127,7 +127,7 @@ fn test_mixed_option_patterns() {
 // Failure tests
 
 #[test]
-#[should_panic(expected = "Failed comparison")]
+#[should_panic(expected = "comparison mismatch")]
 fn test_option_comparison_failure() {
     let user = User {
         name: "Grace".to_string(),
@@ -145,7 +145,7 @@ fn test_option_comparison_failure() {
 }
 
 #[test]
-#[should_panic(expected = "Expected Some(...), got None")]
+#[should_panic(expected = "enum variant mismatch")]
 fn test_option_comparison_none_failure() {
     let user = User {
         name: "Henry".to_string(),

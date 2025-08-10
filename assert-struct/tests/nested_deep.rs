@@ -90,14 +90,17 @@ fn test_deeply_nested_range_failure() {
         },
     };
 
-    assert_struct!(company, Company {
-        location: Location {
-            office: Office {
-                rooms: 10..=20,  // Should fail: 5 is not in range
+    assert_struct!(
+        company,
+        Company {
+            location: Location {
+                office: Office {
+                    rooms: 10..=20, // Should fail: 5 is not in range
+                    ..
+                },
                 ..
             },
             ..
-        },
-        ..
-    });
+        }
+    );
 }
