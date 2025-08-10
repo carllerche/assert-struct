@@ -59,15 +59,18 @@ assert_struct!(user, User {
 Target error:
 ```
 assert_struct! failed:
-   | User {
 
+   | User {
 string pattern mismatch:
-  --> `user.name`
+  --> `user.name` (line 54)
    |     name: "Bob",
    |           ^^^^^ actual: "Alice"
    |     ..
    | }
 ```
+
+Note: This example only continues an "actual: " line because the pattern is a
+literal, so the expected value is already displayed.
 
 ### Example 2: expression pattern
 
@@ -94,13 +97,13 @@ assert_struct!(user, User {
 Target error:
 ```
 assert_struct! failed:
-   | User {
 
+   | User {
 string pattern mismatch:
-  --> `user.name`
+  --> `user.name` (line 89)
    |     name: == name,
-   |           ^^^^^ actual: "Alice"
-   |               expected: "Bob"
+   |              ^^^^ actual: "Alice"
+   |                 expected: "Bob"
    |     ..
    | }
 ```
@@ -108,6 +111,9 @@ string pattern mismatch:
 This error message **includes** the `expected` name value because the pattern is
 an expression, so the user does not know what the expected value is based on the
 source.
+
+Only the expression is underlined with `^^^` because the operation is `==`.
+`actual:` and `expected:` are aligned on the `:`.
 
 ### Example 3: Nested field mismatch
 
@@ -143,19 +149,18 @@ assert_struct!(user, User {
 Target error:
 ```
 assert_struct! failed:
-   | User { ... Profile {
 
+   | User { ... Profile {
 comparison mismatch:
-  --> `user.profile.age`
+  --> `user.profile.age` (line 136)
    |     age: >= 18,
    |          ^^^^^ actual: 17
-   |                failed: 17 >= 18
    |     ..
    | } ... }
 ```
 
-This error does *not* include the expected value because the pattern is a number
-literal. The expected pattern is visible already.
+This error does *not* include the expected value or a *failed* line because the
+pattern is a number literal. The expected pattern is visible already.
 
 ### Example 4: Enum variant mismatch
 
@@ -176,7 +181,7 @@ Target error:
 assert_struct! failed:
 
 enum variant mismatch:
-  --> `status`
+  --> `status` (line 171)
    | Status::Active { since: > 0 }
    | ^^^^^^^^^^^^^^ actual: Status::Inactive
 ```
@@ -195,12 +200,14 @@ Target error:
 assert_struct! failed:
 
 comparison mismatch:
-  --> `scores[2]`
+  --> `scores[2]` (line 190)
    | [>= 80, >= 80, >= 80, >= 80]
-   |         ^^^^^
-   |         actual: 78
-   |         failed: 78 >= 80
+   |         ^^^^^ actual: 78
 ```
+
+The operation *and* the literal are underlined and there is no `expected` or
+`failed` line under `actual` because it is a literal pattern and all the
+necessary information to debug is already present.
 
 ### Example 6: Range pattern failure
 
@@ -225,12 +232,12 @@ assert_struct!(person, Person {
 Target error:
 ```
 assert_struct! failed:
-   | Person {
 
+   | Person {
 range mismatch:
-  --> `person.age`
+  --> `person.age` (line 220)
    |     age: 18..=65,
-   |          ^^^^^^^^ actual: 75
+   |          ^^^^^^^ actual: 75
    |     ..
    | }
 ```
@@ -255,16 +262,17 @@ assert_struct!(config, Config {
 Target error:
 ```
 assert_struct! failed:
-   | Config {
 
+   | Config {
 comparison mismatch:
-  --> `config.timeout`
+  --> `config.timeout` (line 251)
    |     timeout: Some(>= 10),
-   |              ^^^^^^^^^^^^ actual: Some(5)
+   |                   ^^^^^ actual: 5
    | }
 ```
 
-The expected value is **not** included because the pattern is a literal.
+The expected value is **not** included because the pattern is a literal. Also,
+because the `Some` did match, it is not highlighted.
 
 ### Example 8: Large slice pattern
 
@@ -286,10 +294,9 @@ Target error:
 assert_struct! failed:
 
 comparison mismatch:
-  --> `data[15]`
+  --> `data[15]` (line 280)
    | [..., > 200, ...]
-   |       ^^^^^^ actual: 160
-   |              failed: > 200
+   |       ^^^^^ actual: 160
    |
    = note: failed at index 15 of 20 elements
 ```
@@ -368,10 +375,10 @@ assert_struct!(user, User {
 Target error:
 ```
 assert_struct! failed:
-   | User { ... Address {
 
+   | User { ... Address {
 string pattern mismatch:
-  --> `user.profile.contact.address.postal_code`
+  --> `user.profile.contact.address.postal_code` (line 357)
    |     postal_code: "90210",
    |                  ^^^^^^^ actual: "98101"
    |     ..
@@ -444,37 +451,32 @@ assert_struct!(system, System {
 
 Target error:
 ```
-assert_struct! failed:
-   | System { ... Metrics {
+assert_struct! failed: 4 mismatches
 
-4 comparison mismatches:
-  --> `system.performance.current.cpu_usage`
+    | System { ... Metrics {
+   --> `system.performance.current.cpu_usage` (line 432)
+  4 | [..., < 90, ...]
+    |       ^^^^^ actual: 95
 
-   | [..., < 90, ...]  // [4]
-   |       ^^^^^ actual: 95
-   |             failed: 95 < 90
+ 13 | [..., < 90, ...]
+    |       ^^^^^ actual: 98
 
-   | [..., < 90, ...]  // [13]
-   |       ^^^^^ actual: 98
-   |             failed: 98 < 90
+ 23 | [..., < 90, ...]
+    |       ^^^^^ actual: 99
 
-   | [..., < 90, ...]  // [23]
-   |       ^^^^^ actual: 99
-   |             failed: 99 < 90
+ 24 | [..., < 90, ...]
+    |       ^^^^^ actual: 100
 
-   | [..., < 90, ...]  // [24]
-   |       ^^^^^ actual: 100
-   |             failed: 100 < 90
-
-   |     ..
-   | } ... }
+    |     ..
+    | } ... }
 
    = note: 4 of 30 elements failed to match
 ```
 
-**Why this format:** When slice elements use pattern comparisons (`< 90`, `>= 100`, etc.), we show
-each failure individually because the user needs to see why each comparison failed. The "failed: 95 < 90"
-line is crucial for understanding the mismatch.
+**Why this format:** When slice elements use pattern comparisons (`< 90`, `>=
+100`, etc.), we show each failure individually because the user needs to see why
+each comparison failed. The "failed: 95 < 90" line is crucial for understanding
+the mismatch.
 
 ### Example 11: Slice with literal values (diff style)
 
@@ -533,13 +535,11 @@ assert_struct!(app, Application {
 Target error:
 ```
 assert_struct! failed:
-   | Application { ... Config {
 
+   | Application { ... Config { [
 slice mismatch:
-  --> `app.settings.overrides.thresholds`
-
+  --> `app.settings.overrides.thresholds` (line 521)
   Diff < expected / actual >:
-    | [
     |     ...
   2 |     30,
   3 |-    40,
@@ -551,18 +551,15 @@ slice mismatch:
     |+    155,
  15 |     160,
     |     ...
-    | ]
-
-   |     ..
-   | } ... }
+   | ] .. } ... }
 ```
 
-**Why diff format:** When slice elements are literal values or equality comparisons (`[10, 20, 30]` or `== expected_slice`),
-we use a unified diff because the user just needs to see which values differ. The diff format is more
-compact and easier to scan for differences in concrete values. We show only a context window (1 element
-before/after changes) to keep the output focused, using `...` to indicate elided matching elements.
-
-
+**Why diff format:** When slice elements are literal values or equality
+comparisons (`[10, 20, 30]` or `== expected_slice`), we use a unified diff
+because the user just needs to see which values differ. The diff format is more
+compact and easier to scan for differences in concrete values. We show only a
+context window (1 element before/after changes) to keep the output focused,
+using `...` to indicate elided matching elements.
 
 ### Example 12: Regex pattern mismatch
 
@@ -590,11 +587,11 @@ assert_struct!(result, ValidationResult {
 Target error:
 ```
 assert_struct! failed:
-   | ValidationResult {
 
+   | ValidationResult {
 regex pattern mismatch:
-  --> `result.email`
-3  |     email: =~ r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
+  --> `result.email` (line 584)
+   |     email: =~ r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |            actual: "invalid.email@"
    |            pattern failed to match
@@ -617,10 +614,11 @@ assert_struct!(coordinates, (< 40.0, > -120.0, 50.0..=200.0));
 Target error:
 ```
 assert_struct! failed:
+
    | (
 comparison mismatch:
-  --> `coordinates.0`
-3  |     < 40.0,
+  --> `coordinates.0` (line 614)
+   |     < 40.0,
    |     ^^^^^^ actual: 45.5231
    |            failed: 45.5231 < 40.0
    |     > -120.0,
@@ -638,11 +636,12 @@ assert_struct!(point, (10, 25, 30));
 Target error:
 ```
 assert_struct! failed:
+
    | (
    |     10,
 value mismatch:
-  --> `point.1`
-3  |     25,
+  --> `point.1` (line 635)
+   |     25,
    |     ^^ actual: 20
    |     30
    | )
@@ -672,11 +671,11 @@ assert_struct!(response, Response {
 Target error:
 ```
 assert_struct! failed:
-   | Response {
 
+   | Response {
 enum variant mismatch:
-  --> `response.data`
-3  |     data: Some(Ok("success")),
+  --> `response.data` (line 666)
+   |     data: Some(Ok("success")),
    |           ^^^^^^^^^^^^^^^^^^^^ actual: Some(Err(404))
    |     ..
    | }
@@ -694,42 +693,18 @@ assert_struct!(result, Some(Ok([== "a", == "b", == "d"])));
 Target error:
 ```
 assert_struct! failed:
-   | Some(Ok([
 
+   | Some(Ok([
 string pattern mismatch:
-  --> `result.Some.Ok[2]`
+  --> `result.Some.Ok[2]` (line 691)
    |     == "a",
    |     == "b",
-3  |     == "d"
-   |     ^^^^^^ actual: "c"
-   |            expected: "d"
+   |     == "d"
+   |        ^^^ actual: "c"
    | ]))
 ```
 
 Example with pattern matching inside error variant:
-```rust
-let error_response: Result<String, (u32, String)> = Err((500, "Internal Error".to_string()));
-
-assert_struct!(error_response, Err((>= 400, =~ r"^Internal")));
-```
-
-Target error:
-```
-assert_struct! failed:
-   | Err((
-
-regex pattern mismatch:
-  --> `error_response.Err.1`
-   |     >= 400,
-3  |     =~ r"^Internal"
-   |     ^^^^^^^^^^^^^^^ actual: "Internal Error"
-   |                     pattern failed to match
-   | ))
-
-   = note: regex pattern: ^Internal
-```
-
-Wait, that should pass. Let me fix:
 
 ```rust
 let error_response: Result<String, (u32, String)> = Err((500, "Server Error".to_string()));
@@ -740,12 +715,12 @@ assert_struct!(error_response, Err((>= 400, =~ r"^Internal")));
 Target error:
 ```
 assert_struct! failed:
-   | Err((
 
+   | Err((
 regex pattern mismatch:
-  --> `error_response.Err.1`
+  --> `error_response.Err.1` (line 737)
    |     >= 400,
-3  |     =~ r"^Internal"
+   |     =~ r"^Internal"
    |     ^^^^^^^^^^^^^^^ actual: "Server Error"
    |                     pattern failed to match
    | ))
@@ -779,11 +754,11 @@ assert_struct!(user, User {
 Target error (with enhanced Like trait):
 ```
 assert_struct! failed:
-   | User {
 
+   | User {
 pattern mismatch:
-  --> `user.email`
-3  |     email: =~ alphanumeric_only,
+  --> `user.email` (line 774)
+   |     email: =~ alphanumeric_only,
    |            ^^^^^^^^^^^^^^^^^^^^^ actual: "user@example.com"
    |                                 pattern failed to match
    |
@@ -832,11 +807,11 @@ impl Like<String> for AlphanumericMatcher {
 With this enhancement, the error would show the custom message from the matcher:
 ```
 assert_struct! failed:
-   | User {
 
+   | User {
 pattern mismatch:
-  --> `user.email`
-3  |     email: =~ alphanumeric_only,
+  --> `user.email` (line 774)
+   |     email: =~ alphanumeric_only,
    |            ^^^^^^^^^^^^^^^^^^^^^ actual: "user@example.com"
    |                                 pattern failed to match
    |
@@ -871,12 +846,12 @@ assert_struct!(score, Score {
 Target error:
 ```
 assert_struct! failed:
+
    | Score {
    |     value: >= 70,
-
 pattern mismatch:
-  --> `score.grade`
-3  |     grade: =~ passing_grade(),
+  --> `score.grade` (line 867)
+   |     grade: =~ passing_grade(),
    |            ^^^^^^^^^^^^^^^^^^^ actual: "D"
    |                               pattern failed to match
    |
@@ -920,35 +895,35 @@ assert_struct!(user, User {
 Target error:
 ```
 assert_struct! failed: 5 mismatches
-   | User {
 
+   | User {
 string mismatch:
-  --> `user.name`
-3  |     name: != "",
+  --> `user.name` (line 912)
+   |     name: != "",
    |           ^^^^^ actual: ""
    |                 values are equal
 
 regex pattern mismatch:
-  --> `user.email`
-4  |     email: =~ r"@.*\.",
+  --> `user.email` (line 913)
+   |     email: =~ r"@.*\.",
    |            ^^^^^^^^^^^^ actual: "invalid-email"
    |                        pattern failed to match
 
 comparison mismatch:
-  --> `user.age`
-5  |     age: >= 18,
+  --> `user.age` (line 914)
+   |     age: >= 18,
    |          ^^^^^ actual: 15
    |                failed: 15 >= 18
 
 comparison mismatch:
-  --> `user.score`
-6  |     score: > 0,
+  --> `user.score` (line 915)
+   |     score: > 0,
    |            ^^^ actual: -10
    |                failed: -10 > 0
 
 value mismatch:
-  --> `user.verified`
-7  |     verified: true,
+  --> `user.verified` (line 916)
+   |     verified: true,
    |               ^^^^ actual: false
 
    | }
@@ -1044,20 +1019,19 @@ assert_struct!(app, Application {
 Target error:
 ```
 assert_struct! failed:
-   | Application { ... RetryPolicy {
 
+   | Application { ... RetryPolicy {
 comparison mismatch:
-  --> `app.config.database...retry_policy.max_attempts`
+  --> `app.config.database...retry_policy.max_attempts` (line 1029)
    |     max_attempts: >= 5,
    |                   ^^^^^ actual: 3
-   |                         failed: 3 >= 5
    |     ..
    | } ... }
 ```
 
 **Path truncation rules:**
 - Show first 2 components: `app.config`
-- Show last 2 components: `retry_policy.max_attempts`  
+- Show last 2 components: `retry_policy.max_attempts`
 - Connect with `...` in the middle
 - Full path would be: `app.config.database.connection_pool.settings.timeout.retry_policy.max_attempts`
 - Truncated to: `app.config.database...retry_policy.max_attempts`
