@@ -8,12 +8,47 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
     let pattern = &assert.pattern;
 
     // Generate the assertion for the root pattern
-    let assertion = generate_pattern_assertion(&quote! { #value }, pattern, false);
+    // Start with root path being the value identifier
+    let root_path = vec![quote! { #value }.to_string()];
+    let assertion =
+        generate_pattern_assertion_with_path(&quote! { #value }, pattern, false, &root_path);
 
     // Wrap in a block to avoid variable name conflicts
     quote! {
         {
             #assertion
+        }
+    }
+}
+
+/// Generate assertion code for any pattern type with path tracking.
+///
+/// This version tracks the path to the current field for better error messages.
+fn generate_pattern_assertion_with_path(
+    value_expr: &TokenStream,
+    pattern: &Pattern,
+    is_ref: bool,
+    path: &[String],
+) -> TokenStream {
+    match pattern {
+        Pattern::Struct {
+            path: struct_path,
+            fields,
+            rest,
+        } => {
+            // Use the path-aware version for structs
+            generate_struct_match_assertion_with_path(
+                value_expr,
+                struct_path,
+                fields,
+                *rest,
+                is_ref,
+                path,
+            )
+        }
+        _ => {
+            // For now, delegate other patterns to the original function
+            generate_pattern_assertion(value_expr, pattern, is_ref)
         }
     }
 }
@@ -254,6 +289,71 @@ fn generate_unit_variant_assertion(
 ///
 /// Using match for both eliminates the need for type detection heuristics.
 /// The `#[allow(unreachable_patterns)]` suppresses warnings for struct matches.
+fn generate_struct_match_assertion_with_path(
+    value_expr: &TokenStream,
+    struct_path: &syn::Path,
+    fields: &Punctuated<FieldAssertion, Token![,]>,
+    rest: bool,
+    is_ref: bool,
+    field_path: &[String],
+) -> TokenStream {
+    let field_names: Vec<_> = fields.iter().map(|f| &f.field_name).collect();
+
+    let rest_pattern = if rest {
+        quote! { , .. }
+    } else {
+        quote! {}
+    };
+
+    let field_assertions: Vec<_> = fields
+        .iter()
+        .map(|f| {
+            let field_name = &f.field_name;
+            let field_pattern = &f.pattern;
+            // Build path for this field
+            let mut new_path = field_path.to_vec();
+            new_path.push(field_name.to_string());
+            // Fields from destructuring are references
+            generate_pattern_assertion_with_path(
+                &quote! { #field_name },
+                field_pattern,
+                true,
+                &new_path,
+            )
+        })
+        .collect();
+
+    if is_ref {
+        quote! {
+            #[allow(unreachable_patterns)]
+            match #value_expr {
+                #struct_path { #(#field_names),* #rest_pattern } => {
+                    #(#field_assertions)*
+                },
+                _ => panic!(
+                    "Expected {}, got {:?}",
+                    stringify!(#struct_path),
+                    #value_expr
+                ),
+            }
+        }
+    } else {
+        quote! {
+            #[allow(unreachable_patterns)]
+            match &#value_expr {
+                #struct_path { #(#field_names),* #rest_pattern } => {
+                    #(#field_assertions)*
+                },
+                _ => panic!(
+                    "Expected {}, got {:?}",
+                    stringify!(#struct_path),
+                    &#value_expr
+                ),
+            }
+        }
+    }
+}
+
 fn generate_struct_match_assertion(
     value_expr: &TokenStream,
     path: &syn::Path,
