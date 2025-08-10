@@ -1,3 +1,5 @@
+# Improved Errors
+
 ## Status Quo
 
 Example:
@@ -563,146 +565,50 @@ before/after changes) to keep the output focused, using `...` to indicate elided
 
 
 ### More examples to add:
-- TODO: Regex pattern mismatch
-- TODO: Multiple field failures
-- TODO: Tuple pattern mismatch
-- TODO: Complex nested Option/Result combinations
-- TODO: Like trait custom matcher failure
 
-## Feasibility Analysis
+#### Pattern-specific examples:
+- TODO: Regex pattern mismatch - How to show when a string doesn't match a regex pattern (with `=~ r"pattern"` syntax)
+- TODO: Tuple pattern mismatch - Standalone tuples (we've only covered tuples in enum variants)
+- TODO: Complex nested Option/Result combinations - e.g., `Option<Result<T, E>>` patterns
+- TODO: Like trait custom matcher failure - When using `=~ custom_matcher` with a variable/expression
 
-### Feasibility: HIGH
-- ✅ Can show file:line:column via `#[track_caller]` and `std::panic::Location::caller()`
-- ✅ Can build pattern representation from AST during macro expansion
-- ✅ Can track field paths and show exactly which field failed
-- ✅ Can annotate the rendered pattern to show failure location
-- ✅ Pattern formatting is fully controlled by macro (like `Debug` pretty-printing)
-- ✅ **Can get line numbers of pattern fragments!** By setting the span of generated code to match the original pattern token spans, then calling a `#[track_caller]` helper function like `capture_location()`, we can get the exact source location of each pattern element. Example:
-  ```rust
-  // In macro expansion, preserve the span from the pattern:
-  let location = #field_name_token_with_original_span capture_location();
+#### Error handling strategies:
+- TODO: Multiple field failures - When multiple struct fields fail (not in a slice). Options:
+  - Show all failures at once?
+  - Fail fast on the first one?
+  - Group them somehow?
 
-  // Helper function:
-  #[track_caller]
-  fn capture_location() -> &'static Location<'static> {
-      Location::caller()
-  }
-  ```
-  This would report the line/column of the original `name: "Bob"` in the pattern!
+#### Edge cases and formatting:
+- TODO: Very long field paths - What if path is extremely long like `app.config.database.connection_pool.settings.timeout.retry_policy.max_attempts`?
+  - Truncate with ellipsis?
+  - Wrap to multiple lines?
+  - Show abbreviated path?
 
-### Implementation Strategy
-1. Add field path tracking during macro expansion
-2. Preserve original token spans when generating assertion code
-3. Use `#[track_caller]` helper functions to capture exact pattern locations
-4. Build AST-based pattern representation for display
-5. Generate comprehensive panic messages with full context and precise location info
+- TODO: Line number consistency - We show line numbers for literals but not for expressions/patterns. Should we be consistent?
 
-## Inspiration
+- TODO: Multiple errors vs fail-fast trade-off - We show multiple failures for slices, but what about struct fields? Performance vs completeness considerations.
 
-Examples of excellent rustc error messages that we can draw inspiration from:
+## Implementation Strategy
 
-### Pattern matching errors
-```
-error[E0308]: mismatched types
-  --> src/main.rs:4:9
-   |
-3  |     match x {
-   |           - this expression has type `Option<i32>`
-4  |         Some("foo") => {},
-   |         ^^^^^^^^^^^ expected `Option<i32>`, found `Option<&str>`
-   |
-   = note: expected enum `Option<i32>`
-              found enum `Option<&'static str>`
-```
+### Phase 1: Core Infrastructure
+1. **Field path tracking** - Build full paths during macro expansion (e.g., `user.profile.age`)
+2. **Pattern AST representation** - Create structured representation of patterns for pretty-printing
+3. **Error context collection** - Capture pattern source, field paths, and values at failure point
+4. **Span preservation** - Maintain original token spans through macro expansion for line numbers
 
-### Struct field errors
-```
-error[E0560]: struct `User` has no field named `emial`
-  --> src/main.rs:8:9
-   |
-8  |         emial: "alice@example.com",
-   |         ^^^^^ help: a field with a similar name exists: `email`
-```
+### Phase 2: Error Message Generation
+5. **Custom panic formatter** - Replace basic `panic!()` with rich formatted messages
+6. **Pattern renderer** - Pretty-print patterns with consistent indentation and ellipsis for nesting
+7. **Diff engine for slices** - Implement unified diff for literal value comparisons
+8. **Context window logic** - Show only relevant portions of large patterns/slices
 
-### Type mismatch with context
-```
-error[E0308]: mismatched types
-  --> src/main.rs:12:18
-   |
-11 |     let age: u32 = user.age;
-   |              ---   ^^^^^^^^ expected `u32`, found `String`
-   |              |
-   |              expected due to this
-```
+### Phase 3: Advanced Features
+9. **Multiple failure collection** (optional) - Gather all failures before panicking for comprehensive errors
+10. **Smart truncation** - Handle very long paths and values gracefully
+11. **Error categorization** - Different formats for different pattern types (comparison, range, regex, etc.)
 
-### Multi-line span with annotations
-```
-error[E0382]: use of moved value: `data`
-  --> src/main.rs:6:20
-   |
-3  |     let data = vec![1, 2, 3];
-   |         ---- move occurs because `data` has type `Vec<i32>`
-4  |     consume(data);
-   |             ---- value moved here
-5  |
-6  |     println!("{}", data.len());
-   |                    ^^^^ value used here after move
-```
-
-### Comparison errors
-```
-error[E0308]: mismatched types
-  --> src/main.rs:5:8
-   |
-5  |     if age > "18" {
-   |        --- ^ ---- &str
-   |        |   |
-   |        |   expected `&str`, found integer
-   |        expected because this is `&str`
-```
-
-### Assert-like errors (from assert_eq!)
-```
-thread 'main' panicked at 'assertion failed: `(left == right)`
-  left: `Config { port: 8080, host: "localhost" }`,
- right: `Config { port: 3000, host: "localhost" }`', src/main.rs:15:5
-```
-
-### Multiple errors in one output
-```
-error[E0308]: mismatched types
-  --> src/main.rs:4:18
-   |
-4  |     let x: u32 = "hello";
-   |            ---   ^^^^^^^ expected `u32`, found `&str`
-   |            |
-   |            expected due to this
-
-error[E0308]: mismatched types
-  --> src/main.rs:5:18
-   |
-5  |     let y: bool = 42;
-   |            ----   ^^ expected `bool`, found integer
-   |            |
-   |            expected due to this
-
-error[E0384]: cannot assign twice to immutable variable `x`
-  --> src/main.rs:7:5
-   |
-4  |     let x: u32 = "hello";
-   |         - first assignment to `x`
-...
-7  |     x = 10;
-   |     ^^^^^^ cannot assign twice to immutable variable
-
-error: aborting due to 3 previous errors
-```
-
-### Key patterns to emulate:
-- **Clear hierarchy**: Main error → file location → detailed explanation
-- **Visual indicators**: Arrows, underlines, and tree-like connectors
-- **Contextual information**: Show surrounding context when helpful
-- **Expected vs Found**: Consistent terminology throughout
-- **Notes and help**: Additional context in `= note:` and `= help:` sections
-- **Precise locations**: Exact line:column for the problematic code
-- **Type information**: Show full types when relevant for understanding
+### Technical Approach
+- Use `#[track_caller]` with helper functions to capture source locations
+- Preserve spans: `let location = #original_span capture_location();`
+- Generate match expressions that preserve pattern structure in error messages
+- Build error messages incrementally with proper formatting and alignment
