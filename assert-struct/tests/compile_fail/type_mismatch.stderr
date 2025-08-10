@@ -11,4 +11,4 @@ error[E0277]: can't compare `u32` with `String`
            but trait `PartialEq<u32>` is implemented for it
    = help: for that trait implementation, expected `u32`, found `String`
    = note: required for `&u32` to implement `PartialEq<&String>`
-   = note: this error originates in the macro `assert_eq` which comes from the expansion of the macro `assert_struct` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `assert_struct` (in Nightly builds, run with -Z macro-backtrace for more info)
