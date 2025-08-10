@@ -486,6 +486,15 @@
 // Re-export the procedural macro
 pub use assert_struct_macros::assert_struct;
 
+// Error handling module
+mod error;
+
+// Hidden module for macro support functions
+#[doc(hidden)]
+pub mod __macro_support {
+    pub use crate::error::{ErrorContext, ErrorType, format_error, format_multiple_errors};
+}
+
 /// A trait for pattern matching, similar to `PartialEq` but for flexible matching.
 ///
 /// The `Like` trait enables custom pattern matching logic beyond simple equality.
