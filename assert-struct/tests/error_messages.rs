@@ -25,6 +25,14 @@ mod equality_pattern;
 mod range_pattern;
 #[path = "error_messages/enum_variant.rs"]
 mod enum_variant;
+#[path = "error_messages/comparison_pattern.rs"]
+mod comparison_pattern;
+#[path = "error_messages/regex_pattern.rs"]
+mod regex_pattern;
+#[path = "error_messages/slice_pattern.rs"]
+mod slice_pattern;
+#[path = "error_messages/option_with_comparison.rs"]
+mod option_with_comparison;
 
 #[test]
 fn test_simple_field_mismatch() {
@@ -115,6 +123,76 @@ enum variant mismatch:
   --> `value` (assert-struct/tests/error_messages/enum_variant.rs:6)
   actual: Some
   expected: None"#;
+
+    assert_eq!(message, expected);
+}
+
+#[test]
+fn test_comparison_pattern() {
+    let message = capture_panic_message(|| {
+        comparison_pattern::test_case();
+    });
+
+    let expected = r#"assert_struct! failed:
+
+   | User {
+comparison mismatch:
+  --> `user.age` (line 15)
+   |     age: > 30,
+   |          ^^^^ actual: 25
+   |     ..
+   | }"#;
+
+    assert_eq!(message, expected);
+}
+
+#[test]
+#[cfg(feature = "regex")]
+fn test_regex_pattern() {
+    let message = capture_panic_message(|| {
+        regex_pattern::test_case();
+    });
+
+    let expected = r#"assert_struct! failed:
+
+regex pattern mismatch:
+  --> `user.email` (assert-struct/tests/error_messages/regex_pattern.rs:13)
+  actual: "alice@wrong.com"
+  expected: =~ r"@example\.com$""#;
+
+    assert_eq!(message, expected);
+}
+
+#[test]
+fn test_slice_pattern() {
+    let message = capture_panic_message(|| {
+        slice_pattern::test_case();
+    });
+
+    // Slices show individual element failures
+    let expected = r#"assert_struct! failed:
+
+value mismatch:
+  --> `data.values.[1]` (assert-struct/tests/error_messages/slice_pattern.rs:13)
+  actual: 2
+  expected: 5"#;
+
+    assert_eq!(message, expected);
+}
+
+#[test]
+fn test_option_with_comparison() {
+    let message = capture_panic_message(|| {
+        option_with_comparison::test_case();
+    });
+
+    // Option with comparison shows the inner comparison failure
+    let expected = r#"assert_struct! failed:
+
+comparison mismatch:
+  --> `data.value.Some` (assert-struct/tests/error_messages/option_with_comparison.rs:11)
+  actual: 25
+  expected: > 30"#;
 
     assert_eq!(message, expected);
 }
