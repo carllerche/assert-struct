@@ -31,7 +31,11 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
 /// Format a pattern as a simple inline string (no newlines)
 fn format_pattern_inline(pattern: &Pattern) -> String {
     match pattern {
-        Pattern::Simple(expr) => quote! { #expr }.to_string(),
+        Pattern::Simple(expr) => {
+            // Remove unnecessary spaces in references to arrays/slices
+            let expr_str = quote! { #expr }.to_string();
+            expr_str.replace("& [", "&[").replace("& mut [", "&mut [")
+        }
         Pattern::Comparison(op, expr) => {
             let op_str = match op {
                 ComparisonOp::Less => "<",
@@ -122,7 +126,10 @@ fn format_pattern_pretty(pattern: &Pattern, indent: usize) -> String {
                     match &field.pattern {
                         Pattern::Simple(expr) => {
                             let expr_str = quote! { #expr }.to_string();
-                            result.push_str(&expr_str);
+                            // Remove unnecessary spaces in references to arrays/slices
+                            let cleaned =
+                                expr_str.replace("& [", "&[").replace("& mut [", "&mut [");
+                            result.push_str(&cleaned);
                         }
                         Pattern::Comparison(op, expr) => {
                             let op_str = match op {
@@ -1219,10 +1226,28 @@ fn generate_comparison_assertion_with_path(
                             value_start
                         };
 
-                        // Simple heuristic: find the comma or end of line
-                        if let Some(comma_pos) = rest_of_line.find(',') {
-                            value_end = value_start + comma_pos;
-                        } else {
+                        // Find the comma that ends the field value, accounting for nested structures
+                        // Simple approach: look for brackets/parens and skip commas inside them
+                        let mut bracket_depth = 0;
+                        let mut paren_depth = 0;
+                        let mut found_end = false;
+
+                        for (i, ch) in rest_of_line.char_indices() {
+                            match ch {
+                                '[' => bracket_depth += 1,
+                                ']' => bracket_depth -= 1,
+                                '(' => paren_depth += 1,
+                                ')' => paren_depth -= 1,
+                                ',' if bracket_depth == 0 && paren_depth == 0 => {
+                                    value_end = value_start + i;
+                                    found_end = true;
+                                    break;
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        if !found_end {
                             value_end = line.len();
                         }
 
@@ -1396,10 +1421,28 @@ fn generate_range_assertion_with_path(
                         let rest_of_line = &line[value_start..];
                         let mut value_end = value_start;
 
-                        // Simple heuristic: find the comma or end of line
-                        if let Some(comma_pos) = rest_of_line.find(',') {
-                            value_end = value_start + comma_pos;
-                        } else {
+                        // Find the comma that ends the field value, accounting for nested structures
+                        // Simple approach: look for brackets/parens and skip commas inside them
+                        let mut bracket_depth = 0;
+                        let mut paren_depth = 0;
+                        let mut found_end = false;
+
+                        for (i, ch) in rest_of_line.char_indices() {
+                            match ch {
+                                '[' => bracket_depth += 1,
+                                ']' => bracket_depth -= 1,
+                                '(' => paren_depth += 1,
+                                ')' => paren_depth -= 1,
+                                ',' if bracket_depth == 0 && paren_depth == 0 => {
+                                    value_end = value_start + i;
+                                    found_end = true;
+                                    break;
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        if !found_end {
                             value_end = line.len();
                         }
 
@@ -1477,10 +1520,28 @@ fn generate_simple_assertion_with_path(
                         let rest_of_line = &line[value_start..];
                         let mut value_end = value_start;
 
-                        // Simple heuristic: find the comma or end of line
-                        if let Some(comma_pos) = rest_of_line.find(',') {
-                            value_end = value_start + comma_pos;
-                        } else {
+                        // Find the comma that ends the field value, accounting for nested structures
+                        // Simple approach: look for brackets/parens and skip commas inside them
+                        let mut bracket_depth = 0;
+                        let mut paren_depth = 0;
+                        let mut found_end = false;
+
+                        for (i, ch) in rest_of_line.char_indices() {
+                            match ch {
+                                '[' => bracket_depth += 1,
+                                ']' => bracket_depth -= 1,
+                                '(' => paren_depth += 1,
+                                ')' => paren_depth -= 1,
+                                ',' if bracket_depth == 0 && paren_depth == 0 => {
+                                    value_end = value_start + i;
+                                    found_end = true;
+                                    break;
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        if !found_end {
                             value_end = line.len();
                         }
 

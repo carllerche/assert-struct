@@ -130,10 +130,7 @@ fn test_greater_than_failure() {
     );
 }
 
-error_message_test!(
-    "comparison_errors/less_than_failure.rs",
-    less_than_failure
-);
+error_message_test!("comparison_errors/less_than_failure.rs", less_than_failure);
 
 error_message_test!(
     "comparison_errors/comparison_pattern.rs",

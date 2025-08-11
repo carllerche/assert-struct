@@ -271,4 +271,7 @@ fn test_some_value_mismatch() {
     );
 }
 
-error_message_test!("option_errors/option_with_comparison.rs", option_with_comparison);
+error_message_test!(
+    "option_errors/option_with_comparison.rs",
+    option_with_comparison
+);

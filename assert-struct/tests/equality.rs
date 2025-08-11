@@ -136,7 +136,4 @@ fn test_inequality_failure() {
 }
 
 // Error message tests
-error_message_test!(
-    "equality_errors/equality_pattern.rs",
-    equality_pattern
-);
+error_message_test!("equality_errors/equality_pattern.rs", equality_pattern);

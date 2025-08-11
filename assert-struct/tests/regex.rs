@@ -84,4 +84,8 @@ fn test_mixed_matchers() {
     );
 }
 
-error_message_test!(#[cfg(feature = "regex")] "regex_errors/regex_pattern.rs", regex_pattern);
+error_message_test!(
+    #[cfg(feature = "regex")]
+    "regex_errors/regex_pattern.rs",
+    regex_pattern
+);

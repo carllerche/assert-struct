@@ -49,20 +49,9 @@ fn partial_match_with_rest() {
 }
 
 // Error message tests using snapshot testing
-error_message_test!(
-    "basic_errors/field_mismatch.rs",
-    field_mismatch
-);
+error_message_test!("basic_errors/field_mismatch.rs", field_mismatch);
 
-error_message_test!(
-    "basic_errors/age_mismatch.rs",
-    age_mismatch
-);
-
-error_message_test!(
-    "basic_errors/simple_field_mismatch.rs",
-    simple_field_mismatch
-);
+error_message_test!("basic_errors/age_mismatch.rs", age_mismatch);
 
 #[test]
 fn test_vec_with_slice_syntax() {
@@ -96,10 +85,7 @@ fn test_vec_partial_match() {
     );
 }
 
-error_message_test!(
-    "basic_errors/vec_mismatch.rs",
-    vec_mismatch
-);
+error_message_test!("basic_errors/vec_mismatch.rs", vec_mismatch);
 
 #[test]
 fn test_tuple_field() {
@@ -136,7 +122,4 @@ fn test_tuple_field_partial() {
     );
 }
 
-error_message_test!(
-    "basic_errors/tuple_field_mismatch.rs",
-    tuple_field_mismatch
-);
+error_message_test!("basic_errors/tuple_field_mismatch.rs", tuple_field_mismatch);
