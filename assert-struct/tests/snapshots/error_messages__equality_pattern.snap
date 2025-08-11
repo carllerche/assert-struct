@@ -1,0 +1,13 @@
+---
+source: assert-struct/tests/error_messages.rs
+expression: message
+---
+assert_struct! failed:
+
+   | Config {
+equality mismatch:
+  --> `config.timeout` (line 12)
+   |     timeout: == expected_timeout,
+   |                 ^^^^^^^^^^^^^^^^ actual: 30
+   |                                  expected: 60
+   | }

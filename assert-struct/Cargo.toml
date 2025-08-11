@@ -28,6 +28,7 @@ regex = { workspace = true, optional = true }
 
 [dev-dependencies]
 trybuild = "1.0"
+insta = "1.40"
 
 [package.metadata.docs.rs]
 all-features = true

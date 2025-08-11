@@ -1,0 +1,10 @@
+---
+source: assert-struct/tests/error_messages.rs
+expression: message
+---
+assert_struct! failed:
+
+value mismatch:
+  --> `data.values.[1]` (assert-struct/tests/error_messages/slice_pattern.rs:13)
+  actual: 2
+  expected: 5

@@ -16,7 +16,7 @@ pub fn capture_panic_message<F: FnOnce() + panic::UnwindSafe>(f: F) -> String {
 /// Macro to reduce boilerplate for error message tests
 #[macro_export]
 macro_rules! error_message_test {
-    ($path:literal, $name:ident, $expected:expr) => {
+    ($path:literal, $name:ident) => {
         #[path = $path]
         mod $name;
 
@@ -25,11 +25,11 @@ macro_rules! error_message_test {
             let message = util::capture_panic_message(|| {
                 $name::test_case();
             });
-            assert_eq!(message, $expected);
+            insta::assert_snapshot!(message);
         }
     };
     // Variant with feature gate
-    (#[cfg($cfg:meta)] $path:literal, $name:ident, $expected:expr) => {
+    (#[cfg($cfg:meta)] $path:literal, $name:ident) => {
         #[cfg($cfg)]
         #[path = $path]
         mod $name;
@@ -40,7 +40,7 @@ macro_rules! error_message_test {
             let message = util::capture_panic_message(|| {
                 $name::test_case();
             });
-            assert_eq!(message, $expected);
+            insta::assert_snapshot!(message);
         }
     };
 }

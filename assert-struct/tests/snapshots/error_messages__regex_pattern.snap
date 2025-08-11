@@ -1,0 +1,10 @@
+---
+source: assert-struct/tests/error_messages.rs
+expression: message
+---
+assert_struct! failed:
+
+regex pattern mismatch:
+  --> `user.email` (assert-struct/tests/error_messages/regex_pattern.rs:13)
+  actual: "alice@wrong.com"
+  expected: =~ r"@example\.com$"
