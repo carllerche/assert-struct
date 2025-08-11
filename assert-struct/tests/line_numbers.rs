@@ -8,7 +8,7 @@ struct User {
 }
 
 #[test]
-#[should_panic(expected = "line_numbers.rs:19")]
+#[should_panic(expected = "(line 19)")]
 fn test_line_number_in_error() {
     let user = User {
         name: "Alice".to_string(),
@@ -24,7 +24,7 @@ fn test_line_number_in_error() {
 }
 
 #[test]
-#[should_panic(expected = "line_numbers.rs:35")]
+#[should_panic(expected = "(line 35)")]
 fn test_nested_line_number() {
     let user = User {
         name: "Bob".to_string(),

@@ -21,6 +21,7 @@
 //! See the main `assert-struct` crate for documentation and examples.
 
 use proc_macro::TokenStream;
+use std::fmt;
 use syn::{Expr, Token, punctuated::Punctuated};
 
 mod expand;
@@ -33,7 +34,7 @@ struct AssertStruct {
 }
 
 // Unified pattern type that can represent any pattern
-enum Pattern {
+pub(crate) enum Pattern {
     // Simple value: 42, "hello", true
     Simple(Expr),
     // Struct pattern: User { name: "Alice", age: 30, .. }
@@ -63,6 +64,99 @@ enum Pattern {
     Rest,
 }
 
+// Helper function to format syn expressions as strings
+fn expr_to_string(expr: &Expr) -> String {
+    // This is a simplified version - in production we'd want more complete handling
+    match expr {
+        Expr::Lit(lit) => {
+            // Handle literals
+            quote::quote! { #lit }.to_string()
+        }
+        Expr::Path(path) => {
+            // Handle paths
+            quote::quote! { #path }.to_string()
+        }
+        Expr::Range(range) => {
+            // Handle ranges
+            quote::quote! { #range }.to_string()
+        }
+        _ => {
+            // Fallback - use quote for other expressions
+            quote::quote! { #expr }.to_string()
+        }
+    }
+}
+
+fn path_to_string(path: &syn::Path) -> String {
+    quote::quote! { #path }.to_string()
+}
+
+impl fmt::Display for Pattern {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Pattern::Simple(expr) => {
+                write!(f, "{}", expr_to_string(expr))
+            }
+            Pattern::Struct { path, fields, rest } => {
+                write!(f, "{} {{ ", path_to_string(path))?;
+                for (i, field) in fields.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}: {}", field.field_name, field.pattern)?;
+                }
+                if *rest {
+                    if !fields.is_empty() {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "..")?;
+                }
+                write!(f, " }}")
+            }
+            Pattern::Tuple { path, elements } => {
+                if let Some(p) = path {
+                    write!(f, "{}", path_to_string(p))?;
+                }
+                write!(f, "(")?;
+                for (i, elem) in elements.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", elem)?;
+                }
+                write!(f, ")")
+            }
+            Pattern::Slice(elements) => {
+                write!(f, "[")?;
+                for (i, elem) in elements.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", elem)?;
+                }
+                write!(f, "]")
+            }
+            Pattern::Comparison(op, expr) => {
+                write!(f, "{} {}", op, expr_to_string(expr))
+            }
+            Pattern::Range(expr) => {
+                write!(f, "{}", expr_to_string(expr))
+            }
+            #[cfg(feature = "regex")]
+            Pattern::Regex(s) => {
+                write!(f, "=~ r\"{}\"", s)
+            }
+            #[cfg(feature = "regex")]
+            Pattern::Like(expr) => {
+                write!(f, "=~ {}", expr_to_string(expr))
+            }
+            Pattern::Rest => {
+                write!(f, "..")
+            }
+        }
+    }
+}
+
 struct Expected {
     fields: Punctuated<FieldAssertion, Token![,]>,
     rest: bool, // true if ".." was present
@@ -75,13 +169,26 @@ struct FieldAssertion {
 }
 
 #[derive(Clone, Copy)]
-enum ComparisonOp {
+pub(crate) enum ComparisonOp {
     Less,
     LessEqual,
     Greater,
     GreaterEqual,
     Equal,
     NotEqual,
+}
+
+impl fmt::Display for ComparisonOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ComparisonOp::Less => write!(f, "<"),
+            ComparisonOp::LessEqual => write!(f, "<="),
+            ComparisonOp::Greater => write!(f, ">"),
+            ComparisonOp::GreaterEqual => write!(f, ">="),
+            ComparisonOp::Equal => write!(f, "=="),
+            ComparisonOp::NotEqual => write!(f, "!="),
+        }
+    }
 }
 
 /// Asserts that a struct matches an expected pattern.

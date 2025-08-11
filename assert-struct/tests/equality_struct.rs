@@ -111,7 +111,7 @@ fn test_nested_struct_equality() {
 
 // Test failure cases
 #[test]
-#[should_panic(expected = "comparison mismatch")]
+#[should_panic(expected = "equality mismatch")]
 fn test_struct_equality_failure() {
     let shape = Shape {
         origin: Point { x: 0, y: 0 },

@@ -396,7 +396,7 @@ fn test_result_expected_ok_got_err() {
 }
 
 #[test]
-#[should_panic(expected = "Expected Status :: Active, got")]
+#[should_panic(expected = "enum variant mismatch")]
 fn test_enum_variant_mismatch() {
     let account = Account {
         id: 5,

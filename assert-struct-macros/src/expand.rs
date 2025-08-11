@@ -1,11 +1,15 @@
 use crate::{AssertStruct, ComparisonOp, FieldAssertion, Pattern};
 use proc_macro2::TokenStream;
 use quote::quote;
+use std::fmt::Write;
 use syn::{Expr, Token, punctuated::Punctuated};
 
 pub fn expand(assert: &AssertStruct) -> TokenStream {
     let value = &assert.value;
     let pattern = &assert.pattern;
+
+    // Generate a pretty-printed string representation of the pattern
+    let pattern_string = format_pattern_pretty(pattern, 0);
 
     // Generate the assertion for the root pattern
     // Start with root path being the value identifier
@@ -16,9 +20,165 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
     // Wrap in a block to avoid variable name conflicts
     quote! {
         {
+            // Store the pattern as a static string
+            const __PATTERN: &str = #pattern_string;
+
             #assertion
         }
     }
+}
+
+/// Format a pattern as a simple inline string (no newlines)
+fn format_pattern_inline(pattern: &Pattern) -> String {
+    match pattern {
+        Pattern::Simple(expr) => quote! { #expr }.to_string(),
+        Pattern::Comparison(op, expr) => {
+            let op_str = match op {
+                ComparisonOp::Less => "<",
+                ComparisonOp::LessEqual => "<=",
+                ComparisonOp::Greater => ">",
+                ComparisonOp::GreaterEqual => ">=",
+                ComparisonOp::Equal => "==",
+                ComparisonOp::NotEqual => "!=",
+            };
+            format!("{} {}", op_str, quote! { #expr })
+        }
+        Pattern::Range(expr) => quote! { #expr }.to_string(),
+        #[cfg(feature = "regex")]
+        Pattern::Regex(s) => format!("=~ r\"{}\"", s),
+        #[cfg(feature = "regex")]
+        Pattern::Like(expr) => format!("=~ {}", quote! { #expr }),
+        Pattern::Rest => "..".to_string(),
+        Pattern::Tuple { path, elements } => {
+            let mut result = String::new();
+            if let Some(p) = path {
+                result.push_str(&quote! { #p }.to_string());
+            }
+            result.push('(');
+            for (i, elem) in elements.iter().enumerate() {
+                if i > 0 {
+                    result.push_str(", ");
+                }
+                result.push_str(&format_pattern_inline(elem));
+            }
+            result.push(')');
+            result
+        }
+        Pattern::Slice(elements) => {
+            let mut result = String::from("[");
+            for (i, elem) in elements.iter().enumerate() {
+                if i > 0 {
+                    result.push_str(", ");
+                }
+                result.push_str(&format_pattern_inline(elem));
+            }
+            result.push(']');
+            result
+        }
+        Pattern::Struct { path, fields, rest } => {
+            // For inline struct, keep it simple
+            let mut result = format!("{} {{ ", quote! { #path });
+            for (i, field) in fields.iter().enumerate() {
+                if i > 0 {
+                    result.push_str(", ");
+                }
+                write!(
+                    &mut result,
+                    "{}: {}",
+                    field.field_name,
+                    format_pattern_inline(&field.pattern)
+                )
+                .unwrap();
+            }
+            if *rest {
+                if !fields.is_empty() {
+                    result.push_str(", ");
+                }
+                result.push_str("..");
+            }
+            result.push_str(" }");
+            result
+        }
+    }
+}
+
+/// Format a pattern as a pretty-printed string with proper indentation
+fn format_pattern_pretty(pattern: &Pattern, indent: usize) -> String {
+    let mut result = String::new();
+    let indent_str = "    ".repeat(indent);
+
+    match pattern {
+        Pattern::Struct { path, fields, rest } => {
+            // Format struct pattern
+            let path_str = quote! { #path }.to_string();
+            write!(&mut result, "{} {{", path_str).unwrap();
+
+            if !fields.is_empty() || *rest {
+                result.push('\n');
+
+                for field in fields {
+                    write!(&mut result, "{}    {}: ", indent_str, field.field_name).unwrap();
+                    // Format the field's pattern inline for simple cases
+                    match &field.pattern {
+                        Pattern::Simple(expr) => {
+                            let expr_str = quote! { #expr }.to_string();
+                            result.push_str(&expr_str);
+                        }
+                        Pattern::Comparison(op, expr) => {
+                            let op_str = match op {
+                                ComparisonOp::Less => "<",
+                                ComparisonOp::LessEqual => "<=",
+                                ComparisonOp::Greater => ">",
+                                ComparisonOp::GreaterEqual => ">=",
+                                ComparisonOp::Equal => "==",
+                                ComparisonOp::NotEqual => "!=",
+                            };
+                            write!(&mut result, "{} {}", op_str, quote! { #expr }).unwrap();
+                        }
+                        Pattern::Range(expr) => {
+                            write!(&mut result, "{}", quote! { #expr }).unwrap();
+                        }
+                        #[cfg(feature = "regex")]
+                        Pattern::Regex(s) => {
+                            write!(&mut result, "=~ r\"{}\"", s).unwrap();
+                        }
+                        nested @ Pattern::Struct { .. } => {
+                            // For nested structs, format on new lines
+                            let nested_str = format_pattern_pretty(nested, indent + 1);
+                            result.push_str(&nested_str);
+                        }
+                        Pattern::Rest => {
+                            result.push_str("..");
+                        }
+                        #[cfg(feature = "regex")]
+                        Pattern::Like(expr) => {
+                            write!(&mut result, "=~ {}", quote! { #expr }).unwrap();
+                        }
+                        Pattern::Tuple { .. } | Pattern::Slice(_) => {
+                            // Use a simple inline format for these
+                            let pattern_str = format_pattern_inline(&field.pattern);
+                            result.push_str(&pattern_str);
+                        }
+                    }
+                    result.push_str(",\n");
+                }
+
+                if *rest {
+                    writeln!(&mut result, "{}    ..", indent_str).unwrap();
+                }
+
+                write!(&mut result, "{}}}", indent_str).unwrap();
+            } else {
+                result.push_str(" }");
+            }
+        }
+        _ => {
+            // For non-struct patterns at root, just use Display
+            result = pattern.to_string();
+        }
+    }
+
+    result
 }
 
 /// Generate assertion code for any pattern type with path tracking.
@@ -75,8 +235,8 @@ fn generate_pattern_assertion_with_path(
             // Handle enum tuples with path tracking
             if let Some(vpath) = variant_path {
                 if elements.is_empty() {
-                    // Unit variant like None - use old version for now
-                    generate_unit_variant_assertion(value_expr, vpath, is_ref)
+                    // Unit variant like None
+                    generate_unit_variant_assertion_with_path(value_expr, vpath, is_ref, path)
                 } else {
                     // Tuple variant with data - generate with path tracking
                     generate_enum_tuple_assertion_with_path(
@@ -290,7 +450,150 @@ fn generate_pattern_assertion(
     }
 }
 
-// Generate assertion for unit variants like None
+// Generate assertion for unit variants like None with path tracking
+fn generate_unit_variant_assertion_with_path(
+    value_expr: &TokenStream,
+    variant_path: &syn::Path,
+    is_ref: bool,
+    field_path: &[String],
+) -> TokenStream {
+    let path_str = field_path.join(".");
+    let variant_str = quote! { #variant_path }.to_string();
+
+    // Special handling for Option/Result unit variants
+    let is_option_none = variant_str == "None";
+    let is_result_err = variant_str == "Err";
+
+    if is_option_none || is_result_err {
+        // These get special error messages
+        if is_ref {
+            quote! {
+                match #value_expr {
+                    #variant_path => {},
+                    Some(_) => {
+                        let __line = line!();
+                        let __file = file!();
+                        let __error = ::assert_struct::__macro_support::ErrorContext {
+                            field_path: #path_str.to_string(),
+                            pattern_str: stringify!(#variant_path).to_string(),
+                            actual_value: "Some".to_string(),
+                            line_number: __line,
+                            file_name: __file,
+                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                            full_pattern: Some(__PATTERN),
+                            pattern_location: None,
+                            expected_value: None,
+                        };
+                        panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+                    }
+                    _ => {
+                        let __line = line!();
+                        let __file = file!();
+                        let __error = ::assert_struct::__macro_support::ErrorContext {
+                            field_path: #path_str.to_string(),
+                            pattern_str: stringify!(#variant_path).to_string(),
+                            actual_value: format!("{:?}", #value_expr),
+                            line_number: __line,
+                            file_name: __file,
+                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                            full_pattern: Some(__PATTERN),
+                            pattern_location: None,
+                            expected_value: None,
+                        };
+                        panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+                    }
+                }
+            }
+        } else {
+            quote! {
+                match &#value_expr {
+                    #variant_path => {},
+                    Some(_) => {
+                        let __line = line!();
+                        let __file = file!();
+                        let __error = ::assert_struct::__macro_support::ErrorContext {
+                            field_path: #path_str.to_string(),
+                            pattern_str: stringify!(#variant_path).to_string(),
+                            actual_value: "Some".to_string(),
+                            line_number: __line,
+                            file_name: __file,
+                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                            full_pattern: Some(__PATTERN),
+                            pattern_location: None,
+                            expected_value: None,
+                        };
+                        panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+                    }
+                    _ => {
+                        let __line = line!();
+                        let __file = file!();
+                        let __error = ::assert_struct::__macro_support::ErrorContext {
+                            field_path: #path_str.to_string(),
+                            pattern_str: stringify!(#variant_path).to_string(),
+                            actual_value: format!("{:?}", &#value_expr),
+                            line_number: __line,
+                            file_name: __file,
+                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                            full_pattern: Some(__PATTERN),
+                            pattern_location: None,
+                            expected_value: None,
+                        };
+                        panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+                    }
+                }
+            }
+        }
+    } else {
+        // General unit variant
+        if is_ref {
+            quote! {
+                match #value_expr {
+                    #variant_path => {},
+                    _ => {
+                        let __line = line!();
+                        let __file = file!();
+                        let __error = ::assert_struct::__macro_support::ErrorContext {
+                            field_path: #path_str.to_string(),
+                            pattern_str: stringify!(#variant_path).to_string(),
+                            actual_value: format!("{:?}", #value_expr),
+                            line_number: __line,
+                            file_name: __file,
+                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                            full_pattern: Some(__PATTERN),
+                            pattern_location: None,
+                            expected_value: None,
+                        };
+                        panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+                    }
+                }
+            }
+        } else {
+            quote! {
+                match &#value_expr {
+                    #variant_path => {},
+                    _ => {
+                        let __line = line!();
+                        let __file = file!();
+                        let __error = ::assert_struct::__macro_support::ErrorContext {
+                            field_path: #path_str.to_string(),
+                            pattern_str: stringify!(#variant_path).to_string(),
+                            actual_value: format!("{:?}", &#value_expr),
+                            line_number: __line,
+                            file_name: __file,
+                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                            full_pattern: Some(__PATTERN),
+                            pattern_location: None,
+                            expected_value: None,
+                        };
+                        panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Generate assertion for unit variants like None (old version without path tracking)
 fn generate_unit_variant_assertion(
     value_expr: &TokenStream,
     path: &syn::Path,
@@ -354,6 +657,7 @@ fn generate_struct_match_assertion_with_path(
     field_path: &[String],
 ) -> TokenStream {
     let field_names: Vec<_> = fields.iter().map(|f| &f.field_name).collect();
+    let field_path_str = field_path.join(".");
 
     let rest_pattern = if rest {
         quote! { , .. }
@@ -386,11 +690,46 @@ fn generate_struct_match_assertion_with_path(
                 #struct_path { #(#field_names),* #rest_pattern } => {
                     #(#field_assertions)*
                 },
-                _ => panic!(
-                    "Expected {}, got {:?}",
-                    stringify!(#struct_path),
-                    #value_expr
-                ),
+                _ => {
+                    let __line = line!();
+                    let __file = file!();
+
+                    // Find the enum variant in the pattern
+                    let pattern_location = {
+                        let pattern_str = stringify!(#struct_path);
+                        let pattern_lines: Vec<&str> = __PATTERN.lines().collect();
+                        let mut location = None;
+
+                        for (line_idx, line) in pattern_lines.iter().enumerate() {
+                            if let Some(pos) = line.find(pattern_str) {
+                                // Just underline the variant name itself
+                                let end_pos = pos + pattern_str.len();
+
+                                location = Some(::assert_struct::__macro_support::PatternLocation {
+                                    line_in_pattern: line_idx,
+                                    start_col: pos,
+                                    end_col: end_pos,
+                                    field_name: String::new(),
+                                });
+                                break;
+                            }
+                        }
+                        location
+                    };
+
+                    let __error = ::assert_struct::__macro_support::ErrorContext {
+                        field_path: #field_path_str.to_string(),
+                        pattern_str: stringify!(#struct_path).to_string(),
+                        actual_value: format!("{:?}", #value_expr),
+                        line_number: __line,
+                        file_name: __file,
+                        error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                        full_pattern: Some(__PATTERN),
+                        pattern_location,
+                        expected_value: None,
+                    };
+                    panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+                }
             }
         }
     } else {
@@ -400,11 +739,46 @@ fn generate_struct_match_assertion_with_path(
                 #struct_path { #(#field_names),* #rest_pattern } => {
                     #(#field_assertions)*
                 },
-                _ => panic!(
-                    "Expected {}, got {:?}",
-                    stringify!(#struct_path),
-                    &#value_expr
-                ),
+                _ => {
+                    let __line = line!();
+                    let __file = file!();
+
+                    // Find the enum variant in the pattern
+                    let pattern_location = {
+                        let pattern_str = stringify!(#struct_path);
+                        let pattern_lines: Vec<&str> = __PATTERN.lines().collect();
+                        let mut location = None;
+
+                        for (line_idx, line) in pattern_lines.iter().enumerate() {
+                            if let Some(pos) = line.find(pattern_str) {
+                                // Just underline the variant name itself
+                                let end_pos = pos + pattern_str.len();
+
+                                location = Some(::assert_struct::__macro_support::PatternLocation {
+                                    line_in_pattern: line_idx,
+                                    start_col: pos,
+                                    end_col: end_pos,
+                                    field_name: String::new(),
+                                });
+                                break;
+                            }
+                        }
+                        location
+                    };
+
+                    let __error = ::assert_struct::__macro_support::ErrorContext {
+                        field_path: #field_path_str.to_string(),
+                        pattern_str: stringify!(#struct_path).to_string(),
+                        actual_value: format!("{:?}", &#value_expr),
+                        line_number: __line,
+                        file_name: __file,
+                        error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                        full_pattern: Some(__PATTERN),
+                        pattern_location,
+                        expected_value: None,
+                    };
+                    panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+                }
             }
         }
     }
@@ -816,6 +1190,71 @@ fn generate_comparison_assertion_with_path(
         quote! { &#value_expr }
     };
 
+    // Get the field name (last element of path)
+    let field_name = path.last().map(|s| s.as_str()).unwrap_or("");
+
+    // Generate code to find the field location in the pattern at runtime
+    let location_code = if !field_name.is_empty() && path.len() > 1 {
+        // For equality patterns (==), we need to underline just the expression, not the operator
+        let is_equality = matches!(op, ComparisonOp::Equal);
+        quote! {
+            {
+                let field_name = #field_name;
+                let pattern_lines: Vec<&str> = __PATTERN.lines().collect();
+                let mut location = None;
+                let is_equality = #is_equality;
+
+                for (line_idx, line) in pattern_lines.iter().enumerate() {
+                    // Look for "field_name: " in the line
+                    if let Some(pos) = line.find(&format!("{}: ", field_name)) {
+                        let value_start = pos + field_name.len() + 2;
+                        // Find where the value ends (at comma or end of line)
+                        let rest_of_line = &line[value_start..];
+                        let mut value_end = value_start;
+
+                        // For equality patterns (== expr), skip the == operator to underline just the expression
+                        let actual_start = if is_equality && rest_of_line.starts_with("== ") {
+                            value_start + 3  // Skip "== "
+                        } else {
+                            value_start
+                        };
+
+                        // Simple heuristic: find the comma or end of line
+                        if let Some(comma_pos) = rest_of_line.find(',') {
+                            value_end = value_start + comma_pos;
+                        } else {
+                            value_end = line.len();
+                        }
+
+                        location = Some(::assert_struct::__macro_support::PatternLocation {
+                            line_in_pattern: line_idx,
+                            start_col: actual_start,
+                            end_col: value_end,
+                            field_name: field_name.to_string(),
+                        });
+                        break;
+                    }
+                }
+                location
+            }
+        }
+    } else {
+        quote! { None }
+    };
+
+    // Also need to track if this is an equality pattern to show both actual and expected
+    let error_type = match op {
+        ComparisonOp::Equal => quote! { ::assert_struct::__macro_support::ErrorType::Equality },
+        _ => quote! { ::assert_struct::__macro_support::ErrorType::Comparison },
+    };
+
+    // For equality patterns, we need to evaluate and show the expected value
+    let expected_value = if matches!(op, ComparisonOp::Equal) {
+        quote! { Some(format!("{:?}", &#expected)) }
+    } else {
+        quote! { None }
+    };
+
     quote! {
         if !(#comparison) {
             // Capture line number using proper spanning
@@ -823,14 +1262,22 @@ fn generate_comparison_assertion_with_path(
             let __file = file!();
 
             // Build error context
-            let __error = ::assert_struct::__macro_support::ErrorContext {
+            let mut __error = ::assert_struct::__macro_support::ErrorContext {
                 field_path: #field_path.to_string(),
                 pattern_str: #pattern_str.to_string(),
                 actual_value: format!("{:?}", #actual_expr),
                 line_number: __line,
                 file_name: __file,
-                error_type: ::assert_struct::__macro_support::ErrorType::Comparison,
+                error_type: #error_type,
+                full_pattern: Some(__PATTERN),
+                pattern_location: #location_code,
+                expected_value: None,
             };
+
+            // Add expected value for equality patterns
+            if let Some(expected) = #expected_value {
+                __error.expected_value = Some(expected);
+            }
 
             panic!("{}", ::assert_struct::__macro_support::format_error(__error));
         }
@@ -876,6 +1323,9 @@ fn generate_enum_tuple_assertion_with_path(
                             line_number: __line,
                             file_name: __file,
                             error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                full_pattern: Some(__PATTERN),
+                pattern_location: None,
+                            expected_value: None,
                         };
                         panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                     }
@@ -897,6 +1347,9 @@ fn generate_enum_tuple_assertion_with_path(
                             line_number: __line,
                             file_name: __file,
                             error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                full_pattern: Some(__PATTERN),
+                pattern_location: None,
+                            expected_value: None,
                         };
                         panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                     }
@@ -924,6 +1377,48 @@ fn generate_range_assertion_with_path(
         quote! { &#value_expr }
     };
 
+    // Get the field name (last element of path)
+    let field_name = path.last().map(|s| s.as_str()).unwrap_or("");
+
+    // Generate code to find the field location in the pattern at runtime
+    let location_code = if !field_name.is_empty() && path.len() > 1 {
+        quote! {
+            {
+                let field_name = #field_name;
+                let pattern_lines: Vec<&str> = __PATTERN.lines().collect();
+                let mut location = None;
+
+                for (line_idx, line) in pattern_lines.iter().enumerate() {
+                    // Look for "field_name: " in the line
+                    if let Some(pos) = line.find(&format!("{}: ", field_name)) {
+                        let value_start = pos + field_name.len() + 2;
+                        // Find where the value ends (at comma or end of line)
+                        let rest_of_line = &line[value_start..];
+                        let mut value_end = value_start;
+
+                        // Simple heuristic: find the comma or end of line
+                        if let Some(comma_pos) = rest_of_line.find(',') {
+                            value_end = value_start + comma_pos;
+                        } else {
+                            value_end = line.len();
+                        }
+
+                        location = Some(::assert_struct::__macro_support::PatternLocation {
+                            line_in_pattern: line_idx,
+                            start_col: value_start,
+                            end_col: value_end,
+                            field_name: field_name.to_string(),
+                        });
+                        break;
+                    }
+                }
+                location
+            }
+        }
+    } else {
+        quote! { None }
+    };
+
     quote! {
         match #match_expr {
             #range => {},
@@ -940,6 +1435,9 @@ fn generate_range_assertion_with_path(
                     line_number: __line,
                     file_name: __file,
                     error_type: ::assert_struct::__macro_support::ErrorType::Range,
+                full_pattern: Some(__PATTERN),
+                pattern_location: #location_code,
+                expected_value: None,
                 };
 
                 panic!("{}", ::assert_struct::__macro_support::format_error(__error));
@@ -960,6 +1458,48 @@ fn generate_simple_assertion_with_path(
     let field_path_str = path.join(".");
     let expected_str = quote! { #expected }.to_string();
 
+    // Get the field name (last element of path)
+    let field_name = path.last().map(|s| s.as_str()).unwrap_or("");
+
+    // Generate code to find the field location in the pattern at runtime
+    let location_code = if !field_name.is_empty() && path.len() > 1 {
+        quote! {
+            {
+                let field_name = #field_name;
+                let pattern_lines: Vec<&str> = __PATTERN.lines().collect();
+                let mut location = None;
+
+                for (line_idx, line) in pattern_lines.iter().enumerate() {
+                    // Look for "field_name: " in the line
+                    if let Some(pos) = line.find(&format!("{}: ", field_name)) {
+                        let value_start = pos + field_name.len() + 2;
+                        // Find where the value ends (at comma or end of line)
+                        let rest_of_line = &line[value_start..];
+                        let mut value_end = value_start;
+
+                        // Simple heuristic: find the comma or end of line
+                        if let Some(comma_pos) = rest_of_line.find(',') {
+                            value_end = value_start + comma_pos;
+                        } else {
+                            value_end = line.len();
+                        }
+
+                        location = Some(::assert_struct::__macro_support::PatternLocation {
+                            line_in_pattern: line_idx,
+                            start_col: value_start,
+                            end_col: value_end,
+                            field_name: field_name.to_string(),
+                        });
+                        break;
+                    }
+                }
+                location
+            }
+        }
+    } else {
+        quote! { None }
+    };
+
     if is_ref {
         quote! {
             if #value_expr != &#transformed {
@@ -972,6 +1512,9 @@ fn generate_simple_assertion_with_path(
                     line_number: __line,
                     file_name: __file,
                     error_type: ::assert_struct::__macro_support::ErrorType::Value,
+                full_pattern: Some(__PATTERN),
+                pattern_location: #location_code,
+                expected_value: None,
                 };
                 panic!("{}", ::assert_struct::__macro_support::format_error(__error));
             }
@@ -988,6 +1531,9 @@ fn generate_simple_assertion_with_path(
                     line_number: __line,
                     file_name: __file,
                     error_type: ::assert_struct::__macro_support::ErrorType::Value,
+                full_pattern: Some(__PATTERN),
+                pattern_location: #location_code,
+                expected_value: None,
                 };
                 panic!("{}", ::assert_struct::__macro_support::format_error(__error));
             }
@@ -1050,6 +1596,9 @@ fn generate_slice_assertion_with_path(
                     line_number: __line,
                     file_name: __file,
                     error_type: ::assert_struct::__macro_support::ErrorType::Slice,
+                full_pattern: Some(__PATTERN),
+                pattern_location: None,
+                            expected_value: None,
                 };
                 panic!("{}", ::assert_struct::__macro_support::format_error(__error));
             }
@@ -1084,6 +1633,9 @@ fn generate_regex_assertion_with_path(
                         line_number: __line,
                         file_name: __file,
                         error_type: ::assert_struct::__macro_support::ErrorType::Regex,
+                full_pattern: Some(__PATTERN),
+                pattern_location: None,
+                            expected_value: None,
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                 }
@@ -1105,6 +1657,9 @@ fn generate_regex_assertion_with_path(
                         line_number: __line,
                         file_name: __file,
                         error_type: ::assert_struct::__macro_support::ErrorType::Regex,
+                full_pattern: Some(__PATTERN),
+                pattern_location: None,
+                            expected_value: None,
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                 }
@@ -1138,6 +1693,9 @@ fn generate_like_assertion_with_path(
                         line_number: __line,
                         file_name: __file,
                         error_type: ::assert_struct::__macro_support::ErrorType::Regex,
+                full_pattern: Some(__PATTERN),
+                pattern_location: None,
+                            expected_value: None,
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                 }
@@ -1157,6 +1715,9 @@ fn generate_like_assertion_with_path(
                         line_number: __line,
                         file_name: __file,
                         error_type: ::assert_struct::__macro_support::ErrorType::Regex,
+                full_pattern: Some(__PATTERN),
+                pattern_location: None,
+                            expected_value: None,
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                 }
