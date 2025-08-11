@@ -1,5 +1,8 @@
 use assert_struct::assert_struct;
 
+#[macro_use]
+mod util;
+
 // Test Result enum
 #[derive(Debug)]
 struct UserData {
@@ -428,3 +431,5 @@ fn test_tuple_enum_field_mismatch() {
         }
     );
 }
+
+error_message_test!("enums_errors/enum_variant.rs", enum_variant);

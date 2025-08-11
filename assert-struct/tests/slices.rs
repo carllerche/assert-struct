@@ -1,5 +1,8 @@
 use assert_struct::assert_struct;
 
+#[macro_use]
+mod util;
+
 #[derive(Debug)]
 struct Container {
     items: Vec<u32>,
@@ -542,3 +545,5 @@ fn test_slice_multiple_rest_patterns_fails() {
     // For now, we'll just panic to have a test that documents this limitation
     panic!("Multiple .. patterns in slices are not allowed - this is enforced at compile time");
 }
+
+error_message_test!("slices_errors/slice_pattern.rs", slice_pattern);

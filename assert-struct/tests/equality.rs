@@ -1,5 +1,8 @@
 use assert_struct::assert_struct;
 
+#[macro_use]
+mod util;
+
 #[derive(Debug)]
 struct User {
     name: String,
@@ -131,3 +134,9 @@ fn test_inequality_failure() {
         ..
     });
 }
+
+// Error message tests
+error_message_test!(
+    "equality_errors/equality_pattern.rs",
+    equality_pattern
+);

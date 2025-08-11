@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/basic.rs
+expression: message
+---
+assert_struct! failed:
+
+   | User {
+value mismatch:
+  --> `user.name` (line 15)
+   |     name: "Bob",
+   |           ^^^^^ actual: "Alice"
+   | }

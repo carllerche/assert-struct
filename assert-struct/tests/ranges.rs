@@ -1,5 +1,8 @@
 use assert_struct::assert_struct;
 
+#[macro_use]
+mod util;
+
 #[derive(Debug)]
 struct Person {
     #[allow(dead_code)]
@@ -260,3 +263,5 @@ fn test_char_range() {
         }
     );
 }
+
+error_message_test!("ranges_errors/range_pattern.rs", range_pattern);

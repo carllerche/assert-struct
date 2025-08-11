@@ -2,6 +2,9 @@
 
 use assert_struct::assert_struct;
 
+#[macro_use]
+mod util;
+
 #[derive(Debug)]
 struct Message {
     id: String,
@@ -80,3 +83,5 @@ fn test_mixed_matchers() {
         }
     );
 }
+
+error_message_test!(#[cfg(feature = "regex")] "regex_errors/regex_pattern.rs", regex_pattern);

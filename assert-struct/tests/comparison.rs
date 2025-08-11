@@ -1,5 +1,8 @@
 use assert_struct::assert_struct;
 
+#[macro_use]
+mod util;
+
 #[derive(Debug)]
 struct Person {
     name: String,
@@ -127,24 +130,15 @@ fn test_greater_than_failure() {
     );
 }
 
-#[test]
-#[should_panic(expected = "comparison mismatch")]
-fn test_less_than_failure() {
-    let person = Person {
-        name: "Grace".to_string(),
-        age: 25,
-        height: 6.2,
-        score: 100,
-    };
+error_message_test!(
+    "comparison_errors/less_than_failure.rs",
+    less_than_failure
+);
 
-    assert_struct!(
-        person,
-        Person {
-            height: < 6.0,  // This should fail
-            ..
-        }
-    );
-}
+error_message_test!(
+    "comparison_errors/comparison_pattern.rs",
+    comparison_pattern
+);
 
 #[derive(Debug)]
 struct Nested {

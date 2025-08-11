@@ -1,5 +1,8 @@
 use assert_struct::assert_struct;
 
+#[macro_use]
+mod util;
+
 #[derive(Debug)]
 struct Address {
     street: String,
@@ -92,3 +95,5 @@ fn test_nested_field_mismatch() {
         }
     );
 }
+
+error_message_test!("nested_errors/nested_comparison.rs", nested_comparison);

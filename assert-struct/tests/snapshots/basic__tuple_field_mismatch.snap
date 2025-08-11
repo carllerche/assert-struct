@@ -1,0 +1,7 @@
+---
+source: assert-struct/tests/basic.rs
+expression: message
+---
+assertion `left == right` failed
+  left: 50
+ right: 60

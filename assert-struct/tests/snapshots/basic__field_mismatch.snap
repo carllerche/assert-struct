@@ -1,5 +1,5 @@
 ---
-source: assert-struct/tests/error_messages.rs
+source: assert-struct/tests/basic.rs
 expression: message
 ---
 assert_struct! failed:
