@@ -11,6 +11,9 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
     // Generate a pretty-printed string representation of the pattern
     let pattern_string = format_pattern_pretty(pattern, 0);
 
+    // Generate the pattern tree structure
+    let pattern_tree = generate_pattern_tree(pattern);
+
     // Generate the assertion for the root pattern
     // Start with root path being the value identifier
     let root_path = vec![quote! { #value }.to_string()];
@@ -22,6 +25,9 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
         {
             // Store the pattern as a static string
             const __PATTERN: &str = #pattern_string;
+
+            // Store the pattern tree
+            const __PATTERN_TREE: &::assert_struct::error::PatternNode = #pattern_tree;
 
             #assertion
         }
@@ -102,6 +108,152 @@ fn format_pattern_inline(pattern: &Pattern) -> String {
             }
             result.push_str(" }");
             result
+        }
+    }
+}
+
+/// Generate a PatternNode tree structure from a Pattern
+fn generate_pattern_tree(pattern: &Pattern) -> TokenStream {
+    match pattern {
+        Pattern::Simple(expr) => {
+            let value_str = quote! { #expr }
+                .to_string()
+                .replace("& [", "&[")
+                .replace("& mut [", "&mut [");
+            quote! {
+                &::assert_struct::error::PatternNode::Simple {
+                    value: #value_str,
+                }
+            }
+        }
+        Pattern::Comparison(op, expr) => {
+            let op_str = match op {
+                ComparisonOp::Less => "<",
+                ComparisonOp::LessEqual => "<=",
+                ComparisonOp::Greater => ">",
+                ComparisonOp::GreaterEqual => ">=",
+                ComparisonOp::Equal => "==",
+                ComparisonOp::NotEqual => "!=",
+            };
+            let value_str = quote! { #expr }.to_string();
+            quote! {
+                &::assert_struct::error::PatternNode::Comparison {
+                    op: #op_str,
+                    value: #value_str,
+                }
+            }
+        }
+        Pattern::Range(expr) => {
+            let pattern_str = quote! { #expr }.to_string();
+            quote! {
+                &::assert_struct::error::PatternNode::Range {
+                    pattern: #pattern_str,
+                }
+            }
+        }
+        #[cfg(feature = "regex")]
+        Pattern::Regex(s) => {
+            let pattern_str = format!("r\"{}\"", s);
+            quote! {
+                &::assert_struct::error::PatternNode::Regex {
+                    pattern: #pattern_str,
+                }
+            }
+        }
+        #[cfg(feature = "regex")]
+        Pattern::Like(expr) => {
+            let expr_str = quote! { #expr }.to_string();
+            quote! {
+                &::assert_struct::error::PatternNode::Like {
+                    expr: #expr_str,
+                }
+            }
+        }
+        Pattern::Rest => {
+            quote! {
+                &::assert_struct::error::PatternNode::Rest
+            }
+        }
+        Pattern::Tuple { path, elements } => {
+            if let Some(enum_path) = path {
+                // This is an enum variant with tuple args
+                let path_str = quote! { #enum_path }.to_string();
+                if elements.is_empty() {
+                    // Unit variant like None or Status::Active
+                    quote! {
+                        &::assert_struct::error::PatternNode::EnumVariant {
+                            path: #path_str,
+                            args: None,
+                        }
+                    }
+                } else {
+                    // Variant with arguments like Some(42) or Result::Ok("hello")
+                    let arg_nodes: Vec<TokenStream> =
+                        elements.iter().map(generate_pattern_tree).collect();
+                    quote! {
+                        &::assert_struct::error::PatternNode::EnumVariant {
+                            path: #path_str,
+                            args: Some(&[#(#arg_nodes),*]),
+                        }
+                    }
+                }
+            } else {
+                // Regular tuple
+                let item_nodes: Vec<TokenStream> =
+                    elements.iter().map(generate_pattern_tree).collect();
+                quote! {
+                    &::assert_struct::error::PatternNode::Tuple {
+                        items: &[#(#item_nodes),*],
+                    }
+                }
+            }
+        }
+        Pattern::Slice(elements) => {
+            // Check if this is a reference slice (simplified heuristic)
+            // In practice, we'd need type information from parsing
+            let is_ref = true; // Default to true for now
+
+            let item_nodes: Vec<TokenStream> = elements.iter().map(generate_pattern_tree).collect();
+            quote! {
+                &::assert_struct::error::PatternNode::Slice {
+                    items: &[#(#item_nodes),*],
+                    is_ref: #is_ref,
+                }
+            }
+        }
+        Pattern::Struct { path, fields, rest } => {
+            let name_str = quote! { #path }.to_string();
+
+            let field_nodes: Vec<TokenStream> = fields
+                .iter()
+                .map(|field| {
+                    let field_name = field.field_name.to_string();
+                    let field_node = generate_pattern_tree(&field.pattern);
+                    quote! {
+                        (#field_name, #field_node)
+                    }
+                })
+                .collect();
+
+            // If there's a rest pattern, add it as a special field
+            if *rest {
+                quote! {
+                    &::assert_struct::error::PatternNode::Struct {
+                        name: #name_str,
+                        fields: &[
+                            #(#field_nodes,)*
+                            ("..", &::assert_struct::error::PatternNode::Rest)
+                        ],
+                    }
+                }
+            } else {
+                quote! {
+                    &::assert_struct::error::PatternNode::Struct {
+                        name: #name_str,
+                        fields: &[#(#field_nodes),*],
+                    }
+                }
+            }
         }
     }
 }
@@ -490,6 +642,8 @@ fn generate_unit_variant_assertion_with_path(
                             full_pattern: Some(__PATTERN),
                             pattern_location: None,
                             expected_value: None,
+                            pattern_tree: Some(__PATTERN_TREE),
+                            error_node: None,
                         };
                         panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                     }
@@ -506,6 +660,8 @@ fn generate_unit_variant_assertion_with_path(
                             full_pattern: Some(__PATTERN),
                             pattern_location: None,
                             expected_value: None,
+                            pattern_tree: Some(__PATTERN_TREE),
+                            error_node: None,
                         };
                         panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                     }
@@ -528,6 +684,8 @@ fn generate_unit_variant_assertion_with_path(
                             full_pattern: Some(__PATTERN),
                             pattern_location: None,
                             expected_value: None,
+                            pattern_tree: Some(__PATTERN_TREE),
+                            error_node: None,
                         };
                         panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                     }
@@ -544,6 +702,8 @@ fn generate_unit_variant_assertion_with_path(
                             full_pattern: Some(__PATTERN),
                             pattern_location: None,
                             expected_value: None,
+                            pattern_tree: Some(__PATTERN_TREE),
+                            error_node: None,
                         };
                         panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                     }
@@ -569,6 +729,8 @@ fn generate_unit_variant_assertion_with_path(
                             full_pattern: Some(__PATTERN),
                             pattern_location: None,
                             expected_value: None,
+                            pattern_tree: Some(__PATTERN_TREE),
+                            error_node: None,
                         };
                         panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                     }
@@ -591,6 +753,8 @@ fn generate_unit_variant_assertion_with_path(
                             full_pattern: Some(__PATTERN),
                             pattern_location: None,
                             expected_value: None,
+                            pattern_tree: Some(__PATTERN_TREE),
+                            error_node: None,
                         };
                         panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                     }
@@ -734,6 +898,8 @@ fn generate_struct_match_assertion_with_path(
                         full_pattern: Some(__PATTERN),
                         pattern_location,
                         expected_value: None,
+                        pattern_tree: Some(__PATTERN_TREE),
+                        error_node: None,
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                 }
@@ -783,6 +949,8 @@ fn generate_struct_match_assertion_with_path(
                         full_pattern: Some(__PATTERN),
                         pattern_location,
                         expected_value: None,
+                        pattern_tree: Some(__PATTERN_TREE),
+                        error_node: None,
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                 }
@@ -1297,6 +1465,8 @@ fn generate_comparison_assertion_with_path(
                 full_pattern: Some(__PATTERN),
                 pattern_location: #location_code,
                 expected_value: None,
+                pattern_tree: Some(__PATTERN_TREE),
+                error_node: None,
             };
 
             // Add expected value for equality patterns
@@ -1351,6 +1521,8 @@ fn generate_enum_tuple_assertion_with_path(
                 full_pattern: Some(__PATTERN),
                 pattern_location: None,
                             expected_value: None,
+                            pattern_tree: Some(__PATTERN_TREE),
+                            error_node: None,
                         };
                         panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                     }
@@ -1375,6 +1547,8 @@ fn generate_enum_tuple_assertion_with_path(
                 full_pattern: Some(__PATTERN),
                 pattern_location: None,
                             expected_value: None,
+                            pattern_tree: Some(__PATTERN_TREE),
+                            error_node: None,
                         };
                         panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                     }
@@ -1481,6 +1655,8 @@ fn generate_range_assertion_with_path(
                 full_pattern: Some(__PATTERN),
                 pattern_location: #location_code,
                 expected_value: None,
+                pattern_tree: Some(__PATTERN_TREE),
+                error_node: None,
                 };
 
                 panic!("{}", ::assert_struct::__macro_support::format_error(__error));
@@ -1576,6 +1752,8 @@ fn generate_simple_assertion_with_path(
                 full_pattern: Some(__PATTERN),
                 pattern_location: #location_code,
                 expected_value: None,
+                pattern_tree: Some(__PATTERN_TREE),
+                error_node: None,
                 };
                 panic!("{}", ::assert_struct::__macro_support::format_error(__error));
             }
@@ -1595,6 +1773,8 @@ fn generate_simple_assertion_with_path(
                 full_pattern: Some(__PATTERN),
                 pattern_location: #location_code,
                 expected_value: None,
+                pattern_tree: Some(__PATTERN_TREE),
+                error_node: None,
                 };
                 panic!("{}", ::assert_struct::__macro_support::format_error(__error));
             }
@@ -1660,6 +1840,8 @@ fn generate_slice_assertion_with_path(
                 full_pattern: Some(__PATTERN),
                 pattern_location: None,
                             expected_value: None,
+                            pattern_tree: Some(__PATTERN_TREE),
+                            error_node: None,
                 };
                 panic!("{}", ::assert_struct::__macro_support::format_error(__error));
             }
@@ -1697,6 +1879,8 @@ fn generate_regex_assertion_with_path(
                 full_pattern: Some(__PATTERN),
                 pattern_location: None,
                             expected_value: None,
+                            pattern_tree: Some(__PATTERN_TREE),
+                            error_node: None,
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                 }
@@ -1721,6 +1905,8 @@ fn generate_regex_assertion_with_path(
                 full_pattern: Some(__PATTERN),
                 pattern_location: None,
                             expected_value: None,
+                            pattern_tree: Some(__PATTERN_TREE),
+                            error_node: None,
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                 }
@@ -1757,6 +1943,8 @@ fn generate_like_assertion_with_path(
                 full_pattern: Some(__PATTERN),
                 pattern_location: None,
                             expected_value: None,
+                            pattern_tree: Some(__PATTERN_TREE),
+                            error_node: None,
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                 }
@@ -1779,6 +1967,8 @@ fn generate_like_assertion_with_path(
                 full_pattern: Some(__PATTERN),
                 pattern_location: None,
                             expected_value: None,
+                            pattern_tree: Some(__PATTERN_TREE),
+                            error_node: None,
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                 }

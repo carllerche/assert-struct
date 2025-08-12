@@ -532,7 +532,7 @@
 pub use assert_struct_macros::assert_struct;
 
 // Error handling module
-mod error;
+pub mod error;
 
 // Hidden module for macro support functions
 #[doc(hidden)]

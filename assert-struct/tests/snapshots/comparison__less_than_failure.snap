@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | Person {
 comparison mismatch:
-  --> `person.height` (line 19)
+  --> `person.height` (line 20)
    |     height: < 6.0,
    |             ^^^^^ actual: 6.2
    |     ..
