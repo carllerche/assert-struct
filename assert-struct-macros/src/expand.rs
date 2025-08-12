@@ -1,5 +1,5 @@
 use crate::{AssertStruct, ComparisonOp, FieldAssertion, Pattern};
-use proc_macro2::TokenStream;
+use proc_macro2::{TokenStream, Ident, Span};
 use quote::quote;
 use std::fmt::Write;
 use syn::{Expr, Token, punctuated::Punctuated};
@@ -11,8 +11,19 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
     // Generate a pretty-printed string representation of the pattern
     let pattern_string = format_pattern_pretty(pattern, 0);
 
-    // Generate the pattern tree structure
-    let pattern_tree = generate_pattern_tree(pattern);
+    // Generate pattern nodes using the node IDs from the patterns
+    let mut node_defs = Vec::new();
+    let root_ref = generate_pattern_nodes(pattern, &mut node_defs);
+    
+    // Generate constants for all nodes
+    let node_constants: Vec<TokenStream> = node_defs.iter()
+        .map(|(id, def)| {
+            let ident = Ident::new(&format!("__PATTERN_NODE_{}", id), Span::call_site());
+            quote! {
+                const #ident: ::assert_struct::error::PatternNode = #def;
+            }
+        })
+        .collect();
 
     // Generate the assertion for the root pattern
     // Start with root path being the value identifier
@@ -26,23 +37,43 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
             // Store the pattern as a static string
             const __PATTERN: &str = #pattern_string;
 
-            // Store the pattern tree
-            const __PATTERN_TREE: &::assert_struct::error::PatternNode = #pattern_tree;
+            // Generate all node constants
+            #(#node_constants)*
+
+            // Store the pattern tree root
+            const __PATTERN_TREE: &::assert_struct::error::PatternNode = &#root_ref;
 
             #assertion
         }
     }
 }
 
+/// Get the node identifier for a pattern
+fn get_pattern_node_ident(pattern: &Pattern) -> Ident {
+    let node_id = match pattern {
+        Pattern::Simple { node_id, .. } |
+        Pattern::Struct { node_id, .. } |
+        Pattern::Tuple { node_id, .. } |
+        Pattern::Slice { node_id, .. } |
+        Pattern::Comparison { node_id, .. } |
+        Pattern::Range { node_id, .. } |
+        Pattern::Rest { node_id } => *node_id,
+        #[cfg(feature = "regex")]
+        Pattern::Regex { node_id, .. } |
+        Pattern::Like { node_id, .. } => *node_id,
+    };
+    Ident::new(&format!("__PATTERN_NODE_{}", node_id), Span::call_site())
+}
+
 /// Format a pattern as a simple inline string (no newlines)
 fn format_pattern_inline(pattern: &Pattern) -> String {
     match pattern {
-        Pattern::Simple(expr) => {
+        Pattern::Simple { expr, .. } => {
             // Remove unnecessary spaces in references to arrays/slices
             let expr_str = quote! { #expr }.to_string();
             expr_str.replace("& [", "&[").replace("& mut [", "&mut [")
         }
-        Pattern::Comparison(op, expr) => {
+        Pattern::Comparison { op, expr, .. } => {
             let op_str = match op {
                 ComparisonOp::Less => "<",
                 ComparisonOp::LessEqual => "<=",
@@ -53,13 +84,13 @@ fn format_pattern_inline(pattern: &Pattern) -> String {
             };
             format!("{} {}", op_str, quote! { #expr })
         }
-        Pattern::Range(expr) => quote! { #expr }.to_string(),
+        Pattern::Range { expr, .. } => quote! { #expr }.to_string(),
         #[cfg(feature = "regex")]
-        Pattern::Regex(s) => format!("=~ r\"{}\"", s),
+        Pattern::Regex { pattern, .. } => format!("=~ r\"{}\"", pattern),
         #[cfg(feature = "regex")]
-        Pattern::Like(expr) => format!("=~ {}", quote! { #expr }),
-        Pattern::Rest => "..".to_string(),
-        Pattern::Tuple { path, elements } => {
+        Pattern::Like { expr, .. } => format!("=~ {}", quote! { #expr }),
+        Pattern::Rest { .. } => "..".to_string(),
+        Pattern::Tuple { path, elements, .. } => {
             let mut result = String::new();
             if let Some(p) = path {
                 result.push_str(&quote! { #p }.to_string());
@@ -74,7 +105,7 @@ fn format_pattern_inline(pattern: &Pattern) -> String {
             result.push(')');
             result
         }
-        Pattern::Slice(elements) => {
+        Pattern::Slice { elements, .. } => {
             let mut result = String::from("[");
             for (i, elem) in elements.iter().enumerate() {
                 if i > 0 {
@@ -85,7 +116,7 @@ fn format_pattern_inline(pattern: &Pattern) -> String {
             result.push(']');
             result
         }
-        Pattern::Struct { path, fields, rest } => {
+        Pattern::Struct { path, fields, rest, .. } => {
             // For inline struct, keep it simple
             let mut result = format!("{} {{ ", quote! { #path });
             for (i, field) in fields.iter().enumerate() {
@@ -112,21 +143,40 @@ fn format_pattern_inline(pattern: &Pattern) -> String {
     }
 }
 
-/// Generate a PatternNode tree structure from a Pattern
-fn generate_pattern_tree(pattern: &Pattern) -> TokenStream {
-    match pattern {
-        Pattern::Simple(expr) => {
-            let value_str = quote! { #expr }
-                .to_string()
+
+/// Generate pattern nodes using the IDs already in patterns
+fn generate_pattern_nodes(
+    pattern: &Pattern,
+    node_defs: &mut Vec<(usize, TokenStream)>,
+) -> TokenStream {
+    // Get the node_id from the pattern itself
+    let node_id = match pattern {
+        Pattern::Simple { node_id, .. } |
+        Pattern::Struct { node_id, .. } |
+        Pattern::Tuple { node_id, .. } |
+        Pattern::Slice { node_id, .. } |
+        Pattern::Comparison { node_id, .. } |
+        Pattern::Range { node_id, .. } |
+        Pattern::Rest { node_id } => *node_id,
+        #[cfg(feature = "regex")]
+        Pattern::Regex { node_id, .. } |
+        Pattern::Like { node_id, .. } => *node_id,
+    };
+    
+    let node_ident = Ident::new(&format!("__PATTERN_NODE_{}", node_id), Span::call_site());
+    
+    let node_def = match pattern {
+        Pattern::Simple { expr, .. } => {
+            let value_str = quote! { #expr }.to_string()
                 .replace("& [", "&[")
                 .replace("& mut [", "&mut [");
             quote! {
-                &::assert_struct::error::PatternNode::Simple {
+                ::assert_struct::error::PatternNode::Simple {
                     value: #value_str,
                 }
             }
         }
-        Pattern::Comparison(op, expr) => {
+        Pattern::Comparison { op, expr, .. } => {
             let op_str = match op {
                 ComparisonOp::Less => "<",
                 ComparisonOp::LessEqual => "<=",
@@ -137,125 +187,117 @@ fn generate_pattern_tree(pattern: &Pattern) -> TokenStream {
             };
             let value_str = quote! { #expr }.to_string();
             quote! {
-                &::assert_struct::error::PatternNode::Comparison {
+                ::assert_struct::error::PatternNode::Comparison {
                     op: #op_str,
                     value: #value_str,
                 }
             }
         }
-        Pattern::Range(expr) => {
+        Pattern::Range { expr, .. } => {
             let pattern_str = quote! { #expr }.to_string();
             quote! {
-                &::assert_struct::error::PatternNode::Range {
+                ::assert_struct::error::PatternNode::Range {
                     pattern: #pattern_str,
                 }
             }
         }
         #[cfg(feature = "regex")]
-        Pattern::Regex(s) => {
-            let pattern_str = format!("r\"{}\"", s);
+        Pattern::Regex { pattern, .. } => {
+            let pattern_str = format!("r\"{}\"", pattern);
             quote! {
-                &::assert_struct::error::PatternNode::Regex {
+                ::assert_struct::error::PatternNode::Regex {
                     pattern: #pattern_str,
                 }
             }
         }
         #[cfg(feature = "regex")]
-        Pattern::Like(expr) => {
+        Pattern::Like { expr, .. } => {
             let expr_str = quote! { #expr }.to_string();
             quote! {
-                &::assert_struct::error::PatternNode::Like {
+                ::assert_struct::error::PatternNode::Like {
                     expr: #expr_str,
                 }
             }
         }
-        Pattern::Rest => {
+        Pattern::Rest { .. } => {
             quote! {
-                &::assert_struct::error::PatternNode::Rest
+                ::assert_struct::error::PatternNode::Rest
             }
         }
-        Pattern::Tuple { path, elements } => {
+        Pattern::Tuple { path, elements, .. } => {
+            let child_refs: Vec<TokenStream> = elements
+                .iter()
+                .map(|elem| generate_pattern_nodes(elem, node_defs))
+                .collect();
+                
             if let Some(enum_path) = path {
-                // This is an enum variant with tuple args
                 let path_str = quote! { #enum_path }.to_string();
-                if elements.is_empty() {
-                    // Unit variant like None or Status::Active
-                    quote! {
-                        &::assert_struct::error::PatternNode::EnumVariant {
-                            path: #path_str,
-                            args: None,
-                        }
-                    }
-                } else {
-                    // Variant with arguments like Some(42) or Result::Ok("hello")
-                    let arg_nodes: Vec<TokenStream> =
-                        elements.iter().map(generate_pattern_tree).collect();
-                    quote! {
-                        &::assert_struct::error::PatternNode::EnumVariant {
-                            path: #path_str,
-                            args: Some(&[#(#arg_nodes),*]),
-                        }
+                quote! {
+                    ::assert_struct::error::PatternNode::EnumVariant {
+                        path: #path_str,
+                        args: Some(&[#(&#child_refs),*]),
                     }
                 }
             } else {
-                // Regular tuple
-                let item_nodes: Vec<TokenStream> =
-                    elements.iter().map(generate_pattern_tree).collect();
                 quote! {
-                    &::assert_struct::error::PatternNode::Tuple {
-                        items: &[#(#item_nodes),*],
+                    ::assert_struct::error::PatternNode::Tuple {
+                        items: &[#(&#child_refs),*],
                     }
                 }
             }
         }
-        Pattern::Slice(elements) => {
-            // Check if this is a reference slice (simplified heuristic)
-            // In practice, we'd need type information from parsing
-            let is_ref = true; // Default to true for now
-
-            let item_nodes: Vec<TokenStream> = elements.iter().map(generate_pattern_tree).collect();
+        Pattern::Slice { elements, .. } => {
+            let child_refs: Vec<TokenStream> = elements
+                .iter()
+                .map(|elem| generate_pattern_nodes(elem, node_defs))
+                .collect();
+                
+            let is_ref = true; // Default for now
             quote! {
-                &::assert_struct::error::PatternNode::Slice {
-                    items: &[#(#item_nodes),*],
+                ::assert_struct::error::PatternNode::Slice {
+                    items: &[#(&#child_refs),*],
                     is_ref: #is_ref,
                 }
             }
         }
-        Pattern::Struct { path, fields, rest } => {
+        Pattern::Struct { path, fields, rest, .. } => {
             let name_str = quote! { #path }.to_string();
-
-            let field_nodes: Vec<TokenStream> = fields
+            
+            let field_entries: Vec<TokenStream> = fields
                 .iter()
                 .map(|field| {
                     let field_name = field.field_name.to_string();
-                    let field_node = generate_pattern_tree(&field.pattern);
+                    let child_ref = generate_pattern_nodes(&field.pattern, node_defs);
                     quote! {
-                        (#field_name, #field_node)
+                        (#field_name, &#child_ref)
                     }
                 })
                 .collect();
-
-            // If there's a rest pattern, add it as a special field
+                
             if *rest {
+                let rest_ref = generate_pattern_nodes(&Pattern::Rest { node_id: usize::MAX }, node_defs);
                 quote! {
-                    &::assert_struct::error::PatternNode::Struct {
+                    ::assert_struct::error::PatternNode::Struct {
                         name: #name_str,
                         fields: &[
-                            #(#field_nodes,)*
-                            ("..", &::assert_struct::error::PatternNode::Rest)
+                            #(#field_entries,)*
+                            ("..", &#rest_ref)
                         ],
                     }
                 }
             } else {
                 quote! {
-                    &::assert_struct::error::PatternNode::Struct {
+                    ::assert_struct::error::PatternNode::Struct {
                         name: #name_str,
-                        fields: &[#(#field_nodes),*],
+                        fields: &[#(#field_entries),*],
                     }
                 }
             }
         }
-    }
+    };
+    
+    node_defs.push((node_id, node_def));
+    quote! { #node_ident }
 }
 
 /// Format a pattern as a pretty-printed string with proper indentation
@@ -264,7 +306,7 @@ fn format_pattern_pretty(pattern: &Pattern, indent: usize) -> String {
     let indent_str = "    ".repeat(indent);
 
     match pattern {
-        Pattern::Struct { path, fields, rest } => {
+        Pattern::Struct { path, fields, rest, .. } => {
             // Format struct pattern
             let path_str = quote! { #path }.to_string();
             write!(&mut result, "{} {{", path_str).unwrap();
@@ -276,14 +318,14 @@ fn format_pattern_pretty(pattern: &Pattern, indent: usize) -> String {
                     write!(&mut result, "{}    {}: ", indent_str, field.field_name).unwrap();
                     // Format the field's pattern inline for simple cases
                     match &field.pattern {
-                        Pattern::Simple(expr) => {
+                        Pattern::Simple { expr, .. } => {
                             let expr_str = quote! { #expr }.to_string();
                             // Remove unnecessary spaces in references to arrays/slices
                             let cleaned =
                                 expr_str.replace("& [", "&[").replace("& mut [", "&mut [");
                             result.push_str(&cleaned);
                         }
-                        Pattern::Comparison(op, expr) => {
+                        Pattern::Comparison { op, expr, .. } => {
                             let op_str = match op {
                                 ComparisonOp::Less => "<",
                                 ComparisonOp::LessEqual => "<=",
@@ -294,26 +336,26 @@ fn format_pattern_pretty(pattern: &Pattern, indent: usize) -> String {
                             };
                             write!(&mut result, "{} {}", op_str, quote! { #expr }).unwrap();
                         }
-                        Pattern::Range(expr) => {
+                        Pattern::Range { expr, .. } => {
                             write!(&mut result, "{}", quote! { #expr }).unwrap();
                         }
                         #[cfg(feature = "regex")]
-                        Pattern::Regex(s) => {
-                            write!(&mut result, "=~ r\"{}\"", s).unwrap();
+                        Pattern::Regex { pattern, .. } => {
+                            write!(&mut result, "=~ r\"{}\"", pattern).unwrap();
                         }
                         nested @ Pattern::Struct { .. } => {
                             // For nested structs, format on new lines
                             let nested_str = format_pattern_pretty(nested, indent + 1);
                             result.push_str(&nested_str);
                         }
-                        Pattern::Rest => {
+                        Pattern::Rest { .. } => {
                             result.push_str("..");
                         }
                         #[cfg(feature = "regex")]
-                        Pattern::Like(expr) => {
+                        Pattern::Like { expr, .. } => {
                             write!(&mut result, "=~ {}", quote! { #expr }).unwrap();
                         }
-                        Pattern::Tuple { .. } | Pattern::Slice(_) => {
+                        Pattern::Tuple { .. } | Pattern::Slice { .. } => {
                             // Use a simple inline format for these
                             let pattern_str = format_pattern_inline(&field.pattern);
                             result.push_str(&pattern_str);
@@ -340,6 +382,7 @@ fn format_pattern_pretty(pattern: &Pattern, indent: usize) -> String {
     result
 }
 
+
 /// Generate assertion code for any pattern type with path tracking.
 ///
 /// This version tracks the path to the current field for better error messages.
@@ -351,16 +394,20 @@ fn generate_pattern_assertion_with_path(
 ) -> TokenStream {
     // Capture pattern string representation for error messages
     let pattern_str = pattern_to_string(pattern);
+    
+    // Get the node identifier for this pattern
+    let node_ident = get_pattern_node_ident(pattern);
 
     match pattern {
-        Pattern::Simple(expected) => {
+        Pattern::Simple { expr: expected, .. } => {
             // Generate simple assertion with path tracking
-            generate_simple_assertion_with_path(value_expr, expected, is_ref, path)
+            generate_simple_assertion_with_path(value_expr, expected, is_ref, path, &node_ident)
         }
         Pattern::Struct {
             path: struct_path,
             fields,
             rest,
+            ..
         } => {
             // Use the path-aware version for structs
             generate_struct_match_assertion_with_path(
@@ -372,34 +419,36 @@ fn generate_pattern_assertion_with_path(
                 path,
             )
         }
-        Pattern::Comparison(op, expected) => {
+        Pattern::Comparison { op, expr: expected, .. } => {
             // Generate improved comparison assertion
-            generate_comparison_assertion_with_path(
+            generate_comparison_assertion_with_node(
                 value_expr,
                 op,
                 expected,
                 is_ref,
                 path,
                 &pattern_str,
+                &node_ident,
             )
         }
-        Pattern::Range(range) => {
+        Pattern::Range { expr: range, .. } => {
             // Generate improved range assertion
-            generate_range_assertion_with_path(value_expr, range, is_ref, path, &pattern_str)
+            generate_range_assertion_with_path(value_expr, range, is_ref, path, &pattern_str, &node_ident)
         }
         Pattern::Tuple {
             path: variant_path,
             elements,
+            ..
         } => {
             // Handle enum tuples with path tracking
             if let Some(vpath) = variant_path {
                 if elements.is_empty() {
                     // Unit variant like None
-                    generate_unit_variant_assertion_with_path(value_expr, vpath, is_ref, path)
+                    generate_unit_variant_assertion_with_path(value_expr, vpath, is_ref, path, &node_ident)
                 } else {
                     // Tuple variant with data - generate with path tracking
                     generate_enum_tuple_assertion_with_path(
-                        value_expr, vpath, elements, is_ref, path,
+                        value_expr, vpath, elements, is_ref, path, &node_ident,
                     )
                 }
             } else {
@@ -407,19 +456,19 @@ fn generate_pattern_assertion_with_path(
                 generate_plain_tuple_assertion(value_expr, elements, is_ref)
             }
         }
-        Pattern::Slice(elements) => {
+        Pattern::Slice { elements, .. } => {
             // Generate slice assertion with path tracking
-            generate_slice_assertion_with_path(value_expr, elements, is_ref, path)
+            generate_slice_assertion_with_path(value_expr, elements, is_ref, path, &node_ident)
         }
         #[cfg(feature = "regex")]
-        Pattern::Regex(regex_str) => {
+        Pattern::Regex { pattern: regex_str, .. } => {
             // Generate regex assertion with path tracking
-            generate_regex_assertion_with_path(value_expr, regex_str, is_ref, path, &pattern_str)
+            generate_regex_assertion_with_path(value_expr, regex_str, is_ref, path, &pattern_str, &node_ident)
         }
         #[cfg(feature = "regex")]
-        Pattern::Like(pattern_expr) => {
+        Pattern::Like { expr: pattern_expr, .. } => {
             // Generate Like trait assertion with path tracking
-            generate_like_assertion_with_path(value_expr, pattern_expr, is_ref, path)
+            generate_like_assertion_with_path(value_expr, pattern_expr, is_ref, path, &node_ident)
         }
         _ => {
             // For now, delegate other patterns to the original function
@@ -452,7 +501,7 @@ fn generate_pattern_assertion(
     is_ref: bool,
 ) -> TokenStream {
     match pattern {
-        Pattern::Simple(expected) => {
+        Pattern::Simple { expr: expected, .. } => {
             // Direct equality check
             // Transform string literals to String for comparison with String fields
             let transformed = transform_expected_value(expected);
@@ -468,7 +517,7 @@ fn generate_pattern_assertion(
                 }
             }
         }
-        Pattern::Struct { path, fields, rest } => {
+        Pattern::Struct { path, fields, rest, .. } => {
             // Use match expression for both structs and enums for unified handling
             // WHY: This eliminates the need for heuristics to distinguish between them.
             // The unreachable pattern warning for structs is suppressed - a small cost
@@ -479,7 +528,7 @@ fn generate_pattern_assertion(
             // Both generate similar match expressions with exhaustive checking
             generate_struct_match_assertion(value_expr, path, fields, *rest, is_ref)
         }
-        Pattern::Tuple { path, elements } => {
+        Pattern::Tuple { path, elements, .. } => {
             // Handle both plain tuples and enum variants
             if let Some(variant_path) = path {
                 // Enum variant (Some(...), None, Ok(...), etc.)
@@ -495,15 +544,15 @@ fn generate_pattern_assertion(
                 generate_plain_tuple_assertion(value_expr, elements, is_ref)
             }
         }
-        Pattern::Slice(elements) => {
+        Pattern::Slice { elements, .. } => {
             // Slice pattern using Rust's native slice matching
             generate_slice_assertion(value_expr, elements, is_ref)
         }
-        Pattern::Comparison(op, value) => {
+        Pattern::Comparison { op, expr: value, .. } => {
             // Generate comparison assertions with clear error messages
             generate_comparison_assertion(value_expr, op, value, is_ref)
         }
-        Pattern::Range(range) => {
+        Pattern::Range { expr: range, .. } => {
             // Use Rust's native range matching in match expressions
             // WHY: Match expressions handle all edge cases automatically
             // (reference levels, type coercion, inclusive/exclusive bounds)
@@ -533,7 +582,7 @@ fn generate_pattern_assertion(
             }
         }
         #[cfg(feature = "regex")]
-        Pattern::Regex(pattern_str) => {
+        Pattern::Regex { pattern: pattern_str, .. } => {
             // PERFORMANCE OPTIMIZATION: String literal patterns compile at macro expansion
             // This path handles: email: =~ r".*@example\.com"
             // The regex compiles once at expansion time, not at runtime
@@ -571,7 +620,7 @@ fn generate_pattern_assertion(
             }
         }
         #[cfg(feature = "regex")]
-        Pattern::Like(pattern_expr) => {
+        Pattern::Like { expr: pattern_expr, .. } => {
             // Runtime pattern matching via Like trait
             // This path handles: email: =~ my_pattern_var
             if is_ref {
@@ -602,7 +651,7 @@ fn generate_pattern_assertion(
                 }
             }
         }
-        Pattern::Rest => {
+        Pattern::Rest { .. } => {
             // Rest patterns don't generate assertions themselves
             quote! {}
         }
@@ -615,6 +664,7 @@ fn generate_unit_variant_assertion_with_path(
     variant_path: &syn::Path,
     is_ref: bool,
     field_path: &[String],
+    node_ident: &Ident,
 ) -> TokenStream {
     let path_str = field_path.join(".");
     let variant_str = quote! { #variant_path }.to_string();
@@ -643,7 +693,7 @@ fn generate_unit_variant_assertion_with_path(
                             pattern_location: None,
                             expected_value: None,
                             pattern_tree: Some(__PATTERN_TREE),
-                            error_node: None,
+                            error_node: Some(&#node_ident),
                         };
                         panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                     }
@@ -661,7 +711,7 @@ fn generate_unit_variant_assertion_with_path(
                             pattern_location: None,
                             expected_value: None,
                             pattern_tree: Some(__PATTERN_TREE),
-                            error_node: None,
+                            error_node: Some(&#node_ident),
                         };
                         panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                     }
@@ -685,7 +735,7 @@ fn generate_unit_variant_assertion_with_path(
                             pattern_location: None,
                             expected_value: None,
                             pattern_tree: Some(__PATTERN_TREE),
-                            error_node: None,
+                            error_node: Some(&#node_ident),
                         };
                         panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                     }
@@ -703,7 +753,7 @@ fn generate_unit_variant_assertion_with_path(
                             pattern_location: None,
                             expected_value: None,
                             pattern_tree: Some(__PATTERN_TREE),
-                            error_node: None,
+                            error_node: Some(&#node_ident),
                         };
                         panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                     }
@@ -730,7 +780,7 @@ fn generate_unit_variant_assertion_with_path(
                             pattern_location: None,
                             expected_value: None,
                             pattern_tree: Some(__PATTERN_TREE),
-                            error_node: None,
+                            error_node: Some(&#node_ident),
                         };
                         panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                     }
@@ -754,7 +804,7 @@ fn generate_unit_variant_assertion_with_path(
                             pattern_location: None,
                             expected_value: None,
                             pattern_tree: Some(__PATTERN_TREE),
-                            error_node: None,
+                            error_node: Some(&#node_ident),
                         };
                         panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                     }
@@ -1159,7 +1209,7 @@ fn generate_slice_assertion(
 
     for (i, elem) in elements.iter().enumerate() {
         match elem {
-            Pattern::Rest => {
+            Pattern::Rest { .. } => {
                 // Rest pattern allows variable-length matching
                 pattern_parts.push(quote! { .. });
             }
@@ -1293,8 +1343,8 @@ fn is_option_none_path(path: &syn::Path) -> bool {
 /// Convert a pattern to its string representation for error messages
 fn pattern_to_string(pattern: &Pattern) -> String {
     match pattern {
-        Pattern::Simple(expr) => quote! { #expr }.to_string(),
-        Pattern::Comparison(op, expr) => {
+        Pattern::Simple { expr, .. } => quote! { #expr }.to_string(),
+        Pattern::Comparison { op, expr, .. } => {
             let op_str = match op {
                 ComparisonOp::Less => "<",
                 ComparisonOp::LessEqual => "<=",
@@ -1305,14 +1355,14 @@ fn pattern_to_string(pattern: &Pattern) -> String {
             };
             format!("{} {}", op_str, quote! { #expr })
         }
-        Pattern::Range(range) => quote! { #range }.to_string(),
+        Pattern::Range { expr: range, .. } => quote! { #range }.to_string(),
         #[cfg(feature = "regex")]
-        Pattern::Regex(s) => format!("=~ r\"{}\"", s),
+        Pattern::Regex { pattern, .. } => format!("=~ r\"{}\"", pattern),
         #[cfg(feature = "regex")]
-        Pattern::Like(expr) => format!("=~ {}", quote! { #expr }),
-        Pattern::Rest => "..".to_string(),
+        Pattern::Like { expr, .. } => format!("=~ {}", quote! { #expr }),
+        Pattern::Rest { .. } => "..".to_string(),
         Pattern::Struct { path, .. } => quote! { #path { .. } }.to_string(),
-        Pattern::Tuple { path, elements } => {
+        Pattern::Tuple { path, elements, .. } => {
             if let Some(p) = path {
                 if elements.is_empty() {
                     quote! { #p }.to_string()
@@ -1323,7 +1373,105 @@ fn pattern_to_string(pattern: &Pattern) -> String {
                 format!("({} elements)", elements.len())
             }
         }
-        Pattern::Slice(elements) => format!("[{} elements]", elements.len()),
+        Pattern::Slice { elements, .. } => format!("[{} elements]", elements.len()),
+    }
+}
+
+/// Generate comparison assertion with node reference for tree-based error messages
+fn generate_comparison_assertion_with_node(
+    value_expr: &TokenStream,
+    op: &ComparisonOp,
+    expected: &Expr,
+    is_ref: bool,
+    path: &[String],
+    pattern_str: &str,
+    node_ident: &Ident,
+) -> TokenStream {
+    let field_path = path.join(".");
+    
+    // Adjust for reference level
+    let actual_expr = if is_ref {
+        quote! { #value_expr }
+    } else {
+        quote! { &#value_expr }
+    };
+    
+    let comparison = if is_ref {
+        match op {
+            ComparisonOp::Less => quote! { #value_expr < &(#expected) },
+            ComparisonOp::LessEqual => quote! { #value_expr <= &(#expected) },
+            ComparisonOp::Greater => quote! { #value_expr > &(#expected) },
+            ComparisonOp::GreaterEqual => quote! { #value_expr >= &(#expected) },
+            ComparisonOp::Equal => quote! { #value_expr == &(#expected) },
+            ComparisonOp::NotEqual => quote! { #value_expr != &(#expected) },
+        }
+    } else {
+        match op {
+            ComparisonOp::Less => quote! { &#value_expr < &(#expected) },
+            ComparisonOp::LessEqual => quote! { &#value_expr <= &(#expected) },
+            ComparisonOp::Greater => quote! { &#value_expr > &(#expected) },
+            ComparisonOp::GreaterEqual => quote! { &#value_expr >= &(#expected) },
+            ComparisonOp::Equal => quote! { &#value_expr == &(#expected) },
+            ComparisonOp::NotEqual => quote! { &#value_expr != &(#expected) },
+        }
+    };
+    
+    let error_type = if matches!(op, ComparisonOp::Equal) {
+        quote! { ::assert_struct::__macro_support::ErrorType::Equality }
+    } else {
+        quote! { ::assert_struct::__macro_support::ErrorType::Comparison }
+    };
+    
+    let expected_value = if matches!(op, ComparisonOp::Equal) {
+        quote! { Some(format!("{:?}", #expected)) }
+    } else {
+        quote! { None }
+    };
+    
+    // Find pattern location
+    let location_code = quote! {
+        __PATTERN.find(#pattern_str).map(|pos| {
+            let lines: Vec<&str> = __PATTERN[..pos].lines().collect();
+            let line_in_pattern = lines.len().saturating_sub(1);
+            let last_line_len = lines.last().map(|l| l.len()).unwrap_or(0);
+            let pattern_len = #pattern_str.len();
+            ::assert_struct::__macro_support::PatternLocation {
+                line_in_pattern,
+                start_col: last_line_len,
+                end_col: last_line_len + pattern_len,
+                field_name: String::new(),
+            }
+        })
+    };
+    
+    quote! {
+        if !(#comparison) {
+            // Capture line number using proper spanning
+            let __line = line!();
+            let __file = file!();
+            
+            // Build error context
+            let mut __error = ::assert_struct::__macro_support::ErrorContext {
+                field_path: #field_path.to_string(),
+                pattern_str: #pattern_str.to_string(),
+                actual_value: format!("{:?}", #actual_expr),
+                line_number: __line,
+                file_name: __file,
+                error_type: #error_type,
+                full_pattern: Some(__PATTERN),
+                pattern_location: #location_code,
+                expected_value: None,
+                pattern_tree: Some(__PATTERN_TREE),
+                error_node: Some(&#node_ident),
+            };
+            
+            // Add expected value for equality patterns
+            if let Some(expected) = #expected_value {
+                __error.expected_value = Some(expected);
+            }
+            
+            panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+        }
     }
 }
 
@@ -1486,6 +1634,7 @@ fn generate_enum_tuple_assertion_with_path(
     elements: &[Pattern],
     is_ref: bool,
     field_path: &[String],
+    node_ident: &Ident,
 ) -> TokenStream {
     // Special handling for Some with pattern inside
     if is_option_some_path(variant_path) && elements.len() == 1 {
@@ -1522,7 +1671,7 @@ fn generate_enum_tuple_assertion_with_path(
                 pattern_location: None,
                             expected_value: None,
                             pattern_tree: Some(__PATTERN_TREE),
-                            error_node: None,
+                            error_node: Some(&#node_ident),
                         };
                         panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                     }
@@ -1548,7 +1697,7 @@ fn generate_enum_tuple_assertion_with_path(
                 pattern_location: None,
                             expected_value: None,
                             pattern_tree: Some(__PATTERN_TREE),
-                            error_node: None,
+                            error_node: Some(&#node_ident),
                         };
                         panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                     }
@@ -1568,6 +1717,7 @@ fn generate_range_assertion_with_path(
     is_ref: bool,
     path: &[String],
     pattern_str: &str,
+    node_ident: &Ident,
 ) -> TokenStream {
     let field_path = path.join(".");
     let match_expr = if is_ref {
@@ -1656,7 +1806,7 @@ fn generate_range_assertion_with_path(
                 pattern_location: #location_code,
                 expected_value: None,
                 pattern_tree: Some(__PATTERN_TREE),
-                error_node: None,
+                error_node: Some(&#node_ident),
                 };
 
                 panic!("{}", ::assert_struct::__macro_support::format_error(__error));
@@ -1671,6 +1821,7 @@ fn generate_simple_assertion_with_path(
     expected: &syn::Expr,
     is_ref: bool,
     path: &[String],
+    node_ident: &Ident,
 ) -> TokenStream {
     // Transform string literals for String comparison
     let transformed = transform_expected_value(expected);
@@ -1753,7 +1904,7 @@ fn generate_simple_assertion_with_path(
                 pattern_location: #location_code,
                 expected_value: None,
                 pattern_tree: Some(__PATTERN_TREE),
-                error_node: None,
+                error_node: Some(&#node_ident),
                 };
                 panic!("{}", ::assert_struct::__macro_support::format_error(__error));
             }
@@ -1774,7 +1925,7 @@ fn generate_simple_assertion_with_path(
                 pattern_location: #location_code,
                 expected_value: None,
                 pattern_tree: Some(__PATTERN_TREE),
-                error_node: None,
+                error_node: Some(&#node_ident),
                 };
                 panic!("{}", ::assert_struct::__macro_support::format_error(__error));
             }
@@ -1788,13 +1939,14 @@ fn generate_slice_assertion_with_path(
     elements: &[Pattern],
     _is_ref: bool,
     field_path: &[String],
+    node_ident: &Ident,
 ) -> TokenStream {
     let mut pattern_parts = Vec::new();
     let mut bindings_and_assertions = Vec::new();
 
     for (i, elem) in elements.iter().enumerate() {
         match elem {
-            Pattern::Rest => {
+            Pattern::Rest { .. } => {
                 // Rest pattern allows variable-length matching
                 pattern_parts.push(quote! { .. });
             }
@@ -1841,7 +1993,7 @@ fn generate_slice_assertion_with_path(
                 pattern_location: None,
                             expected_value: None,
                             pattern_tree: Some(__PATTERN_TREE),
-                            error_node: None,
+                            error_node: Some(&#node_ident),
                 };
                 panic!("{}", ::assert_struct::__macro_support::format_error(__error));
             }
@@ -1857,6 +2009,7 @@ fn generate_regex_assertion_with_path(
     is_ref: bool,
     path: &[String],
     full_pattern_str: &str,
+    node_ident: &Ident,
 ) -> TokenStream {
     let field_path_str = path.join(".");
 
@@ -1880,7 +2033,7 @@ fn generate_regex_assertion_with_path(
                 pattern_location: None,
                             expected_value: None,
                             pattern_tree: Some(__PATTERN_TREE),
-                            error_node: None,
+                            error_node: Some(&#node_ident),
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                 }
@@ -1906,7 +2059,7 @@ fn generate_regex_assertion_with_path(
                 pattern_location: None,
                             expected_value: None,
                             pattern_tree: Some(__PATTERN_TREE),
-                            error_node: None,
+                            error_node: Some(&#node_ident),
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                 }
@@ -1922,6 +2075,7 @@ fn generate_like_assertion_with_path(
     pattern_expr: &syn::Expr,
     is_ref: bool,
     path: &[String],
+    node_ident: &Ident,
 ) -> TokenStream {
     let field_path_str = path.join(".");
     let pattern_str = format!("=~ {}", quote! { #pattern_expr });
@@ -1944,7 +2098,7 @@ fn generate_like_assertion_with_path(
                 pattern_location: None,
                             expected_value: None,
                             pattern_tree: Some(__PATTERN_TREE),
-                            error_node: None,
+                            error_node: Some(&#node_ident),
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                 }
@@ -1968,7 +2122,7 @@ fn generate_like_assertion_with_path(
                 pattern_location: None,
                             expected_value: None,
                             pattern_tree: Some(__PATTERN_TREE),
-                            error_node: None,
+                            error_node: Some(&#node_ident),
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                 }

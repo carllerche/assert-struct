@@ -36,32 +36,55 @@ struct AssertStruct {
 // Unified pattern type that can represent any pattern
 pub(crate) enum Pattern {
     // Simple value: 42, "hello", true
-    Simple(Expr),
+    Simple {
+        node_id: usize,
+        expr: Expr,
+    },
     // Struct pattern: User { name: "Alice", age: 30, .. }
     Struct {
+        node_id: usize,
         path: syn::Path,
         fields: Punctuated<FieldAssertion, Token![,]>,
         rest: bool,
     },
     // Tuple pattern: (10, 20) or Some(42) or None
     Tuple {
+        node_id: usize,
         path: Option<syn::Path>,
         elements: Vec<Pattern>,
     },
     // Slice pattern: [1, 2, 3] or [1, .., 5]
-    Slice(Vec<Pattern>),
+    Slice {
+        node_id: usize,
+        elements: Vec<Pattern>,
+    },
     // Comparison: > 30, <= 100
-    Comparison(ComparisonOp, Expr),
+    Comparison {
+        node_id: usize,
+        op: ComparisonOp,
+        expr: Expr,
+    },
     // Range: 10..20, 0..=100
-    Range(Expr),
+    Range {
+        node_id: usize,
+        expr: Expr,
+    },
     // Regex: =~ "pattern" - string literal optimized at compile time
     #[cfg(feature = "regex")]
-    Regex(String), // String literal regex pattern (performance optimization)
+    Regex {
+        node_id: usize,
+        pattern: String, // String literal regex pattern (performance optimization)
+    },
     // Like pattern: =~ expr - arbitrary expression using Like trait
     #[cfg(feature = "regex")]
-    Like(Expr),
+    Like {
+        node_id: usize,
+        expr: Expr,
+    },
     // Rest pattern: .. for partial matching
-    Rest,
+    Rest {
+        node_id: usize,
+    },
 }
 
 // Helper function to format syn expressions as strings
@@ -94,10 +117,10 @@ fn path_to_string(path: &syn::Path) -> String {
 impl fmt::Display for Pattern {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Pattern::Simple(expr) => {
+            Pattern::Simple { expr, .. } => {
                 write!(f, "{}", expr_to_string(expr))
             }
-            Pattern::Struct { path, fields, rest } => {
+            Pattern::Struct { path, fields, rest, .. } => {
                 write!(f, "{} {{ ", path_to_string(path))?;
                 for (i, field) in fields.iter().enumerate() {
                     if i > 0 {
@@ -113,7 +136,7 @@ impl fmt::Display for Pattern {
                 }
                 write!(f, " }}")
             }
-            Pattern::Tuple { path, elements } => {
+            Pattern::Tuple { path, elements, .. } => {
                 if let Some(p) = path {
                     write!(f, "{}", path_to_string(p))?;
                 }
@@ -126,7 +149,7 @@ impl fmt::Display for Pattern {
                 }
                 write!(f, ")")
             }
-            Pattern::Slice(elements) => {
+            Pattern::Slice { elements, .. } => {
                 write!(f, "[")?;
                 for (i, elem) in elements.iter().enumerate() {
                     if i > 0 {
@@ -136,21 +159,21 @@ impl fmt::Display for Pattern {
                 }
                 write!(f, "]")
             }
-            Pattern::Comparison(op, expr) => {
+            Pattern::Comparison { op, expr, .. } => {
                 write!(f, "{} {}", op, expr_to_string(expr))
             }
-            Pattern::Range(expr) => {
+            Pattern::Range { expr, .. } => {
                 write!(f, "{}", expr_to_string(expr))
             }
             #[cfg(feature = "regex")]
-            Pattern::Regex(s) => {
-                write!(f, "=~ r\"{}\"", s)
+            Pattern::Regex { pattern, .. } => {
+                write!(f, "=~ r\"{}\"", pattern)
             }
             #[cfg(feature = "regex")]
-            Pattern::Like(expr) => {
+            Pattern::Like { expr, .. } => {
                 write!(f, "=~ {}", expr_to_string(expr))
             }
-            Pattern::Rest => {
+            Pattern::Rest { .. } => {
                 write!(f, "..")
             }
         }

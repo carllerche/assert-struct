@@ -1,7 +1,26 @@
 use crate::{AssertStruct, ComparisonOp, Expected, FieldAssertion, Pattern};
 use syn::{Result, Token, parse::Parse, parse::ParseStream, punctuated::Punctuated};
+use std::cell::Cell;
+
+thread_local! {
+    static NODE_ID_COUNTER: Cell<usize> = Cell::new(0);
+}
+
+fn next_node_id() -> usize {
+    NODE_ID_COUNTER.with(|counter| {
+        let id = counter.get();
+        counter.set(id + 1);
+        id
+    })
+}
+
+fn reset_node_counter() {
+    NODE_ID_COUNTER.with(|counter| counter.set(0));
+}
 
 pub fn parse(input: proc_macro::TokenStream) -> syn::Result<AssertStruct> {
+    // Reset the counter for each macro invocation
+    reset_node_counter();
     syn::parse(input)
 }
 
@@ -91,7 +110,9 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         } else {
             // This is a rest pattern for partial matching
             let _: Token![..] = input.parse()?;
-            return Ok(Pattern::Rest);
+            return Ok(Pattern::Rest {
+                node_id: next_node_id(),
+            });
         }
     }
 
@@ -106,10 +127,18 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         if input.peek(Token![=]) {
             let _: Token![=] = input.parse()?;
             let value = input.parse()?;
-            return Ok(Pattern::Comparison(ComparisonOp::LessEqual, value));
+            return Ok(Pattern::Comparison {
+                node_id: next_node_id(),
+                op: ComparisonOp::LessEqual,
+                expr: value,
+            });
         } else {
             let value = input.parse()?;
-            return Ok(Pattern::Comparison(ComparisonOp::Less, value));
+            return Ok(Pattern::Comparison {
+                node_id: next_node_id(),
+                op: ComparisonOp::Less,
+                expr: value,
+            });
         }
     }
 
@@ -118,10 +147,18 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         if input.peek(Token![=]) {
             let _: Token![=] = input.parse()?;
             let value = input.parse()?;
-            return Ok(Pattern::Comparison(ComparisonOp::GreaterEqual, value));
+            return Ok(Pattern::Comparison {
+                node_id: next_node_id(),
+                op: ComparisonOp::GreaterEqual,
+                expr: value,
+            });
         } else {
             let value = input.parse()?;
-            return Ok(Pattern::Comparison(ComparisonOp::Greater, value));
+            return Ok(Pattern::Comparison {
+                node_id: next_node_id(),
+                op: ComparisonOp::Greater,
+                expr: value,
+            });
         }
     }
 
@@ -133,7 +170,11 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             let _: Token![!] = input.parse()?;
             let _: Token![=] = input.parse()?;
             let value = input.parse()?;
-            return Ok(Pattern::Comparison(ComparisonOp::NotEqual, value));
+            return Ok(Pattern::Comparison {
+                node_id: next_node_id(),
+                op: ComparisonOp::NotEqual,
+                expr: value,
+            });
         }
     }
 
@@ -147,7 +188,11 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
                 let _: Token![=] = input.parse()?;
                 let _: Token![=] = input.parse()?;
                 let value = input.parse()?;
-                return Ok(Pattern::Comparison(ComparisonOp::Equal, value));
+                return Ok(Pattern::Comparison {
+                    node_id: next_node_id(),
+                    op: ComparisonOp::Equal,
+                    expr: value,
+                });
             }
             #[cfg(feature = "regex")]
             if fork.peek(Token![~]) {
@@ -162,12 +207,18 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
                     // Example: `email: =~ r".*@example\.com"`
                     // Compiles regex at macro expansion, fails early if invalid
                     input.parse::<syn::LitStr>()?;
-                    return Ok(Pattern::Regex(lit.value()));
+                    return Ok(Pattern::Regex {
+                        node_id: next_node_id(),
+                        pattern: lit.value(),
+                    });
                 } else {
                     // Example: `email: =~ email_pattern` where email_pattern is a variable
                     // Uses Like trait for runtime pattern matching
                     let expr = input.parse::<syn::Expr>()?;
-                    return Ok(Pattern::Like(expr));
+                    return Ok(Pattern::Like {
+                        node_id: next_node_id(),
+                        expr,
+                    });
                 }
             }
         }
@@ -179,7 +230,10 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         let content;
         syn::bracketed!(content in input);
         let elements = parse_pattern_list(&content)?;
-        return Ok(Pattern::Slice(elements));
+        return Ok(Pattern::Slice {
+            node_id: next_node_id(),
+            elements,
+        });
     }
 
     // Standalone tuple pattern (no type prefix)
@@ -189,6 +243,7 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         syn::parenthesized!(content in input);
         let elements = parse_pattern_list(&content)?;
         return Ok(Pattern::Tuple {
+            node_id: next_node_id(),
             path: None,
             elements,
         });
@@ -206,6 +261,7 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             syn::braced!(content in input);
             let expected: Expected = content.parse()?;
             return Ok(Pattern::Struct {
+                node_id: next_node_id(),
                 path,
                 fields: expected.fields,
                 rest: expected.rest,
@@ -230,6 +286,7 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
                 // Example: `Some(> 30)`, `Event::Click(>= 0, < 100)`
                 let elements = parse_pattern_list(&content)?;
                 return Ok(Pattern::Tuple {
+                    node_id: next_node_id(),
                     path: Some(path),
                     elements,
                 });
@@ -239,8 +296,12 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
                 // We treat the whole content as a single expression
                 let expr = content.parse()?;
                 return Ok(Pattern::Tuple {
+                    node_id: next_node_id(),
                     path: Some(path),
-                    elements: vec![Pattern::Simple(expr)],
+                    elements: vec![Pattern::Simple {
+                        node_id: next_node_id(),
+                        expr,
+                    }],
                 });
             }
         }
@@ -253,6 +314,7 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             if name.chars().next().is_some_and(|c| c.is_uppercase()) {
                 let path: syn::Path = input.parse()?;
                 return Ok(Pattern::Tuple {
+                    node_id: next_node_id(),
                     path: Some(path),
                     elements: vec![],
                 });
@@ -265,11 +327,17 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
 
     // Range expressions like `18..65` or `0.0..100.0`
     if matches!(expr, syn::Expr::Range(_)) {
-        Ok(Pattern::Range(expr))
+        Ok(Pattern::Range {
+            node_id: next_node_id(),
+            expr,
+        })
     } else {
         // Simple value or expression
         // Examples: `42`, `"hello"`, `my_variable`, `compute_value()`
-        Ok(Pattern::Simple(expr))
+        Ok(Pattern::Simple {
+            node_id: next_node_id(),
+            expr,
+        })
     }
 }
 

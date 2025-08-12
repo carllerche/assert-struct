@@ -146,10 +146,14 @@ fn truncate_path(path: &str, max_len: usize) -> String {
 }
 
 pub fn format_error(mut error: ErrorContext) -> String {
-    // If we have full pattern and location, use fancy formatting
-    if let (Some(full_pattern), Some(location)) =
+    // First try tree-based formatting if available
+    if let (Some(pattern_tree), Some(error_node)) = (error.pattern_tree, error.error_node) {
+        // Use tree-based formatting with default context lines
+        format_error_with_tree(pattern_tree, error_node, error, 3)
+    } else if let (Some(full_pattern), Some(location)) =
         (error.full_pattern, error.pattern_location.take())
     {
+        // Fall back to string-based fancy formatting
         format_fancy_error(error, full_pattern, location)
     } else {
         // Fall back to simple formatting
