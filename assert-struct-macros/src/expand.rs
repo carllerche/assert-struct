@@ -417,6 +417,7 @@ fn generate_pattern_assertion_with_path(
                 *rest,
                 is_ref,
                 path,
+                &node_ident,
             )
         }
         Pattern::Comparison { op, expr: expected, .. } => {
@@ -876,6 +877,7 @@ fn generate_struct_match_assertion_with_path(
     rest: bool,
     is_ref: bool,
     field_path: &[String],
+    node_ident: &Ident,
 ) -> TokenStream {
     let field_names: Vec<_> = fields.iter().map(|f| &f.field_name).collect();
     let field_path_str = field_path.join(".");
@@ -949,7 +951,7 @@ fn generate_struct_match_assertion_with_path(
                         pattern_location,
                         expected_value: None,
                         pattern_tree: Some(__PATTERN_TREE),
-                        error_node: None,
+                        error_node: Some(&#node_ident),
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                 }
@@ -1000,7 +1002,7 @@ fn generate_struct_match_assertion_with_path(
                         pattern_location,
                         expected_value: None,
                         pattern_tree: Some(__PATTERN_TREE),
-                        error_node: None,
+                        error_node: Some(&#node_ident),
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                 }
@@ -1476,157 +1478,6 @@ fn generate_comparison_assertion_with_node(
 }
 
 /// Generate comparison assertion with enhanced error message
-fn generate_comparison_assertion_with_path(
-    value_expr: &TokenStream,
-    op: &ComparisonOp,
-    expected: &syn::Expr,
-    is_ref: bool,
-    path: &[String],
-    pattern_str: &str,
-) -> TokenStream {
-    // Build the comparison expression
-    let comparison = if is_ref {
-        match op {
-            ComparisonOp::Less => quote! { #value_expr < &(#expected) },
-            ComparisonOp::LessEqual => quote! { #value_expr <= &(#expected) },
-            ComparisonOp::Greater => quote! { #value_expr > &(#expected) },
-            ComparisonOp::GreaterEqual => quote! { #value_expr >= &(#expected) },
-            ComparisonOp::Equal => quote! { #value_expr == &(#expected) },
-            ComparisonOp::NotEqual => quote! { #value_expr != &(#expected) },
-        }
-    } else {
-        match op {
-            ComparisonOp::Less => quote! { &#value_expr < &(#expected) },
-            ComparisonOp::LessEqual => quote! { &#value_expr <= &(#expected) },
-            ComparisonOp::Greater => quote! { &#value_expr > &(#expected) },
-            ComparisonOp::GreaterEqual => quote! { &#value_expr >= &(#expected) },
-            ComparisonOp::Equal => quote! { &#value_expr == &(#expected) },
-            ComparisonOp::NotEqual => quote! { &#value_expr != &(#expected) },
-        }
-    };
-
-    // Use improved error reporting
-    let field_path = path.join(".");
-    let actual_expr = if is_ref {
-        quote! { #value_expr }
-    } else {
-        quote! { &#value_expr }
-    };
-
-    // Get the field name (last element of path)
-    let field_name = path.last().map(|s| s.as_str()).unwrap_or("");
-
-    // Generate code to find the field location in the pattern at runtime
-    let location_code = if !field_name.is_empty() && path.len() > 1 {
-        // For equality patterns (==), we need to underline just the expression, not the operator
-        let is_equality = matches!(op, ComparisonOp::Equal);
-        quote! {
-            {
-                let field_name = #field_name;
-                let pattern_lines: Vec<&str> = __PATTERN.lines().collect();
-                let mut location = None;
-                let is_equality = #is_equality;
-
-                for (line_idx, line) in pattern_lines.iter().enumerate() {
-                    // Look for "field_name: " in the line
-                    if let Some(pos) = line.find(&format!("{}: ", field_name)) {
-                        let value_start = pos + field_name.len() + 2;
-                        // Find where the value ends (at comma or end of line)
-                        let rest_of_line = &line[value_start..];
-                        let mut value_end = value_start;
-
-                        // For equality patterns (== expr), skip the == operator to underline just the expression
-                        let actual_start = if is_equality && rest_of_line.starts_with("== ") {
-                            value_start + 3  // Skip "== "
-                        } else {
-                            value_start
-                        };
-
-                        // Find the comma that ends the field value, accounting for nested structures
-                        // Simple approach: look for brackets/parens and skip commas inside them
-                        let mut bracket_depth = 0;
-                        let mut paren_depth = 0;
-                        let mut found_end = false;
-
-                        for (i, ch) in rest_of_line.char_indices() {
-                            match ch {
-                                '[' => bracket_depth += 1,
-                                ']' => bracket_depth -= 1,
-                                '(' => paren_depth += 1,
-                                ')' => paren_depth -= 1,
-                                ',' if bracket_depth == 0 && paren_depth == 0 => {
-                                    value_end = value_start + i;
-                                    found_end = true;
-                                    break;
-                                }
-                                _ => {}
-                            }
-                        }
-
-                        if !found_end {
-                            value_end = line.len();
-                        }
-
-                        location = Some(::assert_struct::__macro_support::PatternLocation {
-                            line_in_pattern: line_idx,
-                            start_col: actual_start,
-                            end_col: value_end,
-                            field_name: field_name.to_string(),
-                        });
-                        break;
-                    }
-                }
-                location
-            }
-        }
-    } else {
-        quote! { None }
-    };
-
-    // Also need to track if this is an equality pattern to show both actual and expected
-    let error_type = match op {
-        ComparisonOp::Equal => quote! { ::assert_struct::__macro_support::ErrorType::Equality },
-        _ => quote! { ::assert_struct::__macro_support::ErrorType::Comparison },
-    };
-
-    // For equality patterns, we need to evaluate and show the expected value
-    let expected_value = if matches!(op, ComparisonOp::Equal) {
-        quote! { Some(format!("{:?}", &#expected)) }
-    } else {
-        quote! { None }
-    };
-
-    quote! {
-        if !(#comparison) {
-            // Capture line number using proper spanning
-            let __line = line!();
-            let __file = file!();
-
-            // Build error context
-            let mut __error = ::assert_struct::__macro_support::ErrorContext {
-                field_path: #field_path.to_string(),
-                pattern_str: #pattern_str.to_string(),
-                actual_value: format!("{:?}", #actual_expr),
-                line_number: __line,
-                file_name: __file,
-                error_type: #error_type,
-                full_pattern: Some(__PATTERN),
-                pattern_location: #location_code,
-                expected_value: None,
-                pattern_tree: Some(__PATTERN_TREE),
-                error_node: None,
-            };
-
-            // Add expected value for equality patterns
-            if let Some(expected) = #expected_value {
-                __error.expected_value = Some(expected);
-            }
-
-            panic!("{}", ::assert_struct::__macro_support::format_error(__error));
-        }
-    }
-}
-
 /// Generate assertion for enum tuple variants with path tracking
 fn generate_enum_tuple_assertion_with_path(
     value_expr: &TokenStream,
