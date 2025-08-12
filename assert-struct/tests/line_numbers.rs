@@ -45,7 +45,7 @@ fn test_nested_line_number() {
 
 #[cfg(feature = "regex")]
 #[test]
-#[should_panic(expected = "line_numbers.rs:56")]
+#[should_panic(expected = "(line 56)")]
 fn test_regex_line_number() {
     let user = User {
         name: "Charlie".to_string(),

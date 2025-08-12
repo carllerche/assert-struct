@@ -1,1 +1,4 @@
 /target
+
+# Claude's working directory for temporary files and experiments
+.claude/

@@ -34,7 +34,7 @@ struct LargeStruct {
     field28: u32,
     field29: String,
     field30: u32,
-    important_field: u32,  // This is the field that will fail
+    important_field: u32, // This is the field that will fail
     field31: String,
     field32: u32,
     field33: String,
@@ -191,7 +191,7 @@ fn test_nested_slice_structs_failure() {
             Item {
                 id: 2,
                 tags: vec!["blue".to_string()],
-                scores: vec![5, 15, 25],  // 15 will fail the check
+                scores: vec![5, 15, 25], // 15 will fail the check
             },
         ],
     };
@@ -346,8 +346,8 @@ struct Container {
 
 #[derive(Debug)]
 struct InnerContainer {
-    name: String,  // Same field name as parent
-    id: u32,       // Same field name as parent
+    name: String, // Same field name as parent
+    id: u32,      // Same field name as parent
     value: u32,
 }
 
@@ -389,15 +389,18 @@ fn test_same_field_names_inner_failure() {
     };
 
     // Should fail on inner.name, not outer name
-    assert_struct!(container, Container {
-        name: "outer",
-        id: 1,
-        inner: InnerContainer {
-            name: "inner",  // Fails: "wrong" != "inner"
-            id: 2,
-            value: 100,
-        },
-    });
+    assert_struct!(
+        container,
+        Container {
+            name: "outer",
+            id: 1,
+            inner: InnerContainer {
+                name: "inner", // Fails: "wrong" != "inner"
+                id: 2,
+                value: 100,
+            },
+        }
+    );
 }
 
 #[test]
@@ -414,15 +417,18 @@ fn test_same_field_names_outer_failure() {
     };
 
     // Should fail on outer name, not inner.name
-    assert_struct!(container, Container {
-        name: "outer",  // Fails: "wrong" != "outer"
-        id: 1,
-        inner: InnerContainer {
-            name: "inner",
-            id: 2,
-            value: 100,
-        },
-    });
+    assert_struct!(
+        container,
+        Container {
+            name: "outer", // Fails: "wrong" != "outer"
+            id: 1,
+            inner: InnerContainer {
+                name: "inner",
+                id: 2,
+                value: 100,
+            },
+        }
+    );
 }
 
 // Test 5: Pattern with mixed complexity - some simple fields, some complex nested
@@ -471,7 +477,7 @@ fn test_mixed_complexity_deep_failure() {
                 },
                 SubItem {
                     id: 2,
-                    values: vec![5, 15],  // 5 will fail the check
+                    values: vec![5, 15], // 5 will fail the check
                 },
             ],
             metadata: Metadata {

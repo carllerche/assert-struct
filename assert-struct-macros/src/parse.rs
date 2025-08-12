@@ -1,9 +1,9 @@
 use crate::{AssertStruct, ComparisonOp, Expected, FieldAssertion, Pattern};
-use syn::{Result, Token, parse::Parse, parse::ParseStream, punctuated::Punctuated};
 use std::cell::Cell;
+use syn::{Result, Token, parse::Parse, parse::ParseStream, punctuated::Punctuated};
 
 thread_local! {
-    static NODE_ID_COUNTER: Cell<usize> = Cell::new(0);
+    static NODE_ID_COUNTER: Cell<usize> = const { Cell::new(0) };
 }
 
 fn next_node_id() -> usize {
@@ -241,12 +241,30 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
     if input.peek(syn::token::Paren) {
         let content;
         syn::parenthesized!(content in input);
-        let elements = parse_pattern_list(&content)?;
-        return Ok(Pattern::Tuple {
-            node_id: next_node_id(),
-            path: None,
-            elements,
-        });
+
+        // Check for special syntax to distinguish patterns from simple expressions
+        let fork = content.fork();
+        let has_special = check_for_special_syntax(&fork);
+
+        if has_special {
+            // Contains pattern syntax like `>`, `==`, nested patterns
+            // Example: `(> 10, < 30)`, `(== 5, != 10)`
+            let elements = parse_pattern_list(&content)?;
+            return Ok(Pattern::Tuple {
+                node_id: next_node_id(),
+                path: None,
+                elements,
+            });
+        } else {
+            // Simple expression without pattern syntax
+            // Example: `(10, 20)`, `(expected_x, expected_y)`
+            // Treat as a single simple expression
+            let expr = content.parse()?;
+            return Ok(Pattern::Simple {
+                node_id: next_node_id(),
+                expr,
+            });
+        }
     }
 
     // Complex path-based patterns: structs, enums, tuple variants

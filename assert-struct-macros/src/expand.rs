@@ -1,5 +1,5 @@
 use crate::{AssertStruct, ComparisonOp, FieldAssertion, Pattern};
-use proc_macro2::{TokenStream, Ident, Span};
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use std::fmt::Write;
 use syn::{Expr, Token, punctuated::Punctuated};
@@ -14,9 +14,10 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
     // Generate pattern nodes using the node IDs from the patterns
     let mut node_defs = Vec::new();
     let root_ref = generate_pattern_nodes(pattern, &mut node_defs);
-    
+
     // Generate constants for all nodes
-    let node_constants: Vec<TokenStream> = node_defs.iter()
+    let node_constants: Vec<TokenStream> = node_defs
+        .iter()
         .map(|(id, def)| {
             let ident = Ident::new(&format!("__PATTERN_NODE_{}", id), Span::call_site());
             quote! {
@@ -26,10 +27,10 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
         .collect();
 
     // Generate the assertion for the root pattern
-    // Start with root path being the value identifier
+    // Start with root path containing the variable name
     let root_path = vec![quote! { #value }.to_string()];
     let assertion =
-        generate_pattern_assertion_with_path(&quote! { #value }, pattern, false, &root_path);
+        generate_pattern_assertion_with_collection(&quote! { #value }, pattern, false, &root_path);
 
     // Wrap in a block to avoid variable name conflicts
     quote! {
@@ -43,7 +44,15 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
             // Store the pattern tree root
             const __PATTERN_TREE: &::assert_struct::error::PatternNode = &#root_ref;
 
+            // Create error collection vector
+            let mut __errors: Vec<::assert_struct::__macro_support::ErrorContext> = Vec::new();
+
             #assertion
+
+            // Check if any errors were collected
+            if !__errors.is_empty() {
+                panic!("{}", ::assert_struct::__macro_support::format_multiple_errors(__errors));
+            }
         }
     }
 }
@@ -51,16 +60,15 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
 /// Get the node identifier for a pattern
 fn get_pattern_node_ident(pattern: &Pattern) -> Ident {
     let node_id = match pattern {
-        Pattern::Simple { node_id, .. } |
-        Pattern::Struct { node_id, .. } |
-        Pattern::Tuple { node_id, .. } |
-        Pattern::Slice { node_id, .. } |
-        Pattern::Comparison { node_id, .. } |
-        Pattern::Range { node_id, .. } |
-        Pattern::Rest { node_id } => *node_id,
+        Pattern::Simple { node_id, .. }
+        | Pattern::Struct { node_id, .. }
+        | Pattern::Tuple { node_id, .. }
+        | Pattern::Slice { node_id, .. }
+        | Pattern::Comparison { node_id, .. }
+        | Pattern::Range { node_id, .. }
+        | Pattern::Rest { node_id } => *node_id,
         #[cfg(feature = "regex")]
-        Pattern::Regex { node_id, .. } |
-        Pattern::Like { node_id, .. } => *node_id,
+        Pattern::Regex { node_id, .. } | Pattern::Like { node_id, .. } => *node_id,
     };
     Ident::new(&format!("__PATTERN_NODE_{}", node_id), Span::call_site())
 }
@@ -116,7 +124,9 @@ fn format_pattern_inline(pattern: &Pattern) -> String {
             result.push(']');
             result
         }
-        Pattern::Struct { path, fields, rest, .. } => {
+        Pattern::Struct {
+            path, fields, rest, ..
+        } => {
             // For inline struct, keep it simple
             let mut result = format!("{} {{ ", quote! { #path });
             for (i, field) in fields.iter().enumerate() {
@@ -143,7 +153,6 @@ fn format_pattern_inline(pattern: &Pattern) -> String {
     }
 }
 
-
 /// Generate pattern nodes using the IDs already in patterns
 fn generate_pattern_nodes(
     pattern: &Pattern,
@@ -151,23 +160,31 @@ fn generate_pattern_nodes(
 ) -> TokenStream {
     // Get the node_id from the pattern itself
     let node_id = match pattern {
-        Pattern::Simple { node_id, .. } |
-        Pattern::Struct { node_id, .. } |
-        Pattern::Tuple { node_id, .. } |
-        Pattern::Slice { node_id, .. } |
-        Pattern::Comparison { node_id, .. } |
-        Pattern::Range { node_id, .. } |
-        Pattern::Rest { node_id } => *node_id,
+        Pattern::Simple { node_id, .. }
+        | Pattern::Struct { node_id, .. }
+        | Pattern::Tuple { node_id, .. }
+        | Pattern::Slice { node_id, .. }
+        | Pattern::Comparison { node_id, .. }
+        | Pattern::Range { node_id, .. }
+        | Pattern::Rest { node_id } => *node_id,
         #[cfg(feature = "regex")]
-        Pattern::Regex { node_id, .. } |
-        Pattern::Like { node_id, .. } => *node_id,
+        Pattern::Regex { node_id, .. } | Pattern::Like { node_id, .. } => *node_id,
     };
-    
+
+    // Special handling for Rest patterns with MAX node_id (shouldn't generate constants)
+    if node_id == usize::MAX {
+        // For rest patterns, return inline node definition without creating a constant
+        return quote! {
+            ::assert_struct::error::PatternNode::Rest
+        };
+    }
+
     let node_ident = Ident::new(&format!("__PATTERN_NODE_{}", node_id), Span::call_site());
-    
+
     let node_def = match pattern {
         Pattern::Simple { expr, .. } => {
-            let value_str = quote! { #expr }.to_string()
+            let value_str = quote! { #expr }
+                .to_string()
                 .replace("& [", "&[")
                 .replace("& mut [", "&mut [");
             quote! {
@@ -229,7 +246,7 @@ fn generate_pattern_nodes(
                 .iter()
                 .map(|elem| generate_pattern_nodes(elem, node_defs))
                 .collect();
-                
+
             if let Some(enum_path) = path {
                 let path_str = quote! { #enum_path }.to_string();
                 quote! {
@@ -251,7 +268,7 @@ fn generate_pattern_nodes(
                 .iter()
                 .map(|elem| generate_pattern_nodes(elem, node_defs))
                 .collect();
-                
+
             let is_ref = true; // Default for now
             quote! {
                 ::assert_struct::error::PatternNode::Slice {
@@ -260,9 +277,11 @@ fn generate_pattern_nodes(
                 }
             }
         }
-        Pattern::Struct { path, fields, rest, .. } => {
+        Pattern::Struct {
+            path, fields, rest, ..
+        } => {
             let name_str = quote! { #path }.to_string();
-            
+
             let field_entries: Vec<TokenStream> = fields
                 .iter()
                 .map(|field| {
@@ -273,15 +292,15 @@ fn generate_pattern_nodes(
                     }
                 })
                 .collect();
-                
+
             if *rest {
-                let rest_ref = generate_pattern_nodes(&Pattern::Rest { node_id: usize::MAX }, node_defs);
+                // Rest patterns are handled inline, no need for a separate node
                 quote! {
                     ::assert_struct::error::PatternNode::Struct {
                         name: #name_str,
                         fields: &[
                             #(#field_entries,)*
-                            ("..", &#rest_ref)
+                            ("..", &::assert_struct::error::PatternNode::Rest)
                         ],
                     }
                 }
@@ -295,7 +314,7 @@ fn generate_pattern_nodes(
             }
         }
     };
-    
+
     node_defs.push((node_id, node_def));
     quote! { #node_ident }
 }
@@ -306,7 +325,9 @@ fn format_pattern_pretty(pattern: &Pattern, indent: usize) -> String {
     let indent_str = "    ".repeat(indent);
 
     match pattern {
-        Pattern::Struct { path, fields, rest, .. } => {
+        Pattern::Struct {
+            path, fields, rest, ..
+        } => {
             // Format struct pattern
             let path_str = quote! { #path }.to_string();
             write!(&mut result, "{} {{", path_str).unwrap();
@@ -382,6 +403,59 @@ fn format_pattern_pretty(pattern: &Pattern, indent: usize) -> String {
     result
 }
 
+/// Generate assertion code with error collection instead of immediate panic.
+fn generate_pattern_assertion_with_collection(
+    value_expr: &TokenStream,
+    pattern: &Pattern,
+    is_ref: bool,
+    path: &[String],
+) -> TokenStream {
+    // Capture pattern string representation for error messages
+    let pattern_str = pattern_to_string(pattern);
+
+    // Get the node identifier for this pattern
+    let node_ident = get_pattern_node_ident(pattern);
+
+    match pattern {
+        Pattern::Simple { expr: expected, .. } => generate_simple_assertion_with_collection(
+            value_expr,
+            expected,
+            is_ref,
+            path,
+            &node_ident,
+        ),
+        Pattern::Struct {
+            path: struct_path,
+            fields,
+            rest,
+            ..
+        } => generate_struct_match_assertion_with_collection(
+            value_expr,
+            struct_path,
+            fields,
+            *rest,
+            is_ref,
+            path,
+            &node_ident,
+        ),
+        Pattern::Comparison {
+            op, expr: expected, ..
+        } => generate_comparison_assertion_with_collection(
+            value_expr,
+            op,
+            expected,
+            is_ref,
+            path,
+            &pattern_str,
+            &node_ident,
+        ),
+        // For now, use immediate panic for other patterns - can implement collection later
+        _ => {
+            // Note: this doesn't collect errors but ensures compilation
+            generate_pattern_assertion_with_path(value_expr, pattern, is_ref, path)
+        }
+    }
+}
 
 /// Generate assertion code for any pattern type with path tracking.
 ///
@@ -394,7 +468,7 @@ fn generate_pattern_assertion_with_path(
 ) -> TokenStream {
     // Capture pattern string representation for error messages
     let pattern_str = pattern_to_string(pattern);
-    
+
     // Get the node identifier for this pattern
     let node_ident = get_pattern_node_ident(pattern);
 
@@ -420,7 +494,9 @@ fn generate_pattern_assertion_with_path(
                 &node_ident,
             )
         }
-        Pattern::Comparison { op, expr: expected, .. } => {
+        Pattern::Comparison {
+            op, expr: expected, ..
+        } => {
             // Generate improved comparison assertion
             generate_comparison_assertion_with_node(
                 value_expr,
@@ -434,7 +510,14 @@ fn generate_pattern_assertion_with_path(
         }
         Pattern::Range { expr: range, .. } => {
             // Generate improved range assertion
-            generate_range_assertion_with_path(value_expr, range, is_ref, path, &pattern_str, &node_ident)
+            generate_range_assertion_with_path(
+                value_expr,
+                range,
+                is_ref,
+                path,
+                &pattern_str,
+                &node_ident,
+            )
         }
         Pattern::Tuple {
             path: variant_path,
@@ -445,16 +528,33 @@ fn generate_pattern_assertion_with_path(
             if let Some(vpath) = variant_path {
                 if elements.is_empty() {
                     // Unit variant like None
-                    generate_unit_variant_assertion_with_path(value_expr, vpath, is_ref, path, &node_ident)
+                    generate_unit_variant_assertion_with_path(
+                        value_expr,
+                        vpath,
+                        is_ref,
+                        path,
+                        &node_ident,
+                    )
                 } else {
                     // Tuple variant with data - generate with path tracking
                     generate_enum_tuple_assertion_with_path(
-                        value_expr, vpath, elements, is_ref, path, &node_ident,
+                        value_expr,
+                        vpath,
+                        elements,
+                        is_ref,
+                        path,
+                        &node_ident,
                     )
                 }
             } else {
-                // Plain tuple - use old version for now
-                generate_plain_tuple_assertion(value_expr, elements, is_ref)
+                // Plain tuple - use path-aware version
+                generate_plain_tuple_assertion_with_path(
+                    value_expr,
+                    elements,
+                    is_ref,
+                    path,
+                    &node_ident,
+                )
             }
         }
         Pattern::Slice { elements, .. } => {
@@ -462,12 +562,23 @@ fn generate_pattern_assertion_with_path(
             generate_slice_assertion_with_path(value_expr, elements, is_ref, path, &node_ident)
         }
         #[cfg(feature = "regex")]
-        Pattern::Regex { pattern: regex_str, .. } => {
+        Pattern::Regex {
+            pattern: regex_str, ..
+        } => {
             // Generate regex assertion with path tracking
-            generate_regex_assertion_with_path(value_expr, regex_str, is_ref, path, &pattern_str, &node_ident)
+            generate_regex_assertion_with_path(
+                value_expr,
+                regex_str,
+                is_ref,
+                path,
+                &pattern_str,
+                &node_ident,
+            )
         }
         #[cfg(feature = "regex")]
-        Pattern::Like { expr: pattern_expr, .. } => {
+        Pattern::Like {
+            expr: pattern_expr, ..
+        } => {
             // Generate Like trait assertion with path tracking
             generate_like_assertion_with_path(value_expr, pattern_expr, is_ref, path, &node_ident)
         }
@@ -518,7 +629,9 @@ fn generate_pattern_assertion(
                 }
             }
         }
-        Pattern::Struct { path, fields, rest, .. } => {
+        Pattern::Struct {
+            path, fields, rest, ..
+        } => {
             // Use match expression for both structs and enums for unified handling
             // WHY: This eliminates the need for heuristics to distinguish between them.
             // The unreachable pattern warning for structs is suppressed - a small cost
@@ -527,7 +640,17 @@ fn generate_pattern_assertion(
             // Example for struct: User { name: "Alice", age: 30 }
             // Example for enum: Status::Error { code: 500, message: "Internal" }
             // Both generate similar match expressions with exhaustive checking
-            generate_struct_match_assertion(value_expr, path, fields, *rest, is_ref)
+            // Use dummy values for basic pattern assertion (no error collection)
+            let dummy_node = quote::format_ident!("__DUMMY_NODE");
+            generate_struct_match_assertion_with_path(
+                value_expr,
+                path,
+                fields,
+                *rest,
+                is_ref,
+                &[],
+                &dummy_node,
+            )
         }
         Pattern::Tuple { path, elements, .. } => {
             // Handle both plain tuples and enum variants
@@ -549,7 +672,9 @@ fn generate_pattern_assertion(
             // Slice pattern using Rust's native slice matching
             generate_slice_assertion(value_expr, elements, is_ref)
         }
-        Pattern::Comparison { op, expr: value, .. } => {
+        Pattern::Comparison {
+            op, expr: value, ..
+        } => {
             // Generate comparison assertions with clear error messages
             generate_comparison_assertion(value_expr, op, value, is_ref)
         }
@@ -583,7 +708,10 @@ fn generate_pattern_assertion(
             }
         }
         #[cfg(feature = "regex")]
-        Pattern::Regex { pattern: pattern_str, .. } => {
+        Pattern::Regex {
+            pattern: pattern_str,
+            ..
+        } => {
             // PERFORMANCE OPTIMIZATION: String literal patterns compile at macro expansion
             // This path handles: email: =~ r".*@example\.com"
             // The regex compiles once at expansion time, not at runtime
@@ -621,7 +749,9 @@ fn generate_pattern_assertion(
             }
         }
         #[cfg(feature = "regex")]
-        Pattern::Like { expr: pattern_expr, .. } => {
+        Pattern::Like {
+            expr: pattern_expr, ..
+        } => {
             // Runtime pattern matching via Like trait
             // This path handles: email: =~ my_pattern_var
             if is_ref {
@@ -686,7 +816,7 @@ fn generate_unit_variant_assertion_with_path(
                         let __error = ::assert_struct::__macro_support::ErrorContext {
                             field_path: #path_str.to_string(),
                             pattern_str: stringify!(#variant_path).to_string(),
-                            actual_value: "Some".to_string(),
+                            actual_value: format!("{:?}", #value_expr),
                             line_number: __line,
                             file_name: __file,
                             error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
@@ -728,7 +858,7 @@ fn generate_unit_variant_assertion_with_path(
                         let __error = ::assert_struct::__macro_support::ErrorContext {
                             field_path: #path_str.to_string(),
                             pattern_str: stringify!(#variant_path).to_string(),
-                            actual_value: "Some".to_string(),
+                            actual_value: format!("{:?}", #value_expr),
                             line_number: __line,
                             file_name: __file,
                             error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
@@ -860,6 +990,148 @@ fn generate_unit_variant_assertion(
                         stringify!(#path),
                         &#value_expr
                     ),
+                }
+            }
+        }
+    }
+}
+
+/// Generate struct assertion with error collection for multiple field failures
+fn generate_struct_match_assertion_with_collection(
+    value_expr: &TokenStream,
+    struct_path: &syn::Path,
+    fields: &Punctuated<FieldAssertion, Token![,]>,
+    rest: bool,
+    is_ref: bool,
+    field_path: &[String],
+    node_ident: &Ident,
+) -> TokenStream {
+    let field_names: Vec<_> = fields.iter().map(|f| &f.field_name).collect();
+    let field_path_str = field_path.join(".");
+
+    let rest_pattern = if rest {
+        quote! { , .. }
+    } else {
+        quote! {}
+    };
+
+    let field_assertions: Vec<_> = fields
+        .iter()
+        .map(|f| {
+            let field_name = &f.field_name;
+            let field_pattern = &f.pattern;
+            // Build path for this field
+            let mut new_path = field_path.to_vec();
+            new_path.push(field_name.to_string());
+            // Fields from destructuring are references
+            generate_pattern_assertion_with_collection(
+                &quote! { #field_name },
+                field_pattern,
+                true,
+                &new_path,
+            )
+        })
+        .collect();
+
+    if is_ref {
+        quote! {
+            #[allow(unreachable_patterns)]
+            match #value_expr {
+                #struct_path { #(#field_names),* #rest_pattern } => {
+                    #(#field_assertions)*
+                },
+                _ => {
+                    let __line = line!();
+                    let __file = file!();
+
+                    // Find the enum variant in the pattern
+                    let pattern_location = {
+                        let pattern_str = stringify!(#struct_path);
+                        let pattern_lines: Vec<&str> = __PATTERN.lines().collect();
+                        let mut location = None;
+
+                        for (line_idx, line) in pattern_lines.iter().enumerate() {
+                            if let Some(pos) = line.find(pattern_str) {
+                                // Just underline the variant name itself
+                                let end_pos = pos + pattern_str.len();
+
+                                location = Some(::assert_struct::__macro_support::PatternLocation {
+                                    line_in_pattern: line_idx,
+                                    start_col: pos,
+                                    end_col: end_pos,
+                                    field_name: String::new(),
+                                });
+                                break;
+                            }
+                        }
+                        location
+                    };
+
+                    let __error = ::assert_struct::__macro_support::ErrorContext {
+                        field_path: #field_path_str.to_string(),
+                        pattern_str: stringify!(#struct_path).to_string(),
+                        actual_value: format!("{:?}", #value_expr),
+                        line_number: __line,
+                        file_name: __file,
+                        error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                        full_pattern: Some(__PATTERN),
+                        pattern_location,
+                        expected_value: None,
+                        pattern_tree: Some(__PATTERN_TREE),
+                        error_node: Some(&#node_ident),
+                    };
+                    __errors.push(__error);
+                }
+            }
+        }
+    } else {
+        quote! {
+            #[allow(unreachable_patterns)]
+            match &#value_expr {
+                #struct_path { #(#field_names),* #rest_pattern } => {
+                    #(#field_assertions)*
+                },
+                _ => {
+                    let __line = line!();
+                    let __file = file!();
+
+                    // Find the enum variant in the pattern
+                    let pattern_location = {
+                        let pattern_str = stringify!(#struct_path);
+                        let pattern_lines: Vec<&str> = __PATTERN.lines().collect();
+                        let mut location = None;
+
+                        for (line_idx, line) in pattern_lines.iter().enumerate() {
+                            if let Some(pos) = line.find(pattern_str) {
+                                // Just underline the variant name itself
+                                let end_pos = pos + pattern_str.len();
+
+                                location = Some(::assert_struct::__macro_support::PatternLocation {
+                                    line_in_pattern: line_idx,
+                                    start_col: pos,
+                                    end_col: end_pos,
+                                    field_name: String::new(),
+                                });
+                                break;
+                            }
+                        }
+                        location
+                    };
+
+                    let __error = ::assert_struct::__macro_support::ErrorContext {
+                        field_path: #field_path_str.to_string(),
+                        pattern_str: stringify!(#struct_path).to_string(),
+                        actual_value: format!("{:?}", &#value_expr),
+                        line_number: __line,
+                        file_name: __file,
+                        error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                        full_pattern: Some(__PATTERN),
+                        pattern_location,
+                        expected_value: None,
+                        pattern_tree: Some(__PATTERN_TREE),
+                        error_node: Some(&#node_ident),
+                    };
+                    __errors.push(__error);
                 }
             }
         }
@@ -1011,62 +1283,6 @@ fn generate_struct_match_assertion_with_path(
     }
 }
 
-fn generate_struct_match_assertion(
-    value_expr: &TokenStream,
-    path: &syn::Path,
-    fields: &Punctuated<FieldAssertion, Token![,]>,
-    rest: bool,
-    is_ref: bool,
-) -> TokenStream {
-    let field_names: Vec<_> = fields.iter().map(|f| &f.field_name).collect();
-
-    let rest_pattern = if rest {
-        quote! { , .. }
-    } else {
-        quote! {}
-    };
-
-    let field_assertions: Vec<_> = fields
-        .iter()
-        .map(|f| {
-            let field_name = &f.field_name;
-            let field_pattern = &f.pattern;
-            // Fields from destructuring are references
-            generate_pattern_assertion(&quote! { #field_name }, field_pattern, true)
-        })
-        .collect();
-
-    if is_ref {
-        quote! {
-            #[allow(unreachable_patterns)]
-            match #value_expr {
-                #path { #(#field_names),* #rest_pattern } => {
-                    #(#field_assertions)*
-                },
-                _ => panic!(
-                    "Expected {}, got {:?}",
-                    stringify!(#path),
-                    #value_expr
-                ),
-            }
-        }
-    } else {
-        quote! {
-            #[allow(unreachable_patterns)]
-            match &#value_expr {
-                #path { #(#field_names),* #rest_pattern } => {
-                    #(#field_assertions)*
-                },
-                _ => panic!(
-                    "Expected {}, got {:?}",
-                    stringify!(#path),
-                    &#value_expr
-                ),
-            }
-        }
-    }
-}
-
 // Generate assertion for enum tuple variants
 fn generate_enum_tuple_assertion(
     value_expr: &TokenStream,
@@ -1110,7 +1326,10 @@ fn generate_enum_tuple_assertion(
     let element_assertions: Vec<_> = element_names
         .iter()
         .zip(elements)
-        .map(|(name, pattern)| generate_pattern_assertion(&quote! { #name }, pattern, true))
+        .map(|(name, pattern)| {
+            // Use the with_path version which supports tree-based formatting
+            generate_pattern_assertion_with_path(&quote! { #name }, pattern, true, &[])
+        })
         .collect();
 
     if is_ref {
@@ -1142,7 +1361,51 @@ fn generate_enum_tuple_assertion(
     }
 }
 
-/// Generate assertion for plain tuples.
+/// Generate assertion for plain tuples with path tracking.
+fn generate_plain_tuple_assertion_with_path(
+    value_expr: &TokenStream,
+    elements: &[Pattern],
+    is_ref: bool,
+    field_path: &[String],
+    _node_ident: &Ident,
+) -> TokenStream {
+    // Generate unique names to avoid conflicts
+    let element_names: Vec<_> = (0..elements.len())
+        .map(|i| quote::format_ident!("__tuple_elem_{}", i))
+        .collect();
+
+    let element_assertions: Vec<_> = element_names
+        .iter()
+        .zip(elements)
+        .enumerate()
+        .map(|(i, (name, pattern))| {
+            // Build path for this tuple element
+            let mut elem_path = field_path.to_vec();
+            // Add the index as a separate path component
+            elem_path.push(i.to_string());
+            generate_pattern_assertion_with_path(&quote! { #name }, pattern, true, &elem_path)
+        })
+        .collect();
+
+    // Generate the destructuring and assertions
+    if is_ref {
+        quote! {
+            {
+                let (#(#element_names),*) = #value_expr;
+                #(#element_assertions)*
+            }
+        }
+    } else {
+        quote! {
+            {
+                let (#(#element_names),*) = &#value_expr;
+                #(#element_assertions)*
+            }
+        }
+    }
+}
+
+/// Generate assertion for plain tuples (old version without path tracking).
 ///
 /// # Example
 /// ```text
@@ -1175,7 +1438,10 @@ fn generate_plain_tuple_assertion(
     let element_assertions: Vec<_> = element_names
         .iter()
         .zip(elements)
-        .map(|(name, pattern)| generate_pattern_assertion(&quote! { #name }, pattern, true))
+        .map(|(name, pattern)| {
+            // Use the with_path version which supports tree-based formatting
+            generate_pattern_assertion_with_path(&quote! { #name }, pattern, true, &[])
+        })
         .collect();
 
     quote! {
@@ -1219,7 +1485,9 @@ fn generate_slice_assertion(
                 let binding = quote::format_ident!("__elem_{}", i);
                 pattern_parts.push(quote! { #binding });
 
-                let assertion = generate_pattern_assertion(&quote! { #binding }, elem, true);
+                // Use the with_path version which supports tree-based formatting
+                let assertion =
+                    generate_pattern_assertion_with_path(&quote! { #binding }, elem, true, &[]);
                 bindings_and_assertions.push(assertion);
             }
         }
@@ -1379,8 +1647,8 @@ fn pattern_to_string(pattern: &Pattern) -> String {
     }
 }
 
-/// Generate comparison assertion with node reference for tree-based error messages
-fn generate_comparison_assertion_with_node(
+/// Generate comparison assertion with error collection
+fn generate_comparison_assertion_with_collection(
     value_expr: &TokenStream,
     op: &ComparisonOp,
     expected: &Expr,
@@ -1390,14 +1658,14 @@ fn generate_comparison_assertion_with_node(
     node_ident: &Ident,
 ) -> TokenStream {
     let field_path = path.join(".");
-    
+
     // Adjust for reference level
     let actual_expr = if is_ref {
         quote! { #value_expr }
     } else {
         quote! { &#value_expr }
     };
-    
+
     let comparison = if is_ref {
         match op {
             ComparisonOp::Less => quote! { #value_expr < &(#expected) },
@@ -1417,19 +1685,19 @@ fn generate_comparison_assertion_with_node(
             ComparisonOp::NotEqual => quote! { &#value_expr != &(#expected) },
         }
     };
-    
+
     let error_type = if matches!(op, ComparisonOp::Equal) {
         quote! { ::assert_struct::__macro_support::ErrorType::Equality }
     } else {
         quote! { ::assert_struct::__macro_support::ErrorType::Comparison }
     };
-    
+
     let expected_value = if matches!(op, ComparisonOp::Equal) {
         quote! { Some(format!("{:?}", #expected)) }
     } else {
         quote! { None }
     };
-    
+
     // Find pattern location
     let location_code = quote! {
         __PATTERN.find(#pattern_str).map(|pos| {
@@ -1445,13 +1713,13 @@ fn generate_comparison_assertion_with_node(
             }
         })
     };
-    
+
     quote! {
         if !(#comparison) {
             // Capture line number using proper spanning
             let __line = line!();
             let __file = file!();
-            
+
             // Build error context
             let mut __error = ::assert_struct::__macro_support::ErrorContext {
                 field_path: #field_path.to_string(),
@@ -1466,12 +1734,110 @@ fn generate_comparison_assertion_with_node(
                 pattern_tree: Some(__PATTERN_TREE),
                 error_node: Some(&#node_ident),
             };
-            
+
             // Add expected value for equality patterns
             if let Some(expected) = #expected_value {
                 __error.expected_value = Some(expected);
             }
-            
+
+            __errors.push(__error);
+        }
+    }
+}
+
+/// Generate comparison assertion with node reference for tree-based error messages
+fn generate_comparison_assertion_with_node(
+    value_expr: &TokenStream,
+    op: &ComparisonOp,
+    expected: &Expr,
+    is_ref: bool,
+    path: &[String],
+    pattern_str: &str,
+    node_ident: &Ident,
+) -> TokenStream {
+    let field_path = path.join(".");
+
+    // Adjust for reference level
+    let actual_expr = if is_ref {
+        quote! { #value_expr }
+    } else {
+        quote! { &#value_expr }
+    };
+
+    let comparison = if is_ref {
+        match op {
+            ComparisonOp::Less => quote! { #value_expr < &(#expected) },
+            ComparisonOp::LessEqual => quote! { #value_expr <= &(#expected) },
+            ComparisonOp::Greater => quote! { #value_expr > &(#expected) },
+            ComparisonOp::GreaterEqual => quote! { #value_expr >= &(#expected) },
+            ComparisonOp::Equal => quote! { #value_expr == &(#expected) },
+            ComparisonOp::NotEqual => quote! { #value_expr != &(#expected) },
+        }
+    } else {
+        match op {
+            ComparisonOp::Less => quote! { &#value_expr < &(#expected) },
+            ComparisonOp::LessEqual => quote! { &#value_expr <= &(#expected) },
+            ComparisonOp::Greater => quote! { &#value_expr > &(#expected) },
+            ComparisonOp::GreaterEqual => quote! { &#value_expr >= &(#expected) },
+            ComparisonOp::Equal => quote! { &#value_expr == &(#expected) },
+            ComparisonOp::NotEqual => quote! { &#value_expr != &(#expected) },
+        }
+    };
+
+    let error_type = if matches!(op, ComparisonOp::Equal) {
+        quote! { ::assert_struct::__macro_support::ErrorType::Equality }
+    } else {
+        quote! { ::assert_struct::__macro_support::ErrorType::Comparison }
+    };
+
+    let expected_value = if matches!(op, ComparisonOp::Equal) {
+        quote! { Some(format!("{:?}", #expected)) }
+    } else {
+        quote! { None }
+    };
+
+    // Find pattern location
+    let location_code = quote! {
+        __PATTERN.find(#pattern_str).map(|pos| {
+            let lines: Vec<&str> = __PATTERN[..pos].lines().collect();
+            let line_in_pattern = lines.len().saturating_sub(1);
+            let last_line_len = lines.last().map(|l| l.len()).unwrap_or(0);
+            let pattern_len = #pattern_str.len();
+            ::assert_struct::__macro_support::PatternLocation {
+                line_in_pattern,
+                start_col: last_line_len,
+                end_col: last_line_len + pattern_len,
+                field_name: String::new(),
+            }
+        })
+    };
+
+    quote! {
+        if !(#comparison) {
+            // Capture line number using proper spanning
+            let __line = line!();
+            let __file = file!();
+
+            // Build error context
+            let mut __error = ::assert_struct::__macro_support::ErrorContext {
+                field_path: #field_path.to_string(),
+                pattern_str: #pattern_str.to_string(),
+                actual_value: format!("{:?}", #actual_expr),
+                line_number: __line,
+                file_name: __file,
+                error_type: #error_type,
+                full_pattern: Some(__PATTERN),
+                pattern_location: #location_code,
+                expected_value: None,
+                pattern_tree: Some(__PATTERN_TREE),
+                error_node: Some(&#node_ident),
+            };
+
+            // Add expected value for equality patterns
+            if let Some(expected) = #expected_value {
+                __error.expected_value = Some(expected);
+            }
+
             panic!("{}", ::assert_struct::__macro_support::format_error(__error));
         }
     }
@@ -1557,8 +1923,78 @@ fn generate_enum_tuple_assertion_with_path(
         }
     }
 
-    // For other enum tuple variants, use the old version for now
-    generate_enum_tuple_assertion(value_expr, variant_path, elements, is_ref)
+    // For other enum tuple variants
+    let element_names: Vec<_> = (0..elements.len())
+        .map(|i| quote::format_ident!("__elem_{}", i))
+        .collect();
+
+    let element_assertions: Vec<_> = element_names
+        .iter()
+        .zip(elements)
+        .enumerate()
+        .map(|(i, (name, pattern))| {
+            // Build path for this tuple element
+            let mut elem_path = field_path.to_vec();
+            elem_path.push(i.to_string());
+            generate_pattern_assertion_with_path(&quote! { #name }, pattern, true, &elem_path)
+        })
+        .collect();
+
+    let field_path_str = field_path.join(".");
+
+    if is_ref {
+        quote! {
+            match #value_expr {
+                #variant_path(#(#element_names),*) => {
+                    #(#element_assertions)*
+                },
+                _ => {
+                    let __line = line!();
+                    let __file = file!();
+                    let __error = ::assert_struct::__macro_support::ErrorContext {
+                        field_path: #field_path_str.to_string(),
+                        pattern_str: stringify!(#variant_path).to_string(),
+                        actual_value: format!("{:?}", #value_expr),
+                        line_number: __line,
+                        file_name: __file,
+                        error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                        full_pattern: Some(__PATTERN),
+                        pattern_location: None,
+                        expected_value: None,
+                        pattern_tree: Some(__PATTERN_TREE),
+                        error_node: Some(&#node_ident),
+                    };
+                    panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+                }
+            }
+        }
+    } else {
+        quote! {
+            match &#value_expr {
+                #variant_path(#(#element_names),*) => {
+                    #(#element_assertions)*
+                },
+                _ => {
+                    let __line = line!();
+                    let __file = file!();
+                    let __error = ::assert_struct::__macro_support::ErrorContext {
+                        field_path: #field_path_str.to_string(),
+                        pattern_str: stringify!(#variant_path).to_string(),
+                        actual_value: format!("{:?}", &#value_expr),
+                        line_number: __line,
+                        file_name: __file,
+                        error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                        full_pattern: Some(__PATTERN),
+                        pattern_location: None,
+                        expected_value: None,
+                        pattern_tree: Some(__PATTERN_TREE),
+                        error_node: Some(&#node_ident),
+                    };
+                    panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+                }
+            }
+        }
+    }
 }
 
 /// Generate range assertion with enhanced error message
@@ -1661,6 +2097,124 @@ fn generate_range_assertion_with_path(
                 };
 
                 panic!("{}", ::assert_struct::__macro_support::format_error(__error));
+            }
+        }
+    }
+}
+
+/// Generate simple assertion with error collection
+fn generate_simple_assertion_with_collection(
+    value_expr: &TokenStream,
+    expected: &syn::Expr,
+    is_ref: bool,
+    path: &[String],
+    node_ident: &Ident,
+) -> TokenStream {
+    // Transform string literals for String comparison
+    let transformed = transform_expected_value(expected);
+    let field_path_str = path.join(".");
+    let expected_str = quote! { #expected }.to_string();
+
+    // Get the field name (last element of path)
+    let field_name = path.last().map(|s| s.as_str()).unwrap_or("");
+
+    // Generate code to find the field location in the pattern at runtime
+    let location_code = if !field_name.is_empty() && path.len() > 1 {
+        quote! {
+            {
+                let field_name = #field_name;
+                let pattern_lines: Vec<&str> = __PATTERN.lines().collect();
+                let mut location = None;
+
+                for (line_idx, line) in pattern_lines.iter().enumerate() {
+                    // Look for "field_name: " in the line
+                    if let Some(pos) = line.find(&format!("{}: ", field_name)) {
+                        let value_start = pos + field_name.len() + 2;
+                        // Find where the value ends (at comma or end of line)
+                        let rest_of_line = &line[value_start..];
+                        let mut value_end = value_start;
+
+                        // Find the comma that ends the field value, accounting for nested structures
+                        // Simple approach: look for brackets/parens and skip commas inside them
+                        let mut bracket_depth = 0;
+                        let mut paren_depth = 0;
+                        let mut found_end = false;
+
+                        for (i, ch) in rest_of_line.char_indices() {
+                            match ch {
+                                '[' => bracket_depth += 1,
+                                ']' => bracket_depth -= 1,
+                                '(' => paren_depth += 1,
+                                ')' => paren_depth -= 1,
+                                ',' if bracket_depth == 0 && paren_depth == 0 => {
+                                    value_end = value_start + i;
+                                    found_end = true;
+                                    break;
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        if !found_end {
+                            value_end = line.len();
+                        }
+
+                        location = Some(::assert_struct::__macro_support::PatternLocation {
+                            line_in_pattern: line_idx,
+                            start_col: value_start,
+                            end_col: value_end,
+                            field_name: field_name.to_string(),
+                        });
+                        break;
+                    }
+                }
+                location
+            }
+        }
+    } else {
+        quote! { None }
+    };
+
+    if is_ref {
+        quote! {
+            if #value_expr != &#transformed {
+                let __line = line!();
+                let __file = file!();
+                let __error = ::assert_struct::__macro_support::ErrorContext {
+                    field_path: #field_path_str.to_string(),
+                    pattern_str: #expected_str.to_string(),
+                    actual_value: format!("{:?}", #value_expr),
+                    line_number: __line,
+                    file_name: __file,
+                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
+                full_pattern: Some(__PATTERN),
+                pattern_location: #location_code,
+                expected_value: None,
+                pattern_tree: Some(__PATTERN_TREE),
+                error_node: Some(&#node_ident),
+                };
+                __errors.push(__error);
+            }
+        }
+    } else {
+        quote! {
+            if &#value_expr != &#transformed {
+                let __line = line!();
+                let __file = file!();
+                let __error = ::assert_struct::__macro_support::ErrorContext {
+                    field_path: #field_path_str.to_string(),
+                    pattern_str: #expected_str.to_string(),
+                    actual_value: format!("{:?}", &#value_expr),
+                    line_number: __line,
+                    file_name: __file,
+                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
+                full_pattern: Some(__PATTERN),
+                pattern_location: #location_code,
+                expected_value: None,
+                pattern_tree: Some(__PATTERN_TREE),
+                error_node: Some(&#node_ident),
+                };
+                __errors.push(__error);
             }
         }
     }

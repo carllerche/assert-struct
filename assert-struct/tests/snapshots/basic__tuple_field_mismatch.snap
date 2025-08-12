@@ -2,6 +2,11 @@
 source: assert-struct/tests/basic.rs
 expression: message
 ---
-assertion `left == right` failed
-  left: 50
- right: 60
+assert_struct! failed:
+
+   | TupleHolder {
+value mismatch:
+  --> `holder.data.0` (line 17)
+   |     data: (60, "test"),
+   |            ^^ actual: 50
+   | }

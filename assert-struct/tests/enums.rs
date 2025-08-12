@@ -374,7 +374,7 @@ fn test_nested_enum_struct_variant() {
 
 // Failure tests
 #[test]
-#[should_panic(expected = "Expected Ok, got Err")]
+#[should_panic(expected = "enum variant mismatch")]
 fn test_result_expected_ok_got_err() {
     let data = UserData {
         login_result: Err("Failed".to_string()),
@@ -416,7 +416,7 @@ fn test_enum_variant_mismatch() {
 }
 
 #[test]
-#[should_panic(expected = "assertion `left == right` failed")]
+#[should_panic(expected = "value mismatch")]
 fn test_tuple_enum_field_mismatch() {
     let msg = MessageQueue {
         current: Message::Complex(42, "wrong".to_string(), true),

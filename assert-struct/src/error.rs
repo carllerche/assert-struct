@@ -343,49 +343,38 @@ struct TreeFormatter {
     error_line: Option<usize>,
     error_col_start: Option<usize>,
     error_col_end: Option<usize>,
+    error_node: &'static PatternNode,
 }
 
 impl TreeFormatter {
-    fn new() -> Self {
+    fn new(error_node: &'static PatternNode) -> Self {
         Self {
             output: String::new(),
             current_line: 0,
             error_line: None,
             error_col_start: None,
             error_col_end: None,
+            error_node,
         }
     }
 
-    fn format_with_context(
-        &mut self,
-        root: &'static PatternNode,
-        error_node: &'static PatternNode,
-        context_lines: usize,
-    ) {
+    fn format_with_context(&mut self, root: &'static PatternNode, context_lines: usize) {
         // Find path to error node
-        let path = find_path_to_node(root, error_node, Vec::new());
+        let path = find_path_to_node(root, self.error_node, Vec::new());
 
         // Format the tree with the error highlighted
-        self.format_node(
-            root,
-            0,
-            std::ptr::eq(root, error_node),
-            &path,
-            0,
-            context_lines,
-        );
+        self.format_node(root, 0, &path, 0, context_lines);
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn format_node(
         &mut self,
         node: &'static PatternNode,
         depth: usize,
-        is_error: bool,
         error_path: &[String],
         path_index: usize,
         context_lines: usize,
     ) {
+        let is_error = std::ptr::eq(node, self.error_node);
         let indent = "    ".repeat(depth);
 
         match node {
@@ -413,43 +402,54 @@ impl TreeFormatter {
                         let end = (idx + context_lines + 1).min(fields.len());
 
                         if start > 0 {
-                            self.output.push_str(&format!("   | {}    ...\n", indent));
+                            self.output.push_str(&format!("   | {}...\n", indent));
                             self.current_line += 1;
                         }
 
                         for i in start..end {
                             let (field_name, field_node) = fields[i];
-                            let is_error_field = i == idx;
+                            // Skip rest pattern in field iteration
+                            if field_name == ".." {
+                                continue;
+                            }
                             self.format_field(
                                 field_name,
                                 field_node,
                                 depth + 1,
-                                is_error_field && path_index == error_path.len() - 1,
                                 error_path,
-                                if is_error_field {
-                                    path_index + 1
-                                } else {
-                                    usize::MAX
-                                },
+                                if i == idx { path_index + 1 } else { usize::MAX },
                                 context_lines,
                             );
                         }
 
-                        if end < fields.len() {
-                            self.output.push_str(&format!("   | {}    ...\n", indent));
+                        // Check if we need to show the rest pattern (if it exists and is in range)
+                        let has_rest = fields.iter().any(|(name, _)| name == &"..");
+                        if has_rest && end >= fields.len() - 1 {
+                            // Show rest pattern if it's at the end and in range
+                            self.output
+                                .push_str(&format!("   | {}..\n", "    ".repeat(depth + 1)));
+                            self.current_line += 1;
+                        } else if end < fields.len() && !has_rest {
+                            // Show ellipsis for pruned fields only if there's no rest pattern
+                            self.output.push_str(&format!("   | {}...\n", indent));
                             self.current_line += 1;
                         }
                     }
                 } else {
                     // Show all fields
                     for (field_name, field_node) in fields.iter() {
+                        // Handle rest pattern specially
+                        if field_name == &".." {
+                            // Don't format rest patterns as fields
+                            continue;
+                        }
+
                         let is_on_path =
                             path_index < error_path.len() && field_name == &error_path[path_index];
                         self.format_field(
                             field_name,
                             field_node,
                             depth + 1,
-                            is_on_path && is_error, // is_error already indicates if this field node is the error
                             error_path,
                             if is_on_path {
                                 path_index + 1
@@ -458,6 +458,13 @@ impl TreeFormatter {
                             },
                             context_lines,
                         );
+                    }
+
+                    // If there's a rest pattern, show it after the fields
+                    if fields.iter().any(|(name, _)| name == &"..") {
+                        self.output
+                            .push_str(&format!("   | {}..\n", "    ".repeat(depth + 1)));
+                        self.current_line += 1;
                     }
                 }
 
@@ -482,71 +489,119 @@ impl TreeFormatter {
                 self.output.push_str(&format!("{}[{}]", prefix, content));
             }
             PatternNode::Tuple { items } => {
-                let content = items
-                    .iter()
-                    .map(|item| self.format_inline(item))
-                    .collect::<Vec<_>>()
-                    .join(", ");
+                self.output.push('(');
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 {
+                        self.output.push_str(", ");
+                    }
 
-                if is_error {
-                    let line_start = self.output.lines().last().map(|l| l.len()).unwrap_or(0);
-                    self.error_col_start = Some(line_start);
-                    self.error_col_end = Some(line_start + content.len() + 2); // +2 for ()
-                    self.error_line = Some(self.current_line);
+                    // Check if this item is the error node
+                    let item_is_error = std::ptr::eq(*item, self.error_node);
+
+                    if item_is_error {
+                        // Mark the position before formatting this item
+                        // Get the current line's content to calculate column position
+                        let current_line_content = self.output.lines().last().unwrap_or("");
+                        self.error_col_start = Some(current_line_content.len());
+                        self.error_line = Some(self.current_line);
+                    }
+
+                    // Format the item inline
+                    let item_str = self.format_inline(item);
+                    self.output.push_str(&item_str);
+
+                    if item_is_error && self.error_col_start.is_some() {
+                        // Mark the end position after formatting this item
+                        let current_line_content = self.output.lines().last().unwrap_or("");
+                        self.error_col_end = Some(current_line_content.len());
+                    }
                 }
-
-                self.output.push_str(&format!("({})", content));
+                self.output.push(')');
             }
             PatternNode::Simple { value } => {
-                if is_error {
-                    let line_start = self.output.lines().last().map(|l| l.len()).unwrap_or(0);
-                    self.error_col_start = Some(line_start);
-                    self.error_col_end = Some(line_start + value.len());
+                if is_error && self.error_col_start.is_none() {
+                    // Only set position if not already set by format_field
+                    let current_line = self.output.lines().last().unwrap_or("");
+                    let col_start = current_line.len() - 5; // Subtract "   | " prefix
+                    self.error_col_start = Some(col_start);
+                    self.error_col_end = Some(col_start + value.len());
                     self.error_line = Some(self.current_line);
                 }
                 self.output.push_str(value);
             }
             PatternNode::Comparison { op, value } => {
-                let pattern = format!("{} {}", op, value);
-                if is_error {
-                    let line_start = self.output.lines().last().map(|l| l.len()).unwrap_or(0);
-                    self.error_col_start = Some(line_start);
-                    self.error_col_end = Some(line_start + pattern.len());
+                if is_error && self.error_col_start.is_none() {
+                    // Only set position if not already set by format_field
+                    // Calculate position BEFORE adding the pattern to output
+                    let current_line = self.output.lines().last().unwrap_or("");
+                    let base_col = current_line.len() - 5; // Subtract "   | " prefix
+
+                    // For equality patterns (== and !=), underline just the value part
+                    // For comparison patterns (<, >, <=, >=), underline the whole pattern
+                    if op == &"==" || op == &"!=" {
+                        // Skip the operator and space (e.g., "== " is 3 chars)
+                        let op_with_space_len = op.len() + 1;
+                        self.error_col_start = Some(base_col + op_with_space_len);
+                        self.error_col_end = Some(base_col + op_with_space_len + value.len());
+                    } else {
+                        self.error_col_start = Some(base_col);
+                        self.error_col_end = Some(base_col + op.len() + 1 + value.len());
+                    }
+
                     self.error_line = Some(self.current_line);
                 }
+                // Now add the pattern to output
+                let pattern = format!("{} {}", op, value);
                 self.output.push_str(&pattern);
             }
             PatternNode::Range { pattern } => {
-                if is_error {
-                    let line_start = self.output.lines().last().map(|l| l.len()).unwrap_or(0);
-                    self.error_col_start = Some(line_start);
-                    self.error_col_end = Some(line_start + pattern.len());
+                if is_error && self.error_col_start.is_none() {
+                    let current_line = self.output.lines().last().unwrap_or("");
+                    let col_start = current_line.len() - 5; // Subtract "   | " prefix
+                    self.error_col_start = Some(col_start);
+                    self.error_col_end = Some(col_start + pattern.len());
                     self.error_line = Some(self.current_line);
                 }
                 self.output.push_str(pattern);
             }
             PatternNode::Regex { pattern } => {
                 let full_pattern = format!("=~ {}", pattern);
-                if is_error {
-                    let line_start = self.output.lines().last().map(|l| l.len()).unwrap_or(0);
-                    self.error_col_start = Some(line_start);
-                    self.error_col_end = Some(line_start + full_pattern.len());
+                if is_error && self.error_col_start.is_none() {
+                    let current_line = self.output.lines().last().unwrap_or("");
+                    let col_start = current_line.len() - 5; // Subtract "   | " prefix
+                    self.error_col_start = Some(col_start);
+                    self.error_col_end = Some(col_start + full_pattern.len());
                     self.error_line = Some(self.current_line);
                 }
                 self.output.push_str(&full_pattern);
             }
             PatternNode::Like { expr } => {
                 let full_pattern = format!("=~ {}", expr);
-                if is_error {
-                    let line_start = self.output.lines().last().map(|l| l.len()).unwrap_or(0);
-                    self.error_col_start = Some(line_start);
-                    self.error_col_end = Some(line_start + full_pattern.len());
+                if is_error && self.error_col_start.is_none() {
+                    let current_line = self.output.lines().last().unwrap_or("");
+                    let col_start = current_line.len() - 5; // Subtract "   | " prefix
+                    self.error_col_start = Some(col_start);
+                    self.error_col_end = Some(col_start + full_pattern.len());
                     self.error_line = Some(self.current_line);
                 }
                 self.output.push_str(&full_pattern);
             }
             PatternNode::EnumVariant { path, args } => {
+                // For root-level enum variants, add the "   | " prefix
+                if depth == 0 {
+                    self.output.push_str("   | ");
+                }
+
+                // Mark position for error if this is the error node
+                if is_error {
+                    self.error_line = Some(self.current_line);
+                    // Position is relative to content after "   | " prefix
+                    self.error_col_start = Some(0);
+                    self.error_col_end = Some(path.len());
+                }
+
                 self.output.push_str(path);
+
                 if let Some(args) = args {
                     if !args.is_empty() {
                         self.output.push('(');
@@ -554,26 +609,31 @@ impl TreeFormatter {
                             if i > 0 {
                                 self.output.push_str(", ");
                             }
-                            // Pass is_error for the argument being the error node
-                            // (would need proper path tracking for enum variant args)
-                            self.format_node(
-                                arg,
-                                depth,
-                                false,
-                                error_path,
-                                path_index,
-                                context_lines,
-                            );
+                            // Format the argument node
+                            self.format_node(arg, depth, error_path, path_index, context_lines);
                         }
                         self.output.push(')');
+
+                        // Update end position if this is the error
+                        if is_error {
+                            let mut full_len = path.len() + 2; // Add 2 for "()"
+                            // Count arg lengths
+                            for arg in args.iter() {
+                                let arg_str = self.format_inline(arg);
+                                full_len += arg_str.len();
+                            }
+                            if args.len() > 1 {
+                                full_len += (args.len() - 1) * 2; // ", " between args
+                            }
+                            self.error_col_end = Some(full_len);
+                        }
                     }
                 }
 
-                if is_error {
-                    // Mark the whole enum variant as the error
-                    let _line_start = self.output.lines().last().map(|l| l.len()).unwrap_or(0);
-                    self.error_line = Some(self.current_line);
-                    // We'd need to track where we started to get proper col positions
+                // Add newline if at root level
+                if depth == 0 {
+                    self.output.push('\n');
+                    self.current_line += 1;
                 }
             }
             PatternNode::Rest => {
@@ -582,32 +642,83 @@ impl TreeFormatter {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn format_field(
         &mut self,
         name: &str,
         node: &'static PatternNode,
         depth: usize,
-        is_error: bool,
         error_path: &[String],
         path_index: usize,
         context_lines: usize,
     ) {
         let indent = "    ".repeat(depth);
-        self.output
-            .push_str(&format!("   | {}    {}: ", indent, name));
+        self.output.push_str(&format!("   | {}{}: ", indent, name));
 
-        let field_start_col = self.output.lines().last().map(|l| l.len() - 7).unwrap_or(0); // -7 for "   | "
+        // Check if this field's node contains the error node somewhere within it
+        let contains_error = node_contains(node, self.error_node);
 
-        self.format_node(node, depth, is_error, error_path, path_index, context_lines);
-        self.output.push_str(",\n");
-
-        if is_error && self.error_col_start.is_none() {
-            // If the error position wasn't set by the node itself, set it to the field value
-            self.error_col_start = Some(field_start_col + name.len() + 2); // +2 for ": "
+        // If this field contains the error, we need to handle it specially
+        if contains_error {
             self.error_line = Some(self.current_line);
+
+            // The prefix before the value (not including "   | " which is position 0)
+            let prefix_len = indent.len() + name.len() + 2; // indent + name + ": "
+
+            // If the error is in a tuple field, find the exact position
+            if let PatternNode::Tuple { items } = node {
+                self.output.push('(');
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 {
+                        self.output.push_str(", ");
+                    }
+
+                    let item_is_error = std::ptr::eq(*item, self.error_node);
+
+                    if item_is_error {
+                        // Calculate position from the start of the line
+                        let mut current_pos = prefix_len + 1; // +1 for '('
+                        // Add the length of previous items
+                        for j in 0..i {
+                            let prev_item_str = self.format_inline(items[j]);
+                            if j > 0 {
+                                current_pos += 2; // ", "
+                            }
+                            current_pos += prev_item_str.len();
+                        }
+                        self.error_col_start = Some(current_pos);
+                    }
+
+                    let item_str = self.format_inline(item);
+                    self.output.push_str(&item_str);
+
+                    if item_is_error {
+                        self.error_col_end = Some(self.error_col_start.unwrap() + item_str.len());
+                    }
+                }
+                self.output.push(')');
+            } else if std::ptr::eq(node, self.error_node) {
+                // The entire field value is the error
+                // For Comparison nodes, let format_node handle the position calculation
+                if !matches!(node, PatternNode::Comparison { .. }) {
+                    self.error_col_start = Some(prefix_len);
+                }
+                let value_start = self.output.len();
+                self.format_node(node, depth, error_path, path_index, context_lines);
+                let value_end = self.output.len();
+                // Only set end position if we set the start
+                if self.error_col_start == Some(prefix_len) {
+                    self.error_col_end = Some(prefix_len + (value_end - value_start));
+                }
+            } else {
+                // Some other container that has the error inside it
+                self.format_node(node, depth, error_path, path_index, context_lines);
+            }
+        } else {
+            // No error in this field, format normally
+            self.format_node(node, depth, error_path, path_index, context_lines);
         }
 
+        self.output.push_str(",\n");
         self.current_line += 1;
     }
 
@@ -661,6 +772,25 @@ impl TreeFormatter {
             end_col: self.error_col_end.unwrap_or(0),
             field_name: String::new(), // Would need to track this
         }
+    }
+}
+
+fn node_contains(root: &'static PatternNode, target: &'static PatternNode) -> bool {
+    if std::ptr::eq(root, target) {
+        return true;
+    }
+
+    match root {
+        PatternNode::Struct { fields, .. } => {
+            fields.iter().any(|(_, node)| node_contains(node, target))
+        }
+        PatternNode::EnumVariant {
+            args: Some(args), ..
+        } => args.iter().any(|arg| node_contains(arg, target)),
+        PatternNode::Slice { items, .. } | PatternNode::Tuple { items } => {
+            items.iter().any(|item| node_contains(item, target))
+        }
+        _ => false,
     }
 }
 
@@ -719,15 +849,82 @@ pub fn format_error_with_tree(
     error: ErrorContext,
     context_lines: usize,
 ) -> String {
-    let mut formatter = TreeFormatter::new();
-    formatter.format_with_context(root, error_node, context_lines);
+    let mut formatter = TreeFormatter::new(error_node);
+    formatter.format_with_context(root, context_lines);
 
     let location = formatter.get_error_location();
 
     // Build the full error message
     let mut result = String::from("assert_struct! failed:\n\n");
-    result.push_str(&formatter.output);
-    result.push('\n');
+
+    let lines: Vec<&str> = formatter.output.lines().collect();
+
+    // Check if this is a simple enum variant at root (single line)
+    let is_simple_enum = matches!(root, PatternNode::EnumVariant { .. }) && lines.len() == 1;
+
+    if !is_simple_enum {
+        // Build context for nested structures
+        let error_path = find_path_to_node(root, error_node, Vec::new());
+
+        // Check if we have a nested struct (not just a tuple/slice element)
+        let mut has_nested_struct = false;
+        if error_path.len() > 1 {
+            // Walk the path to see if we encounter nested structs
+            let mut current = root;
+            for path_component in error_path.iter().take(error_path.len() - 1) {
+                if let PatternNode::Struct { fields, .. } = current {
+                    for (field_name, field_node) in fields.iter() {
+                        if field_name == path_component {
+                            if matches!(field_node, PatternNode::Struct { .. }) {
+                                has_nested_struct = true;
+                            }
+                            current = field_node;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if has_nested_struct {
+            // We're in a nested structure, show the context
+            result.push_str("   | ");
+
+            // Show the root struct name
+            if let PatternNode::Struct { name, .. } = root {
+                result.push_str(name);
+                result.push_str(" { ... ");
+
+                // Find and show the immediate parent of the error
+                let mut current = root;
+                for path_component in error_path.iter().take(error_path.len() - 1) {
+                    if let PatternNode::Struct { fields, .. } = current {
+                        for (field_name, field_node) in fields.iter() {
+                            if field_name == path_component {
+                                if let PatternNode::Struct {
+                                    name: nested_name, ..
+                                } = field_node
+                                {
+                                    result.push_str(nested_name);
+                                    result.push_str(" {");
+                                    break;
+                                }
+                                current = field_node;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            result.push('\n');
+        } else {
+            // Not nested structs, just show the opening line
+            if !lines.is_empty() {
+                result.push_str(lines[0]);
+                result.push('\n');
+            }
+        }
+    }
 
     // Add error details
     result.push_str(&format!("{} mismatch:\n", error.error_type));
@@ -736,9 +933,18 @@ pub fn format_error_with_tree(
         error.field_path, error.line_number
     ));
 
-    // Add underline and actual value
-    if location.line_in_pattern < formatter.output.lines().count() {
+    // Add the specific error line with underline
+    if location.line_in_pattern < lines.len() {
+        // Show the line with the pattern
+        let error_line = lines[location.line_in_pattern];
+
+        // The error line already has "   | " prefix from the formatter
+        result.push_str(error_line);
+        result.push('\n');
+
+        // Add underline
         result.push_str("   | ");
+        // The start_col value already accounts for content after "   | " prefix
         for _ in 0..location.start_col {
             result.push(' ');
         }
@@ -762,6 +968,32 @@ pub fn format_error_with_tree(
                 }
                 result.push_str(" expected: ");
                 result.push_str(expected);
+                result.push('\n');
+            }
+        }
+
+        // Check if the next line is a rest pattern or ellipsis
+        if location.line_in_pattern + 1 < lines.len() {
+            let next_line = lines[location.line_in_pattern + 1];
+            let trimmed = next_line.trim_start().trim_start_matches("| ").trim();
+            if trimmed == ".." || trimmed == "..." {
+                result.push_str(next_line);
+                result.push('\n');
+            }
+        }
+    } else {
+        // If location wasn't properly set, just show the actual value
+        result.push_str("   |  actual: ");
+        result.push_str(&error.actual_value);
+        result.push('\n');
+    }
+
+    // Show the closing brace only for structs
+    if !is_simple_enum && lines.len() > 1 {
+        if let Some(last) = lines.last() {
+            // Only show if it's a closing brace
+            if last.contains('}') {
+                result.push_str(last);
                 result.push('\n');
             }
         }

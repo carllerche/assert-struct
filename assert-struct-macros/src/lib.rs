@@ -120,7 +120,9 @@ impl fmt::Display for Pattern {
             Pattern::Simple { expr, .. } => {
                 write!(f, "{}", expr_to_string(expr))
             }
-            Pattern::Struct { path, fields, rest, .. } => {
+            Pattern::Struct {
+                path, fields, rest, ..
+            } => {
                 write!(f, "{} {{ ", path_to_string(path))?;
                 for (i, field) in fields.iter().enumerate() {
                     if i > 0 {

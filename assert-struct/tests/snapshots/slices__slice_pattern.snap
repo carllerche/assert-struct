@@ -1,10 +1,13 @@
 ---
 source: assert-struct/tests/slices.rs
+assertion_line: 549
 expression: message
 ---
 assert_struct! failed:
 
+   | Data {
 value mismatch:
-  --> `data.values.[1]` (assert-struct/tests/slices_errors/slice_pattern.rs:13)
-  actual: 2
-  expected: 5
+  --> `data.values.[1]` (line 13)
+   |     values: &[1, 5, 3],
+   |  actual: 2
+   | }
