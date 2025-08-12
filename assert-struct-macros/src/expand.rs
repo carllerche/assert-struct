@@ -1,8 +1,8 @@
 use crate::{AssertStruct, ComparisonOp, FieldAssertion, Pattern};
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::quote;
+use quote::{quote, quote_spanned};
 use std::fmt::Write;
-use syn::{Expr, Token, punctuated::Punctuated};
+use syn::{Expr, Token, punctuated::Punctuated, spanned::Spanned};
 
 pub fn expand(assert: &AssertStruct) -> TokenStream {
     let value = &assert.value;
@@ -563,12 +563,13 @@ fn generate_pattern_assertion_with_path(
         }
         #[cfg(feature = "regex")]
         Pattern::Regex {
-            pattern: regex_str, ..
+            pattern: regex_str, span, ..
         } => {
             // Generate regex assertion with path tracking
             generate_regex_assertion_with_path(
                 value_expr,
                 regex_str,
+                *span,
                 is_ref,
                 path,
                 &pattern_str,
@@ -710,6 +711,7 @@ fn generate_pattern_assertion(
         #[cfg(feature = "regex")]
         Pattern::Regex {
             pattern: pattern_str,
+            span: pattern_span,
             ..
         } => {
             // PERFORMANCE OPTIMIZATION: String literal patterns compile at macro expansion
@@ -717,7 +719,7 @@ fn generate_pattern_assertion(
             // The regex compiles once at expansion time, not at runtime
             // We still use Like trait for consistency with the Like(Expr) path
             if is_ref {
-                quote! {
+                quote_spanned! {*pattern_span=>
                     {
                         use ::assert_struct::Like;
                         let re = ::regex::Regex::new(#pattern_str)
@@ -732,7 +734,7 @@ fn generate_pattern_assertion(
                     }
                 }
             } else {
-                quote! {
+                quote_spanned! {*pattern_span=>
                     {
                         use ::assert_struct::Like;
                         let re = ::regex::Regex::new(#pattern_str)
@@ -1714,7 +1716,8 @@ fn generate_comparison_assertion_with_collection(
         })
     };
 
-    quote! {
+    let span = expected.span();
+    quote_spanned! {span=>
         if !(#comparison) {
             // Capture line number using proper spanning
             let __line = line!();
@@ -1812,7 +1815,8 @@ fn generate_comparison_assertion_with_node(
         })
     };
 
-    quote! {
+    let span = expected.span();
+    quote_spanned! {span=>
         if !(#comparison) {
             // Capture line number using proper spanning
             let __line = line!();
@@ -2411,6 +2415,7 @@ fn generate_slice_assertion_with_path(
 fn generate_regex_assertion_with_path(
     value_expr: &TokenStream,
     pattern_str: &str,
+    span: proc_macro2::Span,
     is_ref: bool,
     path: &[String],
     full_pattern_str: &str,
@@ -2419,7 +2424,7 @@ fn generate_regex_assertion_with_path(
     let field_path_str = path.join(".");
 
     if is_ref {
-        quote! {
+        quote_spanned! {span=>
             {
                 use ::assert_struct::Like;
                 let re = ::regex::Regex::new(#pattern_str)
@@ -2445,7 +2450,7 @@ fn generate_regex_assertion_with_path(
             }
         }
     } else {
-        quote! {
+        quote_spanned! {span=>
             {
                 use ::assert_struct::Like;
                 let re = ::regex::Regex::new(#pattern_str)

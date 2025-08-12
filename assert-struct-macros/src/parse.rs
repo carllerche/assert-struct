@@ -206,10 +206,11 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
                 if let Ok(lit) = fork.parse::<syn::LitStr>() {
                     // Example: `email: =~ r".*@example\.com"`
                     // Compiles regex at macro expansion, fails early if invalid
-                    input.parse::<syn::LitStr>()?;
+                    let parsed_lit = input.parse::<syn::LitStr>()?;
                     return Ok(Pattern::Regex {
                         node_id: next_node_id(),
                         pattern: lit.value(),
+                        span: parsed_lit.span(),
                     });
                 } else {
                     // Example: `email: =~ email_pattern` where email_pattern is a variable

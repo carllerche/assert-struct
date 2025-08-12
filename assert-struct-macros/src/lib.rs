@@ -74,6 +74,7 @@ pub(crate) enum Pattern {
     Regex {
         node_id: usize,
         pattern: String, // String literal regex pattern (performance optimization)
+        span: proc_macro2::Span, // Store span for accurate error reporting
     },
     // Like pattern: =~ expr - arbitrary expression using Like trait
     #[cfg(feature = "regex")]
