@@ -314,22 +314,28 @@ pub fn format_multiple_errors(errors: Vec<ErrorContext>) -> String {
         return format_error(errors.into_iter().next().unwrap());
     }
 
-    let mut result = format!("assert_struct! failed: {} mismatches\n\n", errors.len());
+    // Format multiple errors by showing each error using the same logic as single errors
+    let mut result = format!("assert_struct! failed: {} mismatches\n", errors.len());
 
-    for (i, error) in errors.iter().enumerate() {
+    for (i, error) in errors.into_iter().enumerate() {
         if i > 0 {
-            result.push('\n');
+            result.push_str("\n---\n");
         }
-        let truncated_path = truncate_path(&error.field_path, 60);
-        result.push_str(&format!(
-            "{} mismatch:\n  --> `{}` ({}:{})\n  actual: {}\n  expected: {}\n",
-            error.error_type,
-            truncated_path,
-            error.file_name,
-            error.line_number,
-            error.actual_value,
-            error.pattern_str
-        ));
+
+        // Format each error using the same logic as single errors
+        let single_error = format_error(error);
+
+        // Strip the "assert_struct! failed:" prefix since we already have one
+        let error_body = if single_error.starts_with("assert_struct! failed:") {
+            single_error
+                .strip_prefix("assert_struct! failed:")
+                .unwrap()
+                .trim_start()
+        } else {
+            &single_error
+        };
+
+        result.push_str(error_body);
     }
 
     result

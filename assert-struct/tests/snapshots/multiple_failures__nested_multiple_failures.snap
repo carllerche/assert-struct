@@ -1,0 +1,27 @@
+---
+source: assert-struct/tests/multiple_failures.rs
+expression: message
+---
+assert_struct! failed: 3 mismatches
+| Account { ... Profile {
+value mismatch:
+  --> `account.profile.bio` (line 26)
+   |         bio: "A detailed bio that is much longer",
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ actual: "Hello"
+   | }
+
+---
+| Account { ... Profile {
+value mismatch:
+  --> `account.profile.verified` (line 26)
+   |         verified: true,
+   |                   ^^^^ actual: false
+   | }
+
+---
+| Account { ... Profile {
+comparison mismatch:
+  --> `account.profile.followers` (line 31)
+   |         followers: > 100,
+   |                    ^^^^^ actual: 5
+   | }

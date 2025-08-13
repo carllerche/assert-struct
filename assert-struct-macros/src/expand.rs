@@ -449,6 +449,44 @@ fn generate_pattern_assertion_with_collection(
             &pattern_str,
             &node_ident,
         ),
+        Pattern::Tuple {
+            path: variant_path,
+            elements,
+            ..
+        } => {
+            // Handle enum tuples with error collection
+            if let Some(vpath) = variant_path {
+                if elements.is_empty() {
+                    // Unit variant like None - still use path version as it doesn't have nested errors
+                    generate_unit_variant_assertion_with_path(
+                        value_expr,
+                        vpath,
+                        is_ref,
+                        path,
+                        &node_ident,
+                    )
+                } else {
+                    // Tuple variant with data - use collection version
+                    generate_enum_tuple_assertion_with_collection(
+                        value_expr,
+                        vpath,
+                        elements,
+                        is_ref,
+                        path,
+                        &node_ident,
+                    )
+                }
+            } else {
+                // Plain tuple - for now use path version
+                generate_plain_tuple_assertion_with_path(
+                    value_expr,
+                    elements,
+                    is_ref,
+                    path,
+                    &node_ident,
+                )
+            }
+        }
         // For now, use immediate panic for other patterns - can implement collection later
         _ => {
             // Note: this doesn't collect errors but ensures compilation
@@ -1849,7 +1887,96 @@ fn generate_comparison_assertion_with_node(
     }
 }
 
-/// Generate comparison assertion with enhanced error message
+/// Generate assertion for enum tuple variants with error collection
+fn generate_enum_tuple_assertion_with_collection(
+    value_expr: &TokenStream,
+    variant_path: &syn::Path,
+    elements: &[Pattern],
+    is_ref: bool,
+    field_path: &[String],
+    node_ident: &Ident,
+) -> TokenStream {
+    // Special handling for Some with pattern inside
+    if is_option_some_path(variant_path) && elements.len() == 1 {
+        // Build path for the Some content
+        let mut inner_path = field_path.to_vec();
+        inner_path.push("Some".to_string());
+
+        let inner_assertion = generate_pattern_assertion_with_collection(
+            &quote! { inner },
+            &elements[0],
+            true, // inner is a reference from the match
+            &inner_path,
+        );
+
+        let field_path_str = field_path.join(".");
+
+        if is_ref {
+            return quote! {
+                match #value_expr {
+                    Some(inner) => {
+                        #inner_assertion
+                    },
+                    None => {
+                        let __line = line!();
+                        let __file = file!();
+                        let __error = ::assert_struct::__macro_support::ErrorContext {
+                            field_path: #field_path_str.to_string(),
+                            pattern_str: "Some(...)".to_string(),
+                            actual_value: "None".to_string(),
+                            line_number: __line,
+                            file_name: __file,
+                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                            full_pattern: Some(__PATTERN),
+                            pattern_location: None,
+                            expected_value: None,
+                            pattern_tree: Some(__PATTERN_TREE),
+                            error_node: Some(&#node_ident),
+                        };
+                        __errors.push(__error);
+                    }
+                }
+            };
+        } else {
+            return quote! {
+                match &#value_expr {
+                    Some(inner) => {
+                        #inner_assertion
+                    },
+                    None => {
+                        let __line = line!();
+                        let __file = file!();
+                        let __error = ::assert_struct::__macro_support::ErrorContext {
+                            field_path: #field_path_str.to_string(),
+                            pattern_str: "Some(...)".to_string(),
+                            actual_value: "None".to_string(),
+                            line_number: __line,
+                            file_name: __file,
+                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                            full_pattern: Some(__PATTERN),
+                            pattern_location: None,
+                            expected_value: None,
+                            pattern_tree: Some(__PATTERN_TREE),
+                            error_node: Some(&#node_ident),
+                        };
+                        __errors.push(__error);
+                    }
+                }
+            };
+        }
+    }
+
+    // For other enum variants, delegate to the path version for now
+    generate_enum_tuple_assertion_with_path(
+        value_expr,
+        variant_path,
+        elements,
+        is_ref,
+        field_path,
+        node_ident,
+    )
+}
+
 /// Generate assertion for enum tuple variants with path tracking
 fn generate_enum_tuple_assertion_with_path(
     value_expr: &TokenStream,

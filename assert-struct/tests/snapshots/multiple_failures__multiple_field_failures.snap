@@ -1,0 +1,19 @@
+---
+source: assert-struct/tests/multiple_failures.rs
+expression: message
+---
+assert_struct! failed: 2 mismatches
+| User {
+comparison mismatch:
+  --> `user.age` (line 22)
+   |     age: > 18,
+   |          ^^^^ actual: 17
+   | }
+
+---
+| User {
+value mismatch:
+  --> `user.email` (line 20)
+   |     email: "alice@example.com",
+   |            ^^^^^^^^^^^^^^^^^^^ actual: "alice@wrong.com"
+   | }

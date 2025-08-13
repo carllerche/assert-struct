@@ -553,11 +553,14 @@ pub mod __macro_support {
 /// ## Basic String Pattern Matching
 ///
 /// ```
+/// # #[cfg(feature = "regex")]
+/// # {
 /// use assert_struct::Like;
 ///
 /// // Using Like trait directly
 /// let text = "hello@example.com";
 /// assert!(text.like(&r".*@example\.com"));
+/// # }
 /// ```
 ///
 /// ## Custom Implementation
@@ -587,10 +590,13 @@ pub trait Like<Rhs = Self> {
     /// # Examples
     ///
     /// ```
+    /// # #[cfg(feature = "regex")]
+    /// # {
     /// use assert_struct::Like;
     ///
     /// let s = "test123";
     /// assert!(s.like(&r"\w+\d+"));
+    /// # }
     /// ```
     fn like(&self, other: &Rhs) -> bool;
 }

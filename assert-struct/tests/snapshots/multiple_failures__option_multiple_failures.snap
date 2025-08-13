@@ -1,0 +1,19 @@
+---
+source: assert-struct/tests/multiple_failures.rs
+expression: message
+---
+assert_struct! failed: 2 mismatches
+| Settings {
+value mismatch:
+  --> `settings.theme.Some` (line 17)
+   |     theme: Some("dark"),
+   |                 ^^^^^^ actual: "light"
+   | }
+
+---
+| Settings {
+comparison mismatch:
+  --> `settings.font_size.Some` (line 19)
+   |     font_size: Some(> 12),
+   |                     ^^^^ actual: 10
+   | }
