@@ -320,28 +320,154 @@ pub fn format_multiple_errors(errors: Vec<ErrorContext>) -> String {
         return format_error(errors.into_iter().next().unwrap());
     }
 
-    // Format multiple errors by showing each error using the same logic as single errors
-    let mut result = format!("assert_struct! failed: {} mismatches\n", errors.len());
+    // Group errors by their parent structure
+    let mut grouped_errors: Vec<(String, Vec<ErrorContext>)> = Vec::new();
 
-    for (i, error) in errors.into_iter().enumerate() {
-        if i > 0 {
+    for error in errors {
+        // Extract the parent path (everything except the last field)
+        let path_parts: Vec<&str> = error.field_path.split('.').collect();
+
+        // Special handling for Option/Result/enum patterns - group by the containing struct
+        // E.g., "settings.theme.Some" should be grouped with "settings" not "settings.theme"
+        let parent_path = if path_parts.len() > 1 {
+            let last_part = path_parts[path_parts.len() - 1];
+            // Check if the last part is an enum variant (Some, None, Ok, Err, or PascalCase)
+            let is_enum_variant = last_part == "Some"
+                || last_part == "None"
+                || last_part == "Ok"
+                || last_part == "Err"
+                || (last_part.chars().next().map_or(false, |c| c.is_uppercase()));
+
+            if is_enum_variant && path_parts.len() > 2 {
+                // Group by the struct containing the Option/Result field
+                path_parts[..path_parts.len() - 2].join(".")
+            } else {
+                path_parts[..path_parts.len() - 1].join(".")
+            }
+        } else {
+            String::new()
+        };
+
+        // Find or create group for this parent path
+        if let Some(group) = grouped_errors
+            .iter_mut()
+            .find(|(path, _)| path == &parent_path)
+        {
+            group.1.push(error);
+        } else {
+            grouped_errors.push((parent_path, vec![error]));
+        }
+    }
+
+    let total_errors: usize = grouped_errors.iter().map(|(_, errs)| errs.len()).sum();
+    let mut result = format!("assert_struct! failed: {} mismatches\n", total_errors);
+
+    for (group_idx, (parent_path, group_errors)) in grouped_errors.into_iter().enumerate() {
+        if group_idx > 0 {
             result.push_str("\n---\n");
         }
 
-        // Format each error using the same logic as single errors
-        let single_error = format_error(error);
+        // Determine the opening context based on the first error in the group
+        if let Some(first_error) = group_errors.first() {
+            // Build the opening breadcrumb
+            if let Some(full_pattern) = first_error.full_pattern {
+                let pattern_lines: Vec<&str> = full_pattern.lines().collect();
+                if !pattern_lines.is_empty() {
+                    // Get the struct name and show opening
+                    result.push_str("| ");
 
-        // Strip the "assert_struct! failed:" prefix since we already have one
-        let error_body = if single_error.starts_with("assert_struct! failed:") {
-            single_error
-                .strip_prefix("assert_struct! failed:")
-                .unwrap()
-                .trim_start()
+                    // For nested structures, show the breadcrumb
+                    let path_parts: Vec<&str> = first_error.field_path.split('.').collect();
+                    if path_parts.len() > 2 {
+                        // Show breadcrumb like "User { ... Profile {"
+                        if let Some(first_line) = pattern_lines.first() {
+                            if let Some(brace_pos) = first_line.find('{') {
+                                result.push_str(&first_line[..=brace_pos]);
+
+                                // Add intermediate context if deeply nested
+                                let parent_parts: Vec<&str> = parent_path.split('.').collect();
+                                if parent_parts.len() > 1 {
+                                    result.push_str(" ... ");
+                                    // Find the parent struct name in the pattern
+                                    for line in pattern_lines.iter() {
+                                        let trimmed = line.trim();
+                                        if trimmed.contains(':') && trimmed.contains('{') {
+                                            if let Some(colon_pos) = trimmed.find(':') {
+                                                let field_name = trimmed[..colon_pos].trim();
+                                                if parent_parts.last() == Some(&field_name) {
+                                                    // Found the parent field, extract struct name
+                                                    let after_colon =
+                                                        &trimmed[colon_pos + 1..].trim();
+                                                    if let Some(brace_pos) = after_colon.find('{') {
+                                                        result.push_str(&after_colon[..=brace_pos]);
+                                                    }
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Simple case - just show the root struct
+                        if let Some(first_line) = pattern_lines.first() {
+                            result.push_str(first_line);
+                        }
+                    }
+                    result.push('\n');
+                }
+            }
+        }
+
+        // Format each error in the group
+        for (i, error) in group_errors.into_iter().enumerate() {
+            if i > 0 {
+                // Add blank line between errors in same group for readability
+            }
+
+            // Format the error details without the structure context
+
+            result.push_str(&format!("{} mismatch:\n", error.error_type));
+            result.push_str(&format!(
+                "  --> `{}` (line {})\n",
+                error.field_path, error.line_number
+            ));
+
+            // Show the pattern line with the error
+            if let Some(full_pattern) = error.full_pattern {
+                if let Some(location) = error.pattern_location {
+                    let pattern_lines: Vec<&str> = full_pattern.lines().collect();
+                    if location.line_in_pattern < pattern_lines.len() {
+                        let pattern_line = pattern_lines[location.line_in_pattern];
+                        result.push_str("   | ");
+                        result.push_str(pattern_line);
+                        result.push('\n');
+
+                        // Add underline
+                        result.push_str("   | ");
+                        for _ in 0..location.start_col {
+                            result.push(' ');
+                        }
+                        let underline_len = location.end_col.saturating_sub(location.start_col);
+                        for _ in 0..underline_len {
+                            result.push('^');
+                        }
+                        result.push_str(" actual: ");
+                        result.push_str(&error.actual_value);
+                        result.push('\n');
+                    }
+                }
+            }
+        }
+
+        // Add closing brace
+        let path_parts: Vec<&str> = parent_path.split('.').collect();
+        if path_parts.len() > 1 {
+            result.push_str("   | } ... }");
         } else {
-            &single_error
-        };
-
-        result.push_str(error_body);
+            result.push_str("   | }");
+        }
     }
 
     result

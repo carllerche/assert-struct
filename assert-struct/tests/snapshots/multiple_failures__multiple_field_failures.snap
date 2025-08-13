@@ -8,10 +8,6 @@ comparison mismatch:
   --> `user.age` (line 22)
    |     age: > 18,
    |          ^^^^ actual: 17
-   | }
-
----
-| User {
 value mismatch:
   --> `user.email` (line 23)
    |     email: "alice@example.com",

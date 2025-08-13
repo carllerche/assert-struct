@@ -6,12 +6,6 @@ assert_struct! failed: 2 mismatches
 | Settings {
 value mismatch:
   --> `settings.theme.Some` (line 18)
-   |     theme: Some("dark"),
-   |                 ^^^^^^ actual: "light"
-   | }
-
----
-| Settings {
 comparison mismatch:
   --> `settings.font_size.Some` (line 19)
    |     font_size: Some(> 12),
