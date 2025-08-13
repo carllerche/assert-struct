@@ -1088,7 +1088,7 @@ fn generate_struct_match_assertion_with_collection(
                 true,
                 &new_path,
             );
-            
+
             // Wrap the assertion with the span of the field pattern if available
             if let Some(span) = get_pattern_span(field_pattern) {
                 quote_spanned! {span=> #assertion }

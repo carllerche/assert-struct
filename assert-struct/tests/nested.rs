@@ -69,7 +69,32 @@ fn test_nested_struct_partial() {
     );
 }
 
-error_message_test!("nested_errors/nested_field_mismatch.rs", nested_field_mismatch);
+#[test]
+#[should_panic(expected = "person.address.city")]
+fn test_nested_field_mismatch() {
+    let person = Person {
+        name: "Charlie".to_string(),
+        age: 35,
+        address: Address {
+            street: "789 Elm St".to_string(),
+            city: "Capital City".to_string(),
+            zip: 99999,
+        },
+    };
+
+    assert_struct!(
+        person,
+        Person {
+            name: "Charlie",
+            age: 35,
+            address: Address {
+                street: "789 Elm St",
+                city: "Wrong City",
+                zip: 99999,
+            },
+        }
+    );
+}
 
 error_message_test!("nested_errors/nested_comparison.rs", nested_comparison);
 
@@ -123,6 +148,55 @@ fn test_deeply_nested_with_comparisons() {
     });
 }
 
-error_message_test!("nested_errors/deeply_nested_comparison_failure.rs", deeply_nested_comparison_failure);
+error_message_test!(
+    "nested_errors/deeply_nested_comparison_failure.rs",
+    deeply_nested_comparison_failure
+);
 
-error_message_test!("nested_errors/deeply_nested_range_failure.rs", deeply_nested_range_failure);
+error_message_test!(
+    "nested_errors/deeply_nested_range_failure.rs",
+    deeply_nested_range_failure
+);
+
+// ============================================================================
+// Comprehensive Deeply Nested Pattern Tests
+// ============================================================================
+
+// Test all pattern types at third level of nesting to ensure line numbers are correct
+error_message_test!(
+    "nested_errors/deeply_nested_value_mismatch.rs",
+    deeply_nested_value_mismatch
+);
+error_message_test!(
+    "nested_errors/deeply_nested_equality_pattern.rs",
+    deeply_nested_equality_pattern
+);
+error_message_test!(
+    "nested_errors/deeply_nested_not_equal_pattern.rs",
+    deeply_nested_not_equal_pattern
+);
+error_message_test!(
+    "nested_errors/deeply_nested_less_than.rs",
+    deeply_nested_less_than
+);
+error_message_test!(
+    "nested_errors/deeply_nested_greater_equal.rs",
+    deeply_nested_greater_equal
+);
+error_message_test!(
+    "nested_errors/deeply_nested_slice_pattern.rs",
+    deeply_nested_slice_pattern
+);
+error_message_test!(
+    "nested_errors/deeply_nested_option_pattern.rs",
+    deeply_nested_option_pattern
+);
+error_message_test!(
+    "nested_errors/deeply_nested_tuple_pattern.rs",
+    deeply_nested_tuple_pattern
+);
+#[cfg(feature = "regex")]
+error_message_test!(
+    "nested_errors/deeply_nested_regex_pattern.rs",
+    deeply_nested_regex_pattern
+);

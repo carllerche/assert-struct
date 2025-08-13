@@ -1,0 +1,13 @@
+---
+source: assert-struct/tests/nested.rs
+expression: message
+---
+assert_struct! failed:
+
+   | System { ... Server {
+equality mismatch:
+  --> `system.server.database.version` (line 38)
+   |             version: == 6,
+   |                         ^ actual: 5
+   |                           expected: 6
+   | } ... }

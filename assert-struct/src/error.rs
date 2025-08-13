@@ -1022,7 +1022,7 @@ pub fn format_error_with_tree(
                 }
             }
         }
-        
+
         if has_nested_struct {
             // Show balanced closing for nested structures
             result.push_str("   | } ... }");

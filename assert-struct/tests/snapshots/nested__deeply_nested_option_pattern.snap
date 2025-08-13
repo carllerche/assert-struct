@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/nested.rs
+expression: message
+---
+assert_struct! failed:
+
+   | Deployment { ... Environment {
+value mismatch:
+  --> `deploy.env.settings.debug.Some` (line 38)
+   |             debug: Some(true),
+   |                         ^^^^ actual: false
+   | } ... }
