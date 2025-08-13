@@ -28,6 +28,10 @@ error_message_test!(
     "multiple_failures_errors/single_failure_unchanged.rs",
     single_failure_unchanged
 );
+error_message_test!(
+    "multiple_failures_errors/mixed_level_failures.rs",
+    mixed_level_failures
+);
 
 // Test that all passing assertions still work
 #[test]

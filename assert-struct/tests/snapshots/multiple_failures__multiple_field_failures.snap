@@ -3,7 +3,7 @@ source: assert-struct/tests/multiple_failures.rs
 expression: message
 ---
 assert_struct! failed: 2 mismatches
-| User {
+   | User {
 comparison mismatch:
   --> `user.age` (line 22)
    |     age: > 18,
@@ -12,4 +12,4 @@ value mismatch:
   --> `user.email` (line 23)
    |     email: "alice@example.com",
    |            ^^^^^^^^^^^^^^^^^^^ actual: "alice@wrong.com"
-   | }
+   | } ... }

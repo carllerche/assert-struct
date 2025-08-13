@@ -1,0 +1,16 @@
+---
+source: assert-struct/tests/multiple_failures.rs
+expression: message
+---
+assert_struct! failed: 2 mismatches
+   | User {
+value mismatch:
+  --> `user.age` (line 32)
+   |     age: 30,
+   |          ^^ actual: 25
+   | address: Address {
+value mismatch:
+  --> `user.address.city` (line 36)
+   |     city: "Shelbyville",
+   |           ^^^^^^^^^^^^^ actual: "Springfield"
+   | } ... }
