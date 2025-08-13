@@ -847,7 +847,7 @@ fn generate_pattern_assertion(
     }
 }
 
-// Generate assertion for unit variants like None with path tracking
+// Generate assertion for unit variants with path tracking
 fn generate_unit_variant_assertion_with_path(
     value_expr: &TokenStream,
     variant_path: &syn::Path,
@@ -856,199 +856,86 @@ fn generate_unit_variant_assertion_with_path(
     node_ident: &Ident,
 ) -> TokenStream {
     let path_str = field_path.join(".");
-    let variant_str = quote! { #variant_path }.to_string();
 
-    // Special handling for Option/Result unit variants
-    let is_option_none = variant_str == "None";
-    let is_result_err = variant_str == "Err";
-
-    if is_option_none || is_result_err {
-        // These get special error messages
-        if is_ref {
-            quote! {
-                match #value_expr {
-                    #variant_path => {},
-                    Some(_) => {
-                        let __line = line!();
-                        let __file = file!();
-                        let __error = ::assert_struct::__macro_support::ErrorContext {
-                            field_path: #path_str.to_string(),
-                            pattern_str: stringify!(#variant_path).to_string(),
-                            actual_value: format!("{:?}", #value_expr),
-                            line_number: __line,
-                            file_name: __file,
-                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-                            full_pattern: Some(__PATTERN),
-                            pattern_location: None,
-                            expected_value: None,
-                            pattern_tree: Some(__PATTERN_TREE),
-                            error_node: Some(&#node_ident),
-                        };
-                        panic!("{}", ::assert_struct::__macro_support::format_error(__error));
-                    }
-                    _ => {
-                        let __line = line!();
-                        let __file = file!();
-                        let __error = ::assert_struct::__macro_support::ErrorContext {
-                            field_path: #path_str.to_string(),
-                            pattern_str: stringify!(#variant_path).to_string(),
-                            actual_value: format!("{:?}", #value_expr),
-                            line_number: __line,
-                            file_name: __file,
-                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-                            full_pattern: Some(__PATTERN),
-                            pattern_location: None,
-                            expected_value: None,
-                            pattern_tree: Some(__PATTERN_TREE),
-                            error_node: Some(&#node_ident),
-                        };
-                        panic!("{}", ::assert_struct::__macro_support::format_error(__error));
-                    }
-                }
-            }
-        } else {
-            quote! {
-                match &#value_expr {
-                    #variant_path => {},
-                    Some(_) => {
-                        let __line = line!();
-                        let __file = file!();
-                        let __error = ::assert_struct::__macro_support::ErrorContext {
-                            field_path: #path_str.to_string(),
-                            pattern_str: stringify!(#variant_path).to_string(),
-                            actual_value: format!("{:?}", #value_expr),
-                            line_number: __line,
-                            file_name: __file,
-                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-                            full_pattern: Some(__PATTERN),
-                            pattern_location: None,
-                            expected_value: None,
-                            pattern_tree: Some(__PATTERN_TREE),
-                            error_node: Some(&#node_ident),
-                        };
-                        panic!("{}", ::assert_struct::__macro_support::format_error(__error));
-                    }
-                    _ => {
-                        let __line = line!();
-                        let __file = file!();
-                        let __error = ::assert_struct::__macro_support::ErrorContext {
-                            field_path: #path_str.to_string(),
-                            pattern_str: stringify!(#variant_path).to_string(),
-                            actual_value: format!("{:?}", &#value_expr),
-                            line_number: __line,
-                            file_name: __file,
-                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-                            full_pattern: Some(__PATTERN),
-                            pattern_location: None,
-                            expected_value: None,
-                            pattern_tree: Some(__PATTERN_TREE),
-                            error_node: Some(&#node_ident),
-                        };
-                        panic!("{}", ::assert_struct::__macro_support::format_error(__error));
-                    }
+    // Generic handling for all enum unit variants
+    if is_ref {
+        quote! {
+            match #value_expr {
+                #variant_path => {},
+                _ => {
+                    let __line = line!();
+                    let __file = file!();
+                    let __error = ::assert_struct::__macro_support::ErrorContext {
+                        field_path: #path_str.to_string(),
+                        pattern_str: stringify!(#variant_path).to_string(),
+                        actual_value: format!("{:?}", #value_expr),
+                        line_number: __line,
+                        file_name: __file,
+                        error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                        full_pattern: Some(__PATTERN),
+                        pattern_location: None,
+                        expected_value: None,
+                        pattern_tree: Some(__PATTERN_TREE),
+                        error_node: Some(&#node_ident),
+                    };
+                    panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                 }
             }
         }
     } else {
-        // General unit variant
-        if is_ref {
-            quote! {
-                match #value_expr {
-                    #variant_path => {},
-                    _ => {
-                        let __line = line!();
-                        let __file = file!();
-                        let __error = ::assert_struct::__macro_support::ErrorContext {
-                            field_path: #path_str.to_string(),
-                            pattern_str: stringify!(#variant_path).to_string(),
-                            actual_value: format!("{:?}", #value_expr),
-                            line_number: __line,
-                            file_name: __file,
-                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-                            full_pattern: Some(__PATTERN),
-                            pattern_location: None,
-                            expected_value: None,
-                            pattern_tree: Some(__PATTERN_TREE),
-                            error_node: Some(&#node_ident),
-                        };
-                        panic!("{}", ::assert_struct::__macro_support::format_error(__error));
-                    }
-                }
-            }
-        } else {
-            quote! {
-                match &#value_expr {
-                    #variant_path => {},
-                    _ => {
-                        let __line = line!();
-                        let __file = file!();
-                        let __error = ::assert_struct::__macro_support::ErrorContext {
-                            field_path: #path_str.to_string(),
-                            pattern_str: stringify!(#variant_path).to_string(),
-                            actual_value: format!("{:?}", &#value_expr),
-                            line_number: __line,
-                            file_name: __file,
-                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-                            full_pattern: Some(__PATTERN),
-                            pattern_location: None,
-                            expected_value: None,
-                            pattern_tree: Some(__PATTERN_TREE),
-                            error_node: Some(&#node_ident),
-                        };
-                        panic!("{}", ::assert_struct::__macro_support::format_error(__error));
-                    }
+        quote! {
+            match &#value_expr {
+                #variant_path => {},
+                _ => {
+                    let __line = line!();
+                    let __file = file!();
+                    let __error = ::assert_struct::__macro_support::ErrorContext {
+                        field_path: #path_str.to_string(),
+                        pattern_str: stringify!(#variant_path).to_string(),
+                        actual_value: format!("{:?}", &#value_expr),
+                        line_number: __line,
+                        file_name: __file,
+                        error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                        full_pattern: Some(__PATTERN),
+                        pattern_location: None,
+                        expected_value: None,
+                        pattern_tree: Some(__PATTERN_TREE),
+                        error_node: Some(&#node_ident),
+                    };
+                    panic!("{}", ::assert_struct::__macro_support::format_error(__error));
                 }
             }
         }
     }
 }
 
-// Generate assertion for unit variants like None (old version without path tracking)
+// Generate assertion for unit variants (old version without path tracking)
 fn generate_unit_variant_assertion(
     value_expr: &TokenStream,
     path: &syn::Path,
     is_ref: bool,
 ) -> TokenStream {
-    // Special handling for None
-    if is_option_none_path(path) {
-        if is_ref {
-            quote! {
-                match #value_expr {
-                    None => {},
-                    Some(_) => panic!("Expected None, got Some"),
-                }
-            }
-        } else {
-            quote! {
-                match &#value_expr {
-                    None => {},
-                    Some(_) => panic!("Expected None, got Some"),
-                }
+    // Generic handling for all enum unit variants
+    if is_ref {
+        quote! {
+            match #value_expr {
+                #path => {},
+                _ => panic!(
+                    "Expected {}, got {:?}",
+                    stringify!(#path),
+                    #value_expr
+                ),
             }
         }
     } else {
-        // General unit variant
-        if is_ref {
-            quote! {
-                match #value_expr {
-                    #path => {},
-                    _ => panic!(
-                        "Expected {}, got {:?}",
-                        stringify!(#path),
-                        #value_expr
-                    ),
-                }
-            }
-        } else {
-            quote! {
-                match &#value_expr {
-                    #path => {},
-                    _ => panic!(
-                        "Expected {}, got {:?}",
-                        stringify!(#path),
-                        &#value_expr
-                    ),
-                }
+        quote! {
+            match &#value_expr {
+                #path => {},
+                _ => panic!(
+                    "Expected {}, got {:?}",
+                    stringify!(#path),
+                    &#value_expr
+                ),
             }
         }
     }
@@ -1355,35 +1242,7 @@ fn generate_enum_tuple_assertion(
     elements: &[Pattern],
     is_ref: bool,
 ) -> TokenStream {
-    // Special handling for Some
-    if is_option_some_path(path) && elements.len() == 1 {
-        let inner_assertion = generate_pattern_assertion(
-            &quote! { inner },
-            &elements[0],
-            true, // inner is a reference from the match
-        );
-        if is_ref {
-            return quote! {
-                match #value_expr {
-                    Some(inner) => {
-                        #inner_assertion
-                    },
-                    None => panic!("Expected Some(...), got None"),
-                }
-            };
-        } else {
-            return quote! {
-                match &#value_expr {
-                    Some(inner) => {
-                        #inner_assertion
-                    },
-                    None => panic!("Expected Some(...), got None"),
-                }
-            };
-        }
-    }
-
-    // General enum tuple variant
+    // General enum tuple variant (handles all enums including Option::Some)
     let element_names: Vec<_> = (0..elements.len())
         .map(|i| quote::format_ident!("__elem_{}", i))
         .collect();
@@ -1658,22 +1517,6 @@ fn transform_expected_value(expr: &Expr) -> Expr {
 }
 
 // Check if a path refers to Option::Some
-fn is_option_some_path(path: &syn::Path) -> bool {
-    if let Some(segment) = path.segments.last() {
-        segment.ident == "Some"
-    } else {
-        false
-    }
-}
-
-// Check if a path refers to Option::None
-fn is_option_none_path(path: &syn::Path) -> bool {
-    if let Some(segment) = path.segments.last() {
-        segment.ident == "None"
-    } else {
-        false
-    }
-}
 
 /// Convert a pattern to its string representation for error messages
 fn pattern_to_string(pattern: &Pattern) -> String {
@@ -1919,85 +1762,92 @@ fn generate_enum_tuple_assertion_with_collection(
     field_path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
-    // Special handling for Some with pattern inside
-    if is_option_some_path(variant_path) && elements.len() == 1 {
-        // Build path for the Some content
-        let mut inner_path = field_path.to_vec();
-        inner_path.push("Some".to_string());
+    // Generic handling for all enum tuple variants with error collection
+    let element_names: Vec<_> = (0..elements.len())
+        .map(|i| quote::format_ident!("__elem_{}", i))
+        .collect();
 
-        let inner_assertion = generate_pattern_assertion_with_collection(
-            &quote! { inner },
-            &elements[0],
-            true, // inner is a reference from the match
-            &inner_path,
-        );
+    // Extract variant name from path for better error messages
+    let variant_name = if let Some(segment) = variant_path.segments.last() {
+        segment.ident.to_string()
+    } else {
+        "variant".to_string()
+    };
 
-        let field_path_str = field_path.join(".");
+    let element_assertions: Vec<_> = element_names
+        .iter()
+        .zip(elements)
+        .enumerate()
+        .map(|(i, (name, pattern))| {
+            // Build path for this tuple element
+            let mut elem_path = field_path.to_vec();
+            // For single-element tuple variants, use the variant name for better error messages
+            // For multi-element variants, use indices
+            if elements.len() == 1 {
+                elem_path.push(variant_name.clone());
+            } else {
+                elem_path.push(i.to_string());
+            }
+            // Use with_collection for error collection
+            generate_pattern_assertion_with_collection(&quote! { #name }, pattern, true, &elem_path)
+        })
+        .collect();
 
-        if is_ref {
-            return quote! {
-                match #value_expr {
-                    Some(inner) => {
-                        #inner_assertion
-                    },
-                    None => {
-                        let __line = line!();
-                        let __file = file!();
-                        let __error = ::assert_struct::__macro_support::ErrorContext {
-                            field_path: #field_path_str.to_string(),
-                            pattern_str: "Some(...)".to_string(),
-                            actual_value: "None".to_string(),
-                            line_number: __line,
-                            file_name: __file,
-                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-                            full_pattern: Some(__PATTERN),
-                            pattern_location: None,
-                            expected_value: None,
-                            pattern_tree: Some(__PATTERN_TREE),
-                            error_node: Some(&#node_ident),
-                        };
-                        __errors.push(__error);
-                    }
+    let field_path_str = field_path.join(".");
+
+    if is_ref {
+        quote! {
+            match #value_expr {
+                #variant_path(#(#element_names),*) => {
+                    #(#element_assertions)*
+                },
+                _ => {
+                    let __line = line!();
+                    let __file = file!();
+                    let __error = ::assert_struct::__macro_support::ErrorContext {
+                        field_path: #field_path_str.to_string(),
+                        pattern_str: stringify!(#variant_path).to_string(),
+                        actual_value: format!("{:?}", #value_expr),
+                        line_number: __line,
+                        file_name: __file,
+                        error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                        full_pattern: Some(__PATTERN),
+                        pattern_location: None,
+                        expected_value: None,
+                        pattern_tree: Some(__PATTERN_TREE),
+                        error_node: Some(&#node_ident),
+                    };
+                    __errors.push(__error);
                 }
-            };
-        } else {
-            return quote! {
-                match &#value_expr {
-                    Some(inner) => {
-                        #inner_assertion
-                    },
-                    None => {
-                        let __line = line!();
-                        let __file = file!();
-                        let __error = ::assert_struct::__macro_support::ErrorContext {
-                            field_path: #field_path_str.to_string(),
-                            pattern_str: "Some(...)".to_string(),
-                            actual_value: "None".to_string(),
-                            line_number: __line,
-                            file_name: __file,
-                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-                            full_pattern: Some(__PATTERN),
-                            pattern_location: None,
-                            expected_value: None,
-                            pattern_tree: Some(__PATTERN_TREE),
-                            error_node: Some(&#node_ident),
-                        };
-                        __errors.push(__error);
-                    }
+            }
+        }
+    } else {
+        quote! {
+            match &#value_expr {
+                #variant_path(#(#element_names),*) => {
+                    #(#element_assertions)*
+                },
+                _ => {
+                    let __line = line!();
+                    let __file = file!();
+                    let __error = ::assert_struct::__macro_support::ErrorContext {
+                        field_path: #field_path_str.to_string(),
+                        pattern_str: stringify!(#variant_path).to_string(),
+                        actual_value: format!("{:?}", &#value_expr),
+                        line_number: __line,
+                        file_name: __file,
+                        error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                        full_pattern: Some(__PATTERN),
+                        pattern_location: None,
+                        expected_value: None,
+                        pattern_tree: Some(__PATTERN_TREE),
+                        error_node: Some(&#node_ident),
+                    };
+                    __errors.push(__error);
                 }
-            };
+            }
         }
     }
-
-    // For other enum variants, delegate to the path version for now
-    generate_enum_tuple_assertion_with_path(
-        value_expr,
-        variant_path,
-        elements,
-        is_ref,
-        field_path,
-        node_ident,
-    )
 }
 
 /// Generate assertion for enum tuple variants with path tracking
@@ -2009,80 +1859,17 @@ fn generate_enum_tuple_assertion_with_path(
     field_path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
-    // Special handling for Some with pattern inside
-    if is_option_some_path(variant_path) && elements.len() == 1 {
-        // Build path for the Some content
-        let mut inner_path = field_path.to_vec();
-        inner_path.push("Some".to_string());
-
-        let inner_assertion = generate_pattern_assertion_with_path(
-            &quote! { inner },
-            &elements[0],
-            true, // inner is a reference from the match
-            &inner_path,
-        );
-
-        let field_path_str = field_path.join(".");
-
-        if is_ref {
-            return quote! {
-                match #value_expr {
-                    Some(inner) => {
-                        #inner_assertion
-                    },
-                    None => {
-                        let __line = line!();
-                        let __file = file!();
-                        let __error = ::assert_struct::__macro_support::ErrorContext {
-                            field_path: #field_path_str.to_string(),
-                            pattern_str: "Some(...)".to_string(),
-                            actual_value: "None".to_string(),
-                            line_number: __line,
-                            file_name: __file,
-                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-                full_pattern: Some(__PATTERN),
-                pattern_location: None,
-                            expected_value: None,
-                            pattern_tree: Some(__PATTERN_TREE),
-                            error_node: Some(&#node_ident),
-                        };
-                        panic!("{}", ::assert_struct::__macro_support::format_error(__error));
-                    }
-                }
-            };
-        } else {
-            return quote! {
-                match &#value_expr {
-                    Some(inner) => {
-                        #inner_assertion
-                    },
-                    None => {
-                        let __line = line!();
-                        let __file = file!();
-                        let __error = ::assert_struct::__macro_support::ErrorContext {
-                            field_path: #field_path_str.to_string(),
-                            pattern_str: "Some(...)".to_string(),
-                            actual_value: "None".to_string(),
-                            line_number: __line,
-                            file_name: __file,
-                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-                full_pattern: Some(__PATTERN),
-                pattern_location: None,
-                            expected_value: None,
-                            pattern_tree: Some(__PATTERN_TREE),
-                            error_node: Some(&#node_ident),
-                        };
-                        panic!("{}", ::assert_struct::__macro_support::format_error(__error));
-                    }
-                }
-            };
-        }
-    }
-
-    // For other enum tuple variants
+    // Generic handling for all enum tuple variants (including Option::Some)
     let element_names: Vec<_> = (0..elements.len())
         .map(|i| quote::format_ident!("__elem_{}", i))
         .collect();
+
+    // Extract variant name from path for better error messages
+    let variant_name = if let Some(segment) = variant_path.segments.last() {
+        segment.ident.to_string()
+    } else {
+        "variant".to_string()
+    };
 
     let element_assertions: Vec<_> = element_names
         .iter()
@@ -2091,7 +1878,13 @@ fn generate_enum_tuple_assertion_with_path(
         .map(|(i, (name, pattern))| {
             // Build path for this tuple element
             let mut elem_path = field_path.to_vec();
-            elem_path.push(i.to_string());
+            // For single-element tuple variants, use the variant name for better error messages
+            // For multi-element variants, use indices
+            if elements.len() == 1 {
+                elem_path.push(variant_name.clone());
+            } else {
+                elem_path.push(i.to_string());
+            }
             generate_pattern_assertion_with_path(&quote! { #name }, pattern, true, &elem_path)
         })
         .collect();
