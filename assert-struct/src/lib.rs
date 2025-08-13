@@ -537,9 +537,7 @@ pub mod error;
 // Hidden module for macro support functions
 #[doc(hidden)]
 pub mod __macro_support {
-    pub use crate::error::{
-        ErrorContext, ErrorType, PatternLocation, format_error, format_multiple_errors,
-    };
+    pub use crate::error::{ErrorContext, ErrorType, format_errors};
 }
 
 /// A trait for pattern matching, similar to `PartialEq` but for flexible matching.

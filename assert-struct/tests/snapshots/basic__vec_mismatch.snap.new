@@ -1,0 +1,10 @@
+---
+source: assert-struct/tests/basic.rs
+assertion_line: 88
+expression: message
+---
+assert_struct! failed:
+
+   | DataHolder {
+value mismatch:
+  --> `data.values` (line 18)

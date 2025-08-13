@@ -1,0 +1,10 @@
+---
+source: assert-struct/tests/basic.rs
+assertion_line: 52
+expression: message
+---
+assert_struct! failed:
+
+   | User {
+value mismatch:
+  --> `user.name` (line 18)
