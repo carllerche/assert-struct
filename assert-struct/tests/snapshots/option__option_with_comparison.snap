@@ -1,13 +1,12 @@
 ---
 source: assert-struct/tests/option.rs
-assertion_line: 274
 expression: message
 ---
 assert_struct! failed:
 
    | Data {
 comparison mismatch:
-  --> `data.value.Some` (line 11)
+  --> `data.value.Some` (line 12)
    |     value: Some(> 30),
    |                 ^^^^ actual: 25
    | }

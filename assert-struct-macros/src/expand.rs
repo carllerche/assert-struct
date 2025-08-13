@@ -563,7 +563,9 @@ fn generate_pattern_assertion_with_path(
         }
         #[cfg(feature = "regex")]
         Pattern::Regex {
-            pattern: regex_str, span, ..
+            pattern: regex_str,
+            span,
+            ..
         } => {
             // Generate regex assertion with path tracking
             generate_regex_assertion_with_path(
