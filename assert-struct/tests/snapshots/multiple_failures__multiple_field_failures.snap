@@ -13,7 +13,7 @@ comparison mismatch:
 ---
 | User {
 value mismatch:
-  --> `user.email` (line 20)
+  --> `user.email` (line 23)
    |     email: "alice@example.com",
    |            ^^^^^^^^^^^^^^^^^^^ actual: "alice@wrong.com"
    | }

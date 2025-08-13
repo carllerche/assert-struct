@@ -2332,8 +2332,9 @@ fn generate_simple_assertion_with_collection(
         quote! { None }
     };
 
+    let span = expected.span();
     if is_ref {
-        quote! {
+        quote_spanned! {span=>
             if #value_expr != &#transformed {
                 let __line = line!();
                 let __file = file!();
@@ -2354,7 +2355,7 @@ fn generate_simple_assertion_with_collection(
             }
         }
     } else {
-        quote! {
+        quote_spanned! {span=>
             if &#value_expr != &#transformed {
                 let __line = line!();
                 let __file = file!();
@@ -2450,8 +2451,9 @@ fn generate_simple_assertion_with_path(
         quote! { None }
     };
 
+    let span = expected.span();
     if is_ref {
-        quote! {
+        quote_spanned! {span=>
             if #value_expr != &#transformed {
                 let __line = line!();
                 let __file = file!();
@@ -2472,7 +2474,7 @@ fn generate_simple_assertion_with_path(
             }
         }
     } else {
-        quote! {
+        quote_spanned! {span=>
             if &#value_expr != &#transformed {
                 let __line = line!();
                 let __file = file!();

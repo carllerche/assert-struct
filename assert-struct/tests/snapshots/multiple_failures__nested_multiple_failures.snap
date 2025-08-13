@@ -5,14 +5,14 @@ expression: message
 assert_struct! failed: 3 mismatches
 | Account { ... Profile {
 value mismatch:
-  --> `account.profile.bio` (line 26)
+  --> `account.profile.bio` (line 29)
    |         bio: "A detailed bio that is much longer",
    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ actual: "Hello"
    | } ... }
 ---
 | Account { ... Profile {
 value mismatch:
-  --> `account.profile.verified` (line 26)
+  --> `account.profile.verified` (line 30)
    |         verified: true,
    |                   ^^^^ actual: false
    | } ... }
