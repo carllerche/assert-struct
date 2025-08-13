@@ -69,32 +69,7 @@ fn test_nested_struct_partial() {
     );
 }
 
-#[test]
-#[should_panic(expected = "person.address.city")]
-fn test_nested_field_mismatch() {
-    let person = Person {
-        name: "Charlie".to_string(),
-        age: 35,
-        address: Address {
-            street: "789 Elm St".to_string(),
-            city: "Capital City".to_string(),
-            zip: 99999,
-        },
-    };
-
-    assert_struct!(
-        person,
-        Person {
-            name: "Charlie",
-            age: 35,
-            address: Address {
-                street: "789 Elm St",
-                city: "Wrong City",
-                zip: 99999,
-            },
-        }
-    );
-}
+error_message_test!("nested_errors/nested_field_mismatch.rs", nested_field_mismatch);
 
 error_message_test!("nested_errors/nested_comparison.rs", nested_comparison);
 
@@ -148,60 +123,6 @@ fn test_deeply_nested_with_comparisons() {
     });
 }
 
-#[test]
-#[should_panic(expected = "company.location.office.floor")]
-fn test_deeply_nested_comparison_failure() {
-    let company = Company {
-        name: "TechCorp".to_string(),
-        location: CompanyLocation {
-            country: "USA".to_string(),
-            office: Office {
-                building: "Tower A".to_string(),
-                floor: 5,
-                rooms: 25,
-            },
-        },
-    };
+error_message_test!("nested_errors/deeply_nested_comparison_failure.rs", deeply_nested_comparison_failure);
 
-    assert_struct!(company, Company {
-        name: "TechCorp",
-        location: CompanyLocation {
-            country: "USA",
-            office: Office {
-                building: "Tower A",
-                floor: > 10,  // Should fail: 5 is not > 10
-                rooms: >= 20,
-            },
-        },
-    });
-}
-
-#[test]
-#[should_panic(expected = "company.location.office.rooms")]
-fn test_deeply_nested_range_failure() {
-    let company = Company {
-        name: "TechCorp".to_string(),
-        location: CompanyLocation {
-            country: "USA".to_string(),
-            office: Office {
-                building: "Tower A".to_string(),
-                floor: 15,
-                rooms: 5,
-            },
-        },
-    };
-
-    assert_struct!(
-        company,
-        Company {
-            location: CompanyLocation {
-                office: Office {
-                    rooms: 10..=20, // Should fail: 5 is not in range
-                    ..
-                },
-                ..
-            },
-            ..
-        }
-    );
-}
+error_message_test!("nested_errors/deeply_nested_range_failure.rs", deeply_nested_range_failure);

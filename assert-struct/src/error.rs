@@ -294,7 +294,13 @@ fn format_fancy_error(
         }
 
         // Show closing braces
-        if let Some(last_line) = pattern_lines.last() {
+        if is_nested {
+            // Build matching closing breadcrumb like "} ... }"
+            let parts: Vec<&str> = error.field_path.split('.').collect();
+            if parts.len() > 2 {
+                result.push_str("   | } ... }");
+            }
+        } else if let Some(last_line) = pattern_lines.last() {
             if !last_line.trim().is_empty() {
                 result.push_str("   | ");
                 result.push_str(last_line);
@@ -996,7 +1002,31 @@ pub fn format_error_with_tree(
 
     // Show the closing brace only for structs
     if !is_simple_enum && lines.len() > 1 {
-        if let Some(last) = lines.last() {
+        // Check if we have a nested struct to show balanced closing
+        let error_path = find_path_to_node(root, error_node, Vec::new());
+        let mut has_nested_struct = false;
+        if error_path.len() > 1 {
+            // Walk the path to see if we encounter nested structs
+            let mut current = root;
+            for path_component in error_path.iter().take(error_path.len() - 1) {
+                if let PatternNode::Struct { fields, .. } = current {
+                    for (field_name, field_node) in fields.iter() {
+                        if field_name == path_component {
+                            if matches!(field_node, PatternNode::Struct { .. }) {
+                                has_nested_struct = true;
+                            }
+                            current = field_node;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        
+        if has_nested_struct {
+            // Show balanced closing for nested structures
+            result.push_str("   | } ... }");
+        } else if let Some(last) = lines.last() {
             // Only show if it's a closing brace
             if last.contains('}') {
                 result.push_str(last);

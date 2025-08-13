@@ -1,0 +1,13 @@
+---
+source: assert-struct/tests/nested.rs
+expression: message
+---
+assert_struct! failed:
+
+   | Company { ... CompanyLocation {
+range mismatch:
+  --> `company.location.office.rooms` (line 40)
+   |             rooms: 10 ..= 20,
+   |                    ^^^^^^^^^ actual: 5
+   |             ..
+   | } ... }

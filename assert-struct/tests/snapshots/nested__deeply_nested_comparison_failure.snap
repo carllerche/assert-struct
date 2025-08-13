@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/nested.rs
+expression: message
+---
+assert_struct! failed:
+
+   | Company { ... CompanyLocation {
+comparison mismatch:
+  --> `company.location.office.floor` (line 41)
+   |             floor: > 10,
+   |                    ^^^^ actual: 5
+   | } ... }

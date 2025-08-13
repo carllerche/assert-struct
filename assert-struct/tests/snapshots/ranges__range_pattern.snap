@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | Person {
 range mismatch:
-  --> `person.age` (line 11)
+  --> `person.age` (line 12)
    |     age: 18 ..= 65,
    |          ^^^^^^^^^ actual: 75
    | }

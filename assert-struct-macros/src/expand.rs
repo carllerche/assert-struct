@@ -73,6 +73,22 @@ fn get_pattern_node_ident(pattern: &Pattern) -> Ident {
     Ident::new(&format!("__PATTERN_NODE_{}", node_id), Span::call_site())
 }
 
+/// Get the span for a pattern (if available)
+fn get_pattern_span(pattern: &Pattern) -> Option<Span> {
+    match pattern {
+        Pattern::Simple { expr, .. } => Some(expr.span()),
+        Pattern::Comparison { expr, .. } => Some(expr.span()),
+        Pattern::Range { expr, .. } => Some(expr.span()),
+        #[cfg(feature = "regex")]
+        Pattern::Regex { span, .. } => Some(*span),
+        #[cfg(feature = "regex")]
+        Pattern::Like { expr, .. } => Some(expr.span()),
+        Pattern::Struct { path, .. } => Some(path.span()),
+        Pattern::Tuple { path, .. } => path.as_ref().map(|p| p.span()),
+        Pattern::Slice { .. } | Pattern::Rest { .. } => None,
+    }
+}
+
 /// Format a pattern as a simple inline string (no newlines)
 fn format_pattern_inline(pattern: &Pattern) -> String {
     match pattern {
@@ -1066,12 +1082,19 @@ fn generate_struct_match_assertion_with_collection(
             let mut new_path = field_path.to_vec();
             new_path.push(field_name.to_string());
             // Fields from destructuring are references
-            generate_pattern_assertion_with_collection(
+            let assertion = generate_pattern_assertion_with_collection(
                 &quote! { #field_name },
                 field_pattern,
                 true,
                 &new_path,
-            )
+            );
+            
+            // Wrap the assertion with the span of the field pattern if available
+            if let Some(span) = get_pattern_span(field_pattern) {
+                quote_spanned! {span=> #assertion }
+            } else {
+                assertion
+            }
         })
         .collect();
 
@@ -2206,7 +2229,8 @@ fn generate_range_assertion_with_path(
         quote! { None }
     };
 
-    quote! {
+    let span = range.span();
+    quote_spanned! {span=>
         match #match_expr {
             #range => {},
             _ => {
