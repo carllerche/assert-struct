@@ -4,9 +4,9 @@ expression: message
 ---
 assert_struct! failed:
 
-   | Level1 { ... Level2 {
+   | Level1 { ... Level2 { ... Level3 {
 value mismatch:
   --> `data.inner.nested.name` (line 38)
-   |             name: "expected",
-   |                   ^^^^^^^^^^ actual: "actual"
-   | } ... }
+   |     name: "expected",
+   |           ^^^^^^^^^^ actual: "actual"
+   | } ... } ... }

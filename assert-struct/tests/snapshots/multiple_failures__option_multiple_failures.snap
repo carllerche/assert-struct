@@ -5,11 +5,12 @@ expression: message
 assert_struct! failed: 2 mismatches
    | Settings {
 value mismatch:
-  --> `settings.theme` (line 18)
-   |     theme: Some("dark"),
-   |            ^^^^^^^^^^^^ actual: "light"
+  --> `settings.theme.Some` (line 18)
+   |     Some: "dark",
+   |           ^^^^^^ actual: "light"
+
 comparison mismatch:
-  --> `settings.font_size` (line 19)
-   |     font_size: Some(> 12),
-   |                     ^^^^ actual: 10
-   | } ... }
+  --> `settings.font_size.Some` (line 19)
+   | > 12
+   | ^^^^ actual: 10
+   | }

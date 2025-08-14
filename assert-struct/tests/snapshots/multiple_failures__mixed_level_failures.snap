@@ -8,7 +8,7 @@ value mismatch:
   --> `user.age` (line 32)
    |     age: 30,
    |          ^^ actual: 25
-   | address: Address {
+   | ... Address {
 value mismatch:
   --> `user.address.city` (line 36)
    |     city: "Shelbyville",

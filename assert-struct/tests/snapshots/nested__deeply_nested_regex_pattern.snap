@@ -4,9 +4,9 @@ expression: message
 ---
 assert_struct! failed:
 
-   | Customer { ... Contact {
+   | Customer { ... Contact { ... Validation {
 regex pattern mismatch:
   --> `customer.contact.validation.email` (line 38)
-   |             email: =~ r".*@company\.com$",
-   |                    ^^^^^^^^^^^^^^^^^^^^^^ actual: "john@example.com"
-   | } ... }
+   | =~ r".*@company\.com$"
+   | ^^^^^^^^^^^^^^^^^^^^^^ actual: "john@example.com"
+   | } ... } ... }

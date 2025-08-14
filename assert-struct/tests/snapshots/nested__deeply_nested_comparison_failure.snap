@@ -4,9 +4,9 @@ expression: message
 ---
 assert_struct! failed:
 
-   | Company { ... CompanyLocation {
+   | Company { ... CompanyLocation { ... Office {
 comparison mismatch:
   --> `company.location.office.floor` (line 41)
-   |             floor: > 10,
-   |                    ^^^^ actual: 5
-   | } ... }
+   | > 10
+   | ^^^^ actual: 5
+   | } ... } ... }

@@ -4,8 +4,9 @@ expression: message
 ---
 assert_struct! failed:
 
-   | Report { ... Analysis {
+   | Report { ... Analysis { ... DataSet {
 value mismatch:
   --> `report.analysis.data.values.[1]` (line 38)
-   |             values: &[10, 25, 30],
-   | } ... }
+   |     [1]: 25,
+   |          ^^ actual: 20
+   | } ... } ... }

@@ -4,10 +4,9 @@ expression: message
 ---
 assert_struct! failed:
 
-   | System { ... Server {
+   | System { ... Server { ... Database {
 equality mismatch:
   --> `system.server.database.version` (line 38)
-   |             version: == 6,
-   |                         ^ actual: 5
-   |                           expected: 6
-   | } ... }
+   | == 6
+   | ^^^^ actual: 5
+   | } ... } ... }

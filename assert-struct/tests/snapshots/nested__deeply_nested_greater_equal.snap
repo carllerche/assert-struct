@@ -4,9 +4,9 @@ expression: message
 ---
 assert_struct! failed:
 
-   | Game { ... Player {
+   | Game { ... Player { ... Score {
 comparison mismatch:
   --> `game.player.score.points` (line 38)
-   |             points: >= 100,
-   |                     ^^^^^^ actual: 80
-   | } ... }
+   | >= 100
+   | ^^^^^^ actual: 80
+   | } ... } ... }

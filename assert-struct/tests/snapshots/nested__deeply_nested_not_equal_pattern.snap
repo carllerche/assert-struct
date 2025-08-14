@@ -4,9 +4,9 @@ expression: message
 ---
 assert_struct! failed:
 
-   | Application { ... Service {
+   | Application { ... Service { ... Config {
 comparison mismatch:
   --> `app.service.config.timeout` (line 38)
-   |             timeout: != 30,
-   |                         ^^ actual: 30
-   | } ... }
+   | != 30
+   | ^^^^^ actual: 30
+   | } ... } ... }

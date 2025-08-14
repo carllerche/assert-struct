@@ -4,9 +4,9 @@ expression: message
 ---
 assert_struct! failed:
 
-   | Deployment { ... Environment {
+   | Deployment { ... Environment { ... Settings {
 value mismatch:
   --> `deploy.env.settings.debug.Some` (line 38)
-   |             debug: Some(true),
-   |                         ^^^^ actual: false
-   | } ... }
+   |     Some: true,
+   |           ^^^^ actual: false
+   | } ... } ... }

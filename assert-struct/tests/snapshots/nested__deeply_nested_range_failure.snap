@@ -4,9 +4,9 @@ expression: message
 ---
 assert_struct! failed:
 
-   | Company { ... CompanyLocation {
+   | Company { ... CompanyLocation { ... Office {
 range mismatch:
   --> `company.location.office.rooms` (line 40)
-   |             rooms: 10 ..= 20,
-   |                    ^^^^^^^^^ actual: 5
-   | } ... }
+   | 10 ..= 20
+   | ^^^^^^^^^ actual: 5
+   | } ... } ... }
