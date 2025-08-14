@@ -8,5 +8,4 @@ assert_struct! failed:
 value mismatch:
   --> `report.analysis.data.values.[1]` (line 38)
    |             values: &[10, 25, 30],
-   |  actual: 20
    | } ... }
