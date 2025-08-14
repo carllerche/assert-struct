@@ -7,7 +7,6 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
     let value = &assert.value;
     let pattern = &assert.pattern;
 
-
     // Generate pattern nodes using the node IDs from the patterns
     let mut node_defs = Vec::new();
     let root_ref = generate_pattern_nodes(pattern, &mut node_defs);
@@ -82,7 +81,6 @@ fn get_pattern_span(pattern: &Pattern) -> Option<Span> {
         Pattern::Slice { .. } | Pattern::Rest { .. } => None,
     }
 }
-
 
 /// Generate pattern nodes using the IDs already in patterns
 fn generate_pattern_nodes(
@@ -249,7 +247,6 @@ fn generate_pattern_nodes(
     node_defs.push((node_id, node_def));
     quote! { #node_ident }
 }
-
 
 /// Generate assertion code with error collection instead of immediate panic.
 fn generate_pattern_assertion_with_collection(
@@ -1290,8 +1287,6 @@ fn generate_comparison_assertion_with_collection(
         quote! { None }
     };
 
-
-
     let span = expected.span();
     quote_spanned! {span=>
         if !(#comparison) {
@@ -1373,8 +1368,6 @@ fn generate_comparison_assertion_with_node(
     } else {
         quote! { None }
     };
-
-
 
     let span = expected.span();
     quote_spanned! {span=>
@@ -1632,10 +1625,6 @@ fn generate_range_assertion_with_path(
         quote! { &#value_expr }
     };
 
-
-
-
-
     let span = range.span();
     quote_spanned! {span=>
         match #match_expr {
@@ -1677,10 +1666,6 @@ fn generate_simple_assertion_with_collection(
     let transformed = transform_expected_value(expected);
     let field_path_str = path.join(".");
     let expected_str = quote! { #expected }.to_string();
-
-
-
-
 
     let span = expected.span();
     if is_ref {
@@ -1738,10 +1723,6 @@ fn generate_simple_assertion_with_path(
     let transformed = transform_expected_value(expected);
     let field_path_str = path.join(".");
     let expected_str = quote! { #expected }.to_string();
-
-
-
-
 
     let span = expected.span();
     if is_ref {
