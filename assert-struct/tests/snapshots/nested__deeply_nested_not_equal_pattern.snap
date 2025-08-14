@@ -5,7 +5,7 @@ expression: message
 assert_struct! failed:
 
    | Application { ... Service { ... Config {
-comparison mismatch:
+mismatch:
   --> `app.service.config.timeout` (line 38)
    | != 30
    | ^^^^^ actual: 30

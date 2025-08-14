@@ -5,7 +5,7 @@ expression: message
 assert_struct! failed:
 
    | User {
-regex pattern mismatch:
+mismatch:
   --> `user.email` (line 14)
    | =~ r"@example\.com$"
    | ^^^^^^^^^^^^^^^^^^^^ actual: "alice@wrong.com"

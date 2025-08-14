@@ -5,7 +5,7 @@ expression: message
 assert_struct! failed:
 
    | Deployment { ... Environment { ... Settings {
-value mismatch:
+mismatch:
   --> `deploy.env.settings.debug.Some` (line 38)
    |     Some: true,
    |           ^^^^ actual: false

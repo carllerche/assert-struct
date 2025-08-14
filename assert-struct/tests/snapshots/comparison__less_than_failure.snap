@@ -5,7 +5,7 @@ expression: message
 assert_struct! failed:
 
    | Person {
-comparison mismatch:
+mismatch:
   --> `person.height` (line 23)
    | < 6.0
    | ^^^^^ actual: 6.2

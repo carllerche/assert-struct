@@ -5,7 +5,7 @@ expression: message
 assert_struct! failed:
 
    | Company { ... CompanyLocation { ... Office {
-range mismatch:
+mismatch:
   --> `company.location.office.rooms` (line 40)
    | 10 ..= 20
    | ^^^^^^^^^ actual: 5

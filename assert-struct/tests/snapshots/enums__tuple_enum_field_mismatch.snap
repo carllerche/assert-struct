@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/enums.rs
+expression: message
+---
+assert_struct! failed:
+
+   | MessageQueue {
+mismatch:
+  --> `msg.current` (line 25)
+   |     current: Message :: Complex(42, "test", true),
+   |                                   ^^^^^^ actual: "wrong"
+   | }

@@ -778,7 +778,6 @@ fn generate_struct_match_assertion_with_collection(
                         expected_value: None,
 
                         error_node: Some(&#node_ident),
-                        tuple_context: None,
                     };
                     __errors.push(__error);
                 }
@@ -808,7 +807,6 @@ fn generate_struct_match_assertion_with_collection(
                         expected_value: None,
 
                         error_node: Some(&#node_ident),
-                        tuple_context: None,
                     };
                     __errors.push(__error);
                 }
@@ -881,7 +879,6 @@ fn generate_struct_match_assertion_with_path(
                         expected_value: None,
 
                         error_node: Some(&#node_ident),
-                        tuple_context: None,
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, vec![__error]));
                 }
@@ -911,7 +908,6 @@ fn generate_struct_match_assertion_with_path(
                         expected_value: None,
 
                         error_node: Some(&#node_ident),
-                        tuple_context: None,
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, vec![__error]));
                 }
@@ -976,141 +972,39 @@ fn generate_plain_tuple_assertion_with_path(
     elements: &[Pattern],
     is_ref: bool,
     field_path: &[String],
-    node_ident: &Ident,
+    _node_ident: &Ident,
 ) -> TokenStream {
     // Generate unique names to avoid conflicts
     let element_names: Vec<_> = (0..elements.len())
         .map(|i| quote::format_ident!("__tuple_elem_{}", i))
         .collect();
 
-    // Build the full tuple pattern string for display
-    let full_tuple_pattern = {
-        let patterns: Vec<String> = elements.iter().map(|e| pattern_to_string(e)).collect();
-        format!("({})", patterns.join(", "))
-    };
-
-    // Generate individual element checks to find which one fails
-    let element_checks: Vec<_> = element_names
+    let element_assertions: Vec<_> = element_names
         .iter()
         .zip(elements)
         .enumerate()
         .map(|(i, (name, pattern))| {
-            match pattern {
-                Pattern::Simple { expr: expected, .. } => {
-                    let expected_str = pattern_to_string(pattern);
-                    let transformed = transform_expected_value(expected);
-                    quote! {
-                        if #name != &#transformed {
-                            return Some((#i, #expected_str.to_string(), format!("{:?}", #name)));
-                        }
-                    }
-                }
-                Pattern::Comparison {
-                    op, expr: value, ..
-                } => {
-                    let pattern_str = pattern_to_string(pattern);
-                    let comparison = match op {
-                        ComparisonOp::Less => quote! { #name < &(#value) },
-                        ComparisonOp::LessEqual => quote! { #name <= &(#value) },
-                        ComparisonOp::Greater => quote! { #name > &(#value) },
-                        ComparisonOp::GreaterEqual => quote! { #name >= &(#value) },
-                        ComparisonOp::Equal => quote! { #name == &(#value) },
-                        ComparisonOp::NotEqual => quote! { #name != &(#value) },
-                    };
-                    quote! {
-                        if !(#comparison) {
-                            return Some((#i, #pattern_str.to_string(), format!("{:?}", #name)));
-                        }
-                    }
-                }
-                _ => {
-                    // For other pattern types, fall back to individual assertions for now
-                    // This ensures we don't break existing functionality
-                    let mut elem_path = field_path.to_vec();
-                    elem_path.push(i.to_string());
-                    let assertion = generate_pattern_assertion_with_path(
-                        &quote! { #name },
-                        pattern,
-                        true,
-                        &elem_path,
-                    );
-                    quote! {
-                        #assertion
-                        // No tuple error for complex patterns yet
-                    }
-                }
-            }
+            // Build path for this tuple element
+            let mut elem_path = field_path.to_vec();
+            // Add the index as a separate path component
+            elem_path.push(i.to_string());
+            generate_pattern_assertion_with_path(&quote! { #name }, pattern, true, &elem_path)
         })
         .collect();
 
-    let field_path_str = field_path.join(".");
-    let span = proc_macro2::Span::call_site();
-
-    // Generate the assertion code
+    // Generate the destructuring and assertions
     if is_ref {
-        quote_spanned! {span=>
+        quote! {
             {
                 let (#(#element_names),*) = #value_expr;
-
-                // Check each element and return first failure info
-                let check_result = || -> Option<(usize, String, String)> {
-                    #(#element_checks)*
-                    None
-                };
-
-                if let Some((element_index, element_pattern, actual_value)) = check_result() {
-                    let __line = line!();
-                    let __file = file!();
-                    let __error = ::assert_struct::__macro_support::ErrorContext {
-                        field_path: #field_path_str.to_string(),
-                        pattern_str: #full_tuple_pattern.to_string(),
-                        actual_value,
-                        line_number: __line,
-                        file_name: __file,
-                        error_type: ::assert_struct::__macro_support::ErrorType::Tuple,
-                        expected_value: None,
-                        error_node: Some(&#node_ident),
-                        tuple_context: Some(::assert_struct::__macro_support::TupleErrorContext {
-                            element_index,
-                            element_pattern,
-                            full_tuple_pattern: #full_tuple_pattern.to_string(),
-                        }),
-                    };
-                    panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, vec![__error]));
-                }
+                #(#element_assertions)*
             }
         }
     } else {
-        quote_spanned! {span=>
+        quote! {
             {
                 let (#(#element_names),*) = &#value_expr;
-
-                // Check each element and return first failure info
-                let check_result = || -> Option<(usize, String, String)> {
-                    #(#element_checks)*
-                    None
-                };
-
-                if let Some((element_index, element_pattern, actual_value)) = check_result() {
-                    let __line = line!();
-                    let __file = file!();
-                    let __error = ::assert_struct::__macro_support::ErrorContext {
-                        field_path: #field_path_str.to_string(),
-                        pattern_str: #full_tuple_pattern.to_string(),
-                        actual_value,
-                        line_number: __line,
-                        file_name: __file,
-                        error_type: ::assert_struct::__macro_support::ErrorType::Tuple,
-                        expected_value: None,
-                        error_node: Some(&#node_ident),
-                        tuple_context: Some(::assert_struct::__macro_support::TupleErrorContext {
-                            element_index,
-                            element_pattern,
-                            full_tuple_pattern: #full_tuple_pattern.to_string(),
-                        }),
-                    };
-                    panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, vec![__error]));
-                }
+                #(#element_assertions)*
             }
         }
     }
@@ -1412,7 +1306,6 @@ fn generate_comparison_assertion_with_collection(
                 expected_value: None,
 
                 error_node: Some(&#node_ident),
-                        tuple_context: None,
             };
 
             // Add expected value for equality patterns
@@ -1495,7 +1388,6 @@ fn generate_comparison_assertion_with_node(
                 expected_value: None,
 
                 error_node: Some(&#node_ident),
-                        tuple_context: None,
             };
 
             // Add expected value for equality patterns
@@ -1571,7 +1463,6 @@ fn generate_enum_tuple_assertion_with_collection(
                         expected_value: None,
 
                         error_node: Some(&#node_ident),
-                        tuple_context: None,
                     };
                     __errors.push(__error);
                 }
@@ -1598,7 +1489,6 @@ fn generate_enum_tuple_assertion_with_collection(
                         expected_value: None,
 
                         error_node: Some(&#node_ident),
-                        tuple_context: None,
                     };
                     __errors.push(__error);
                 }
@@ -1685,7 +1575,6 @@ fn generate_enum_tuple_assertion_with_path(
                         expected_value: None,
 
                         error_node: Some(&#node_ident),
-                        tuple_context: None,
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, vec![__error]));
                 }
@@ -1712,7 +1601,6 @@ fn generate_enum_tuple_assertion_with_path(
                         expected_value: None,
 
                         error_node: Some(&#node_ident),
-                        tuple_context: None,
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, vec![__error]));
                 }
@@ -1758,7 +1646,6 @@ fn generate_range_assertion_with_path(
                 expected_value: None,
 
                 error_node: Some(&#node_ident),
-                        tuple_context: None,
                 };
 
                 panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, vec![__error]));
@@ -1797,7 +1684,6 @@ fn generate_simple_assertion_with_collection(
                 expected_value: None,
 
                 error_node: Some(&#node_ident),
-                        tuple_context: None,
                 };
                 __errors.push(__error);
             }
@@ -1818,7 +1704,6 @@ fn generate_simple_assertion_with_collection(
                 expected_value: None,
 
                 error_node: Some(&#node_ident),
-                        tuple_context: None,
                 };
                 __errors.push(__error);
             }
@@ -1856,7 +1741,6 @@ fn generate_simple_assertion_with_path(
                 expected_value: None,
 
                 error_node: Some(&#node_ident),
-                        tuple_context: None,
                 };
                 panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, vec![__error]));
             }
@@ -1877,7 +1761,6 @@ fn generate_simple_assertion_with_path(
                 expected_value: None,
 
                 error_node: Some(&#node_ident),
-                        tuple_context: None,
                 };
                 panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, vec![__error]));
             }
@@ -1944,7 +1827,6 @@ fn generate_slice_assertion_with_path(
                 expected_value: None,
 
                 error_node: Some(&#node_ident),
-                        tuple_context: None,
                 };
                 panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, vec![__error]));
             }
@@ -1984,7 +1866,6 @@ fn generate_regex_assertion_with_path(
                 expected_value: None,
 
                 error_node: Some(&#node_ident),
-                        tuple_context: None,
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, vec![__error]));
                 }
@@ -2009,7 +1890,6 @@ fn generate_regex_assertion_with_path(
                 expected_value: None,
 
                 error_node: Some(&#node_ident),
-                        tuple_context: None,
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, vec![__error]));
                 }
@@ -2047,7 +1927,6 @@ fn generate_like_assertion_with_path(
                 expected_value: None,
 
                 error_node: Some(&#node_ident),
-                        tuple_context: None,
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, vec![__error]));
                 }
@@ -2070,7 +1949,6 @@ fn generate_like_assertion_with_path(
                 expected_value: None,
 
                 error_node: Some(&#node_ident),
-                        tuple_context: None,
                     };
                     panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, vec![__error]));
                 }

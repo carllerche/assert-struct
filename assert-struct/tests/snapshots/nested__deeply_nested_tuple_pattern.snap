@@ -5,8 +5,8 @@ expression: message
 assert_struct! failed:
 
    | GameObject { ... Transform { ... Coordinates {
-tuple mismatch:
-  --> `obj.transform.coords.position` (line 33)
+mismatch:
+  --> `obj.transform.coords.position` (line 38)
    |     position: (10.0, 25.0, 30.0),
-   |                      ^^^^ actual: 20.0
+   |                    ^^^^ actual: 20.0
    | } ... } ... }

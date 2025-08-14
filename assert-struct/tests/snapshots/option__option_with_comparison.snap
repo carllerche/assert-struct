@@ -5,7 +5,7 @@ expression: message
 assert_struct! failed:
 
    | Data {
-comparison mismatch:
+mismatch:
   --> `data.value.Some` (line 12)
    | > 30
    | ^^^^ actual: 25

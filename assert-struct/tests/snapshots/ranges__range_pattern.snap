@@ -5,7 +5,7 @@ expression: message
 assert_struct! failed:
 
    | Person {
-range mismatch:
+mismatch:
   --> `person.age` (line 12)
    | 18 ..= 65
    | ^^^^^^^^^ actual: 75

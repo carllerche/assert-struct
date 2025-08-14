@@ -138,15 +138,6 @@ pub struct ErrorContext {
     pub expected_value: Option<String>, // For equality patterns where we need to show the expected value
     // Tree-based pattern data - only the specific node that failed
     pub error_node: Option<&'static PatternNode>,
-    // Tuple context for better error formatting
-    pub tuple_context: Option<TupleErrorContext>,
-}
-
-#[derive(Debug, Clone)]
-pub struct TupleErrorContext {
-    pub element_index: usize,
-    pub element_pattern: String, // Pattern for the failing element (e.g., "60")
-    pub full_tuple_pattern: String, // Full tuple pattern (e.g., "(60, \"test\")")
 }
 
 #[derive(Debug, Clone)]
@@ -157,7 +148,6 @@ pub enum ErrorType {
     Value,
     EnumVariant,
     Slice,
-    Tuple,
     Equality, // For == patterns where we show both actual and expected
 }
 /// State maintained during tree traversal for error formatting.
@@ -243,7 +233,6 @@ impl fmt::Display for ErrorType {
             ErrorType::Value => write!(f, "value"),
             ErrorType::EnumVariant => write!(f, "enum variant"),
             ErrorType::Slice => write!(f, "slice"),
-            ErrorType::Tuple => write!(f, "tuple"),
             ErrorType::Equality => write!(f, "equality"),
         }
     }
@@ -306,6 +295,15 @@ fn traverse_tree(node: &'static PatternNode, state: &mut TraversalState) {
     let is_error_node = state.next_error_matches(node);
 
     if is_error_node {
+        // Check if this is a tuple element error that should be rendered at the tuple level
+        if let Some(error) = state.current_error() {
+            if is_tuple_element_error(&error.field_path) {
+                // Skip rendering at this level - we'll render at the tuple parent level
+                state.advance_error();
+                return;
+            }
+        }
+
         // Render any pending breadcrumbs before the error
         render_breadcrumbs_to_error(state);
 
@@ -378,21 +376,45 @@ fn traverse_tree(node: &'static PatternNode, state: &mut TraversalState) {
             state.current_depth -= 1;
         }
         PatternNode::Tuple { items } => {
-            // Tuples no longer use breadcrumbs - render inline with error
-            state.current_depth += 1;
-            for item in items.iter() {
-                traverse_tree(item, state);
+            // Check if this tuple has child errors that need to be rendered at this level
+            let tuple_errors = collect_tuple_child_errors(node, state);
+
+            if !tuple_errors.is_empty() {
+                // Render tuple errors at this level
+                for error_data in tuple_errors {
+                    render_breadcrumbs_to_error(state);
+                    render_tuple_with_error_context(node, error_data.0, error_data.1, state);
+                    state.advance_error();
+                }
+            } else {
+                // No tuple errors, continue normal traversal
+                state.current_depth += 1;
+                for item in items.iter() {
+                    traverse_tree(item, state);
+                }
+                state.current_depth -= 1;
             }
-            state.current_depth -= 1;
         }
         PatternNode::EnumVariant { args, .. } => {
             if let Some(args) = args {
-                // Enum variants no longer use breadcrumbs - render inline with error
-                state.current_depth += 1;
-                for arg in args.iter() {
-                    traverse_tree(arg, state);
+                // Check if this enum variant has tuple child errors that need to be rendered at this level
+                let tuple_errors = collect_tuple_child_errors(node, state);
+
+                if !tuple_errors.is_empty() {
+                    // Render enum tuple errors at this level
+                    for error_data in tuple_errors {
+                        render_breadcrumbs_to_error(state);
+                        render_tuple_with_error_context(node, error_data.0, error_data.1, state);
+                        state.advance_error();
+                    }
+                } else {
+                    // No tuple errors, continue normal traversal
+                    state.current_depth += 1;
+                    for arg in args.iter() {
+                        traverse_tree(arg, state);
+                    }
+                    state.current_depth -= 1;
                 }
-                state.current_depth -= 1;
             }
         }
         // Leaf nodes don't need further traversal
@@ -415,6 +437,53 @@ fn contains_future_errors(node: &'static PatternNode, state: &TraversalState) ->
         }
     }
     false
+}
+
+/// Check if a field path represents a tuple element error (ends with numeric index)
+fn is_tuple_element_error(field_path: &str) -> bool {
+    field_path
+        .split('.')
+        .last()
+        .map(|s| s.parse::<usize>().is_ok())
+        .unwrap_or(false)
+}
+
+/// Collect all tuple child errors that should be rendered at this tuple level
+fn collect_tuple_child_errors(
+    tuple_node: &'static PatternNode,
+    state: &TraversalState,
+) -> Vec<((ErrorType, String, u32, String), usize)> {
+    let mut tuple_errors = Vec::new();
+
+    // Look for errors that belong to this tuple's children
+    for i in state.error_index..state.errors.len() {
+        let error = &state.errors[i];
+
+        if is_tuple_element_error(&error.field_path) {
+            // Extract the element index
+            if let Some(element_index) = error
+                .field_path
+                .split('.')
+                .last()
+                .and_then(|s| s.parse::<usize>().ok())
+            {
+                // Check if this error belongs to our tuple
+                if let Some(error_node) = error.error_node {
+                    if node_contains_recursive(tuple_node, error_node) {
+                        let error_data = (
+                            error.error_type.clone(),
+                            error.field_path.clone(),
+                            error.line_number,
+                            error.actual_value.clone(),
+                        );
+                        tuple_errors.push((error_data, element_index));
+                    }
+                }
+            }
+        }
+    }
+
+    tuple_errors
 }
 
 /// Check if a root node contains a target node recursively.
@@ -519,86 +588,144 @@ fn render_slice_error(node: &'static PatternNode, state: &mut TraversalState) {
 }
 
 fn render_tuple_error(node: &'static PatternNode, state: &mut TraversalState) {
-    if let Some(error) = state.current_error() {
-        // Extract values before borrowing state mutably
-        let error_type = error.error_type.clone();
-        let field_path = error.field_path.clone();
-        let line_number = error.line_number;
-        let actual_value = error.actual_value.clone();
+    if let PatternNode::Tuple { items } = node {
+        if let Some(error) = state.current_error() {
+            // Extract the tuple element index from the field path
+            // e.g., "holder.data.0" -> index 0
+            let field_path = &error.field_path;
+            let element_index = field_path
+                .split('.')
+                .last()
+                .and_then(|s| s.parse::<usize>().ok())
+                .unwrap_or(0);
 
-        // Check if we have tuple context - if not, fall back to simple rendering
-        let tuple_context = match &error.tuple_context {
-            Some(ctx) => ctx.clone(), // Clone the tuple context to avoid borrowing issues
-            None => {
-                render_simple_error(node, state);
+            if element_index < items.len() {
+                // Extract error data to avoid borrowing issues
+                let error_data = (
+                    error.error_type.clone(),
+                    error.field_path.clone(),
+                    error.line_number,
+                    error.actual_value.clone(),
+                );
+
+                // We have a valid tuple error, render the full tuple context
+                render_tuple_with_error_context(node, error_data, element_index, state);
                 return;
             }
-        };
-
-        state
-            .output
-            .push_str(&format!("{} mismatch:\n", error_type));
-        state
-            .output
-            .push_str(&format!("  --> `{}` (line {})\n", field_path, line_number));
-
-        // Determine if we're in a breadcrumb context and need field-level indentation
-        let has_breadcrumbs = state.breadcrumb_stack.iter().any(|e| e.rendered);
-
-        // Extract field name from path for context (e.g., "holder.data" -> "data")
-        let field_name = field_path.split('.').last().unwrap_or("");
-
-        // For tuples, always show field context if we have breadcrumbs and a field name
-        let should_show_field_context = has_breadcrumbs && !field_name.is_empty();
-        let indent = if should_show_field_context {
-            "    "
-        } else {
-            ""
-        }; // 4 spaces for struct fields
-
-        if should_show_field_context {
-            // Render with field context showing full tuple: "   |     data: (60, "test"),"
-            state.output.push_str(&format!(
-                "   | {}{}: {},\n",
-                indent, field_name, tuple_context.full_tuple_pattern
-            ));
-
-            // Now we need to underline only the failing element within the tuple
-            // Calculate position: indent + field_name + ": (" + position of failing element
-            let field_prefix = format!("{}{}: (", indent, field_name);
-            let field_prefix_len = field_prefix.len();
-
-            // Find the position of the failing element pattern within the full tuple pattern
-            let element_pattern = &tuple_context.element_pattern;
-            let full_pattern = &tuple_context.full_tuple_pattern;
-
-            // Look for the element pattern position within the tuple (after the opening parenthesis)
-            let element_position = if let Some(pos) = full_pattern.find(element_pattern) {
-                // Make sure we found the actual element, not a substring in another element
-                pos - 1 // Subtract 1 to account for the opening parenthesis position
-            } else {
-                0 // Fallback if we can't find the exact position
-            };
-
-            let underline_spaces = " ".repeat(field_prefix_len + element_position);
-            let underline = "^".repeat(element_pattern.len());
-            state.output.push_str(&format!(
-                "   | {}{} actual: {}\n",
-                underline_spaces, underline, actual_value
-            ));
-        } else {
-            // Render without field context (shouldn't happen for tuples in structs, but handle it)
-            state.output.push_str(&format!(
-                "   | {}{}\n",
-                indent, tuple_context.full_tuple_pattern
-            ));
-
-            let underline = "^".repeat(tuple_context.element_pattern.len());
-            state.output.push_str(&format!(
-                "   | {}{} actual: {}\n",
-                indent, underline, actual_value
-            ));
         }
+    }
+
+    // Fallback to simple error rendering if not a valid tuple error
+    render_simple_error(node, state);
+}
+
+/// Render a tuple with full context, highlighting the failing element
+fn render_tuple_with_error_context(
+    node: &'static PatternNode,
+    error_data: (ErrorType, String, u32, String), // (error_type, field_path, line_number, actual_value)
+    failing_element_index: usize,
+    state: &mut TraversalState,
+) {
+    // Extract tuple items - handle both Tuple and EnumVariant nodes
+    let items = match node {
+        PatternNode::Tuple { items } => items,
+        PatternNode::EnumVariant {
+            args: Some(args), ..
+        } => args,
+        _ => return, // Not a tuple or enum variant with args
+    };
+
+    // Extract values for rendering
+    let (_error_type, field_path, line_number, actual_value) = error_data;
+
+    // Build the field path without the element index (e.g., \"holder.data.0\" -> \"holder.data\")
+    let tuple_field_path = field_path.rsplitn(2, '.').nth(1).unwrap_or(&field_path);
+
+    state.output.push_str("mismatch:\n");
+    state.output.push_str(&format!(
+        "  --> `{}` (line {})\n",
+        tuple_field_path, line_number
+    ));
+
+    // Determine if we're in a breadcrumb context and need field-level indentation
+    let has_breadcrumbs = state.breadcrumb_stack.iter().any(|e| e.rendered);
+
+    // Extract field name from path for context (e.g., \"holder.data\" -> \"data\")
+    let field_name = tuple_field_path.split('.').last().unwrap_or("");
+
+    let should_show_field_context = has_breadcrumbs && !field_name.is_empty();
+    let indent = if should_show_field_context {
+        "    "
+    } else {
+        ""
+    }; // 4 spaces for struct fields
+
+    // Build the appropriate pattern string based on node type
+    let pattern_prefix = match node {
+        PatternNode::EnumVariant { path, .. } => {
+            format!("{}", path)
+        }
+        _ => String::new(),
+    };
+
+    // Build the full tuple pattern string
+    let tuple_pattern_elements: Vec<String> = items
+        .iter()
+        .map(|item| format_pattern_simple(item))
+        .collect();
+    let full_tuple_pattern = format!("{}({})", pattern_prefix, tuple_pattern_elements.join(", "));
+
+    if should_show_field_context {
+        // Render with field context: \"   |     data: (60, \"test\"),\"
+        state.output.push_str(&format!(
+            "   | {}{}: {},\n",
+            indent, field_name, full_tuple_pattern
+        ));
+
+        // Calculate underline position
+        let field_prefix = format!("{}{}: {}(", indent, field_name, pattern_prefix);
+        let field_prefix_len = field_prefix.len();
+
+        // Find the position of the failing element within the tuple
+        let mut element_position = 0;
+        for i in 0..failing_element_index {
+            if i > 0 {
+                element_position += 2; // ", " separator
+            }
+            element_position += tuple_pattern_elements[i].len();
+        }
+
+        let failing_element_pattern = &tuple_pattern_elements[failing_element_index];
+        let underline_spaces = " ".repeat(field_prefix_len + element_position);
+        let underline = "^".repeat(failing_element_pattern.len());
+
+        state.output.push_str(&format!(
+            "   | {}{} actual: {}\n",
+            underline_spaces, underline, actual_value
+        ));
+    } else {
+        // Render without field context
+        state
+            .output
+            .push_str(&format!("   | {}{}\n", indent, full_tuple_pattern));
+
+        // Calculate underline position for the failing element
+        let mut element_position = pattern_prefix.len() + 1; // Start after prefix and opening parenthesis
+        for i in 0..failing_element_index {
+            if i > 0 {
+                element_position += 2; // ", " separator
+            }
+            element_position += tuple_pattern_elements[i].len();
+        }
+
+        let failing_element_pattern = &tuple_pattern_elements[failing_element_index];
+        let underline_spaces = " ".repeat(indent.len() + element_position);
+        let underline = "^".repeat(failing_element_pattern.len());
+
+        state.output.push_str(&format!(
+            "   | {}{} actual: {}\n",
+            underline_spaces, underline, actual_value
+        ));
     }
 }
 
@@ -609,14 +736,12 @@ fn render_enum_error(node: &'static PatternNode, state: &mut TraversalState) {
 fn render_simple_error(node: &'static PatternNode, state: &mut TraversalState) {
     if let Some(error) = state.current_error() {
         // Extract values before borrowing state mutably
-        let error_type = error.error_type.clone();
+        let _error_type = error.error_type.clone();
         let field_path = error.field_path.clone();
         let line_number = error.line_number;
         let actual_value = error.actual_value.clone();
 
-        state
-            .output
-            .push_str(&format!("{} mismatch:\n", error_type));
+        state.output.push_str("mismatch:\n");
         state
             .output
             .push_str(&format!("  --> `{}` (line {})\n", field_path, line_number));

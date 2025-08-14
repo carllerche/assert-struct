@@ -4,17 +4,17 @@ expression: message
 ---
 assert_struct! failed: 3 mismatches
    | Account { ... Profile {
-value mismatch:
+mismatch:
   --> `account.profile.bio` (line 29)
    |     bio: "A detailed bio that is much longer",
    |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ actual: "Hello"
 
-value mismatch:
+mismatch:
   --> `account.profile.verified` (line 30)
    |     verified: true,
    |               ^^^^ actual: false
 
-comparison mismatch:
+mismatch:
   --> `account.profile.followers` (line 31)
    | > 100
    | ^^^^^ actual: 5

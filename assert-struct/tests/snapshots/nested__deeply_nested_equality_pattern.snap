@@ -5,7 +5,7 @@ expression: message
 assert_struct! failed:
 
    | System { ... Server { ... Database {
-equality mismatch:
+mismatch:
   --> `system.server.database.version` (line 38)
    | == 6
    | ^^^^ actual: 5

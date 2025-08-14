@@ -5,7 +5,7 @@ expression: message
 assert_struct! failed:
 
    | Report { ... Analysis { ... DataSet {
-value mismatch:
+mismatch:
   --> `report.analysis.data.values.[1]` (line 38)
    |     [1]: 25,
    |          ^^ actual: 20

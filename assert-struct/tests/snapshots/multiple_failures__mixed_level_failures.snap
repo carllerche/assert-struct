@@ -4,12 +4,12 @@ expression: message
 ---
 assert_struct! failed: 2 mismatches
    | User {
-value mismatch:
+mismatch:
   --> `user.age` (line 32)
    |     age: 30,
    |          ^^ actual: 25
    | ... Address {
-value mismatch:
+mismatch:
   --> `user.address.city` (line 36)
    |     city: "Shelbyville",
    |           ^^^^^^^^^^^^^ actual: "Springfield"

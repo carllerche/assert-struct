@@ -1,11 +1,10 @@
 ---
 source: assert-struct/tests/enums.rs
-assertion_line: 435
 expression: message
 ---
 assert_struct! failed:
 
-enum variant mismatch:
+mismatch:
   --> `value` (line 6)
    | None
    | ^^^^ actual: Some(10)

@@ -5,7 +5,7 @@ expression: message
 assert_struct! failed:
 
    | Config {
-equality mismatch:
+mismatch:
   --> `config.timeout` (line 13)
    | == expected_timeout
    | ^^^^^^^^^^^^^^^^^^^ actual: 30

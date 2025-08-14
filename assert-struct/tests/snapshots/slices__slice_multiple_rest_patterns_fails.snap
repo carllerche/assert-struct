@@ -1,0 +1,5 @@
+---
+source: assert-struct/tests/slices.rs
+expression: message
+---
+Multiple .. patterns in slices are not allowed - this is enforced at compile time

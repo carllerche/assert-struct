@@ -182,7 +182,7 @@ fn test_mixed_range_and_operators() {
 
 // Test failure cases
 #[test]
-#[should_panic(expected = "range mismatch")]
+#[should_panic(expected = "mismatch")]
 fn test_range_failure_below() {
     let person = Person {
         name: "Too Young".to_string(),
@@ -202,7 +202,7 @@ fn test_range_failure_below() {
 }
 
 #[test]
-#[should_panic(expected = "range mismatch")]
+#[should_panic(expected = "mismatch")]
 fn test_range_failure_above() {
     let person = Person {
         name: "Too Old".to_string(),
@@ -222,7 +222,7 @@ fn test_range_failure_above() {
 }
 
 #[test]
-#[should_panic(expected = "range mismatch")]
+#[should_panic(expected = "mismatch")]
 fn test_range_exclusive_boundary_failure() {
     let person = Person {
         name: "Boundary".to_string(),

@@ -5,7 +5,7 @@ expression: message
 assert_struct! failed:
 
    | User { ... Profile {
-comparison mismatch:
+mismatch:
   --> `user.profile.age` (line 24)
    | >= 18
    | ^^^^^ actual: 17

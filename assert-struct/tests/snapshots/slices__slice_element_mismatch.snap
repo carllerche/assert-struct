@@ -4,9 +4,9 @@ expression: message
 ---
 assert_struct! failed:
 
-   | Data {
+   | Container {
 mismatch:
-  --> `data.values.[1]` (line 14)
-   |     [1]: 5,
-   |          ^ actual: 2
+  --> `container.items.[2]` (line 20)
+   |     [2]: 4,
+   |          ^ actual: 3
    | }

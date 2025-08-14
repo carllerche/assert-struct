@@ -5,7 +5,7 @@ expression: message
 assert_struct! failed:
 
    | DataHolder {
-value mismatch:
+mismatch:
   --> `data.values` (line 18)
    |     values: &[1, 2, 4],
    |             ^^^^^^^^^^ actual: [1, 2, 3]

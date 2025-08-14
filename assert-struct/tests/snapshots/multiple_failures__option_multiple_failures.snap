@@ -4,12 +4,12 @@ expression: message
 ---
 assert_struct! failed: 2 mismatches
    | Settings {
-value mismatch:
+mismatch:
   --> `settings.theme.Some` (line 18)
    |     Some: "dark",
    |           ^^^^^^ actual: "light"
 
-comparison mismatch:
+mismatch:
   --> `settings.font_size.Some` (line 19)
    | > 12
    | ^^^^ actual: 10
