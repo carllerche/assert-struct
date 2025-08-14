@@ -8,5 +8,5 @@ assert_struct! failed:
 mismatch:
   --> `msg.current` (line 25)
    |     current: Message :: Complex(42, "test", true),
-   |                                   ^^^^^^ actual: "wrong"
+   |                                     ^^^^^^ actual: "wrong"
    | }

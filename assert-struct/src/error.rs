@@ -689,10 +689,8 @@ fn render_tuple_with_error_context(
         // Find the position of the failing element within the tuple
         let mut element_position = 0;
         for i in 0..failing_element_index {
-            if i > 0 {
-                element_position += 2; // ", " separator
-            }
             element_position += tuple_pattern_elements[i].len();
+            element_position += 2; // ", " separator after this element
         }
 
         let failing_element_pattern = &tuple_pattern_elements[failing_element_index];
