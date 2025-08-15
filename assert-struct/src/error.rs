@@ -543,6 +543,10 @@ fn build_error_fragment(
     // a named struct field
     let is_tuple_element = field_name.chars().all(|c| c.is_ascii_digit());
 
+    // Check if this is a top-level pattern (field_path contains no dots)
+    // Top-level patterns like assert_struct!(value, None) shouldn't be wrapped in Field
+    let is_top_level = !error.field_path.contains('.');
+
     // Determine if this is a complex pattern that shouldn't show field names
     // Note: EnumVariant is NOT considered complex here because we want to show
     // field names like "statement: Statement::Query(...)"
@@ -552,14 +556,14 @@ fn build_error_fragment(
     );
 
     // Build the appropriate fragment based on node type and context
-    if !is_tuple_element && !field_name.is_empty() && !is_complex_pattern {
+    if !is_tuple_element && !field_name.is_empty() && !is_complex_pattern && !is_top_level {
         // This is a simple struct field
         Fragment::Field {
             name: field_name.to_string(),
             value: Box::new(build_pattern_fragment(node, Some(error))),
         }
     } else {
-        // Direct pattern without field wrapper (complex patterns, tuple elements, etc.)
+        // Direct pattern without field wrapper (complex patterns, tuple elements, top-level patterns, etc.)
         build_pattern_fragment(node, Some(error))
     }
 }

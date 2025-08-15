@@ -7,4 +7,4 @@ assert_struct! failed:
 mismatch:
   --> `value` (line 7)
    | None
-   | ^^^^ actual: Some(10)
+   | ^^^^ actual: Some(..)
