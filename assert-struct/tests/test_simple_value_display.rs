@@ -2,6 +2,7 @@ use assert_struct::assert_struct;
 
 #[derive(Debug)]
 struct Foo {
+    #[allow(dead_code)]
     value: i32,
 }
 

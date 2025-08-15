@@ -11,8 +11,8 @@ mismatch:
    |           ^^^^^^^^^^^ actual: "select_users"
 mismatch:
   --> `request.statement.Query.params` (line 33)
-   |     params: vec! ["name", "age"],
-   |             ^^^^^^^^^^^^^^^^^^^^ actual: ["id"]
+   |     params: vec!["name", "age"],
+   |             ^^^^^^^^^^^^^^^^^^^ actual: ["id"]
 mismatch:
   --> `request.statement.Query.limit.Some` (line 34)
    |     Some: > 50,

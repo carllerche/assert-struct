@@ -117,10 +117,7 @@ fn generate_pattern_nodes(
 
     let node_def = match pattern {
         Pattern::Simple { expr, .. } => {
-            let value_str = quote! { #expr }
-                .to_string()
-                .replace("& [", "&[")
-                .replace("& mut [", "&mut [");
+            let value_str = quote! { #expr }.to_string();
             quote! {
                 ::assert_struct::__macro_support::PatternNode::Simple {
                     value: #value_str,
