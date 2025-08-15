@@ -154,6 +154,7 @@ pub(crate) struct ErrorLocation {
 
 /// Represents a fragment of the pattern AST with optional error annotation
 #[derive(Debug)]
+#[allow(dead_code)] // Some variants are for future use
 pub(crate) enum Fragment {
     /// Simple leaf patterns (may or may not have error)
     Annotated {
@@ -207,6 +208,7 @@ pub(crate) struct ErrorAnnotation {
     /// The actual value that didn't match
     pub actual_value: String,
     /// Type of error
+    #[allow(dead_code)] // Used for richer error messages in the future
     pub error_type: ErrorType,
 }
 
@@ -217,7 +219,10 @@ pub(crate) struct ErrorAnnotation {
 /// This is Pass 1 of the two-pass system. It traverses the pattern tree,
 /// identifies error locations, and builds a structural representation
 /// suitable for rendering.
-pub(crate) fn build_error_display(root: &'static PatternNode, errors: Vec<ErrorContext>) -> ErrorDisplay {
+pub(crate) fn build_error_display(
+    root: &'static PatternNode,
+    errors: Vec<ErrorContext>,
+) -> ErrorDisplay {
     if errors.is_empty() {
         return ErrorDisplay {
             header: "assert_struct! failed: no errors provided".to_string(),
@@ -455,65 +460,66 @@ fn traverse_pattern_tree(
             }
             state.current_depth -= 1;
         }
-        PatternNode::EnumVariant { args, .. } => {
-            if let Some(args) = args {
-                // Enum variants with args are handled like tuples
-                let tuple_errors = collect_tuple_child_errors(node, state, &field_path);
+        PatternNode::EnumVariant {
+            args: Some(args), ..
+        } => {
+            // Enum variants with args are handled like tuples
+            let tuple_errors = collect_tuple_child_errors(node, state, &field_path);
 
-                if !tuple_errors.is_empty() {
-                    // Extract error data to avoid borrow issues
-                    let error_count = tuple_errors.len();
-                    let first_error_line = tuple_errors[0].line_number;
-                    let first_error_path = tuple_errors[0].field_path.clone();
+            if !tuple_errors.is_empty() {
+                // Extract error data to avoid borrow issues
+                let error_count = tuple_errors.len();
+                let first_error_line = tuple_errors[0].line_number;
+                let first_error_path = tuple_errors[0].field_path.clone();
 
-                    let fragment =
-                        build_enum_tuple_fragment_with_errors(node, &tuple_errors, &field_path);
-                    let opening_breadcrumbs = collect_opening_breadcrumbs(state);
+                let fragment =
+                    build_enum_tuple_fragment_with_errors(node, &tuple_errors, &field_path);
+                let opening_breadcrumbs = collect_opening_breadcrumbs(state);
 
-                    // Note: Currently the macro only generates one error at a time,
-                    // but the rendering code now handles multiple errors gracefully
+                // Note: Currently the macro only generates one error at a time,
+                // but the rendering code now handles multiple errors gracefully
 
-                    // Use the error's field path, but remove the numeric suffix for display
-                    let display_path = {
-                        let path = &first_error_path;
-                        // Remove the numeric index at the end for tuple display
-                        if let Some(dot_pos) = path.rfind('.') {
-                            let (base, suffix) = path.split_at(dot_pos + 1);
-                            if suffix.parse::<usize>().is_ok() {
-                                base[..base.len() - 1].to_string() // Remove the dot too
-                            } else {
-                                path.to_string()
-                            }
+                // Use the error's field path, but remove the numeric suffix for display
+                let display_path = {
+                    let path = &first_error_path;
+                    // Remove the numeric index at the end for tuple display
+                    if let Some(dot_pos) = path.rfind('.') {
+                        let (base, suffix) = path.split_at(dot_pos + 1);
+                        if suffix.parse::<usize>().is_ok() {
+                            base[..base.len() - 1].to_string() // Remove the dot too
                         } else {
                             path.to_string()
                         }
-                    };
-
-                    let section = ErrorSection {
-                        opening_breadcrumbs,
-                        location: ErrorLocation {
-                            field_path: display_path,
-                            line_number: first_error_line,
-                        },
-                        fragment,
-                    };
-
-                    state.sections.push(section);
-
-                    for _ in 0..error_count {
-                        state.advance_error();
+                    } else {
+                        path.to_string()
                     }
-                } else {
-                    state.current_depth += 1;
-                    for (i, arg) in args.iter().enumerate() {
-                        let mut new_path = field_path.clone();
-                        new_path.push(i.to_string());
-                        traverse_pattern_tree(arg, state, new_path);
-                    }
-                    state.current_depth -= 1;
+                };
+
+                let section = ErrorSection {
+                    opening_breadcrumbs,
+                    location: ErrorLocation {
+                        field_path: display_path,
+                        line_number: first_error_line,
+                    },
+                    fragment,
+                };
+
+                state.sections.push(section);
+
+                for _ in 0..error_count {
+                    state.advance_error();
                 }
+            } else {
+                state.current_depth += 1;
+                for (i, arg) in args.iter().enumerate() {
+                    let mut new_path = field_path.clone();
+                    new_path.push(i.to_string());
+                    traverse_pattern_tree(arg, state, new_path);
+                }
+                state.current_depth -= 1;
             }
         }
+        PatternNode::EnumVariant { args: None, .. } => {}
         // Leaf nodes don't need further traversal
         _ => {}
     }
@@ -526,7 +532,7 @@ fn build_error_fragment(
     _state: &TraversalState,
 ) -> Fragment {
     // Extract field name if this is a struct field
-    let field_name = error.field_path.split('.').last().unwrap_or("");
+    let field_name = error.field_path.split('.').next_back().unwrap_or("");
 
     // Check if field_name is all digits to identify tuple element paths
     // This is checking whether the last part of the field path (e.g., "0" in "user.0")
@@ -764,7 +770,7 @@ fn build_enum_tuple_fragment_with_errors(
 fn is_tuple_element_error(field_path: &str) -> bool {
     field_path
         .split('.')
-        .last()
+        .next_back()
         .map(|s| s.parse::<usize>().is_ok())
         .unwrap_or(false)
 }
@@ -1023,7 +1029,7 @@ fn render_fragment<'a>(
     fragment: &'a Fragment,
     output: &mut String,
     annotations: &mut Vec<(usize, usize, &'a ErrorAnnotation)>,
-    current_indent: usize,
+    _current_indent: usize,
 ) {
     match fragment {
         Fragment::Annotated {
@@ -1042,7 +1048,7 @@ fn render_fragment<'a>(
         Fragment::Field { name, value } => {
             output.push_str(name);
             output.push_str(": ");
-            render_fragment(value, output, annotations, current_indent);
+            render_fragment(value, output, annotations, _current_indent);
             output.push(',');
         }
         Fragment::Struct {
@@ -1057,7 +1063,7 @@ fn render_fragment<'a>(
                 if i > 0 {
                     output.push_str(", ");
                 }
-                render_fragment(field, output, annotations, current_indent);
+                render_fragment(field, output, annotations, _current_indent);
             }
 
             if *has_rest {
@@ -1079,7 +1085,7 @@ fn render_fragment<'a>(
                 if i > 0 {
                     output.push_str(", ");
                 }
-                render_fragment(element, output, annotations, current_indent);
+                render_fragment(element, output, annotations, _current_indent);
             }
 
             output.push(')');
@@ -1094,7 +1100,7 @@ fn render_fragment<'a>(
                 if i > 0 {
                     output.push_str(", ");
                 }
-                render_fragment(element, output, annotations, current_indent);
+                render_fragment(element, output, annotations, _current_indent);
             }
 
             output.push(']');
