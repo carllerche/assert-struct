@@ -21,7 +21,6 @@ exclude = [
 [features]
 default = ["regex"]
 regex = ["assert-struct-macros/regex", "dep:regex"]
-structured_errors = []
 
 [dependencies]
 assert-struct-macros = { version = "0.1.0", path = "../assert-struct-macros" }

@@ -1,85 +1,24 @@
 //! Error formatting and display for assert_struct macro failures.
 //!
 //! This module handles the complex task of generating human-readable error messages
-//! when struct assertions fail. It includes support for precise positioning,
-//! pattern context, and multiple error scenarios.
+//! when struct assertions fail. It uses a two-pass system that separates building
+//! the structural representation from rendering it to a string.
 //!
-//! ## Core Algorithm: Tree-Traversal vs Error-Iteration
+//! ## Two-Pass Architecture
 //!
-//! The error formatting system uses a **tree-traversal approach** rather than the
-//! traditional error-iteration approach. This design choice is fundamental to achieving
-//! clean, maintainable, and consistent error formatting.
+//! Pass 1: Build a structural representation of errors
+//! - Traverse the pattern tree to find error locations
+//! - Build Fragment types representing the pattern structure
+//! - Track breadcrumbs for nested contexts
 //!
-//! ### Traditional Approach (Avoided)
-//!
-//! ```text
-//! for each error {
-//!     1. Parse error field path
-//!     2. Reconstruct pattern tree context
-//!     3. Find relevant pattern nodes
-//!     4. Format error in isolation
-//! }
-//! ```
-//!
-//! **Problems:**
-//! - Complex context reconstruction
-//! - Inconsistent formatting between related errors
-//! - Difficult to maintain and extend
-//! - Poor handling of nested structures
-//!
-//! ### Tree-Traversal Approach (Implemented)
-//!
-//! ```text
-//! traverse_pattern_ast(root) {
-//!     for each node {
-//!         if node has errors {
-//!             format errors in context
-//!         } else {
-//!             continue traversal
-//!         }
-//!     }
-//! }
-//! ```
-//!
-//! **Benefits:**
-//! - Natural error grouping and context
-//! - Consistent formatting across all error types
-//! - Simpler logic that follows AST structure
-//! - Easy to extend for new pattern types
-//! - Better handling of complex nested structures
-//!
-//! ## Key Components
-//!
-//! 1. **`format_multiple_errors_with_tree`**: Main entry point that chooses between
-//!    single and multiple error algorithms.
-//!
-//! 2. **`traverse_to_multiple_errors`**: Core multiple-error tree traversal that
-//!    processes errors at their leaf locations.
-//!
-//! 3. **`find_field_node_for_error`**: AST traversal to resolve error field paths
-//!    to exact PatternNode locations.
-//!
-//! 4. **`format_leaf_error_field`**: Precise formatting of individual errors with
-//!    pattern-specific underline positioning.
-//!
-//! ## Critical Insights for Future Developers
-//!
-//! ### Field Path Handling
-//! - Error paths include variable names (`user.name`) - skip the variable part
-//! - Enum variants appear in paths (`theme.Some`) - handle specially for display
-//! - Numeric indices are preserved (`data.0`) - important for tuples/slices
-//!
-//! ### Underline Positioning Strategy
-//! - Different pattern types need different underline strategies
-//! - Equality vs comparison patterns have different semantics
-//! - Enum patterns require special handling for inner vs outer content
-//!
-//! ### Performance Considerations
-//! - Single-pass AST traversal for multiple errors
-//! - Pattern string generation at compile time (handled by macro)
-//! - Minimal string manipulation during formatting
+//! Pass 2: Render the structure to a formatted string
+//! - Convert Fragments to text with proper indentation
+//! - Track positions for underline annotations
+//! - Maintain consistent formatting across error types
 
 use std::fmt;
+
+// ========== CORE DATA STRUCTURES ==========
 
 /// Tree-based pattern representation for error formatting
 #[derive(Debug)]
@@ -99,16 +38,22 @@ pub enum PatternNode {
         items: &'static [&'static PatternNode],
     },
 
-    // Simple patterns
+    // Enum patterns
+    EnumVariant {
+        path: &'static str,
+        args: Option<&'static [&'static PatternNode]>,
+    },
+
+    // Leaf patterns
     Simple {
-        value: &'static str, // "123", "\"hello\"", etc.
+        value: &'static str,
     },
     Comparison {
-        op: &'static str, // ">", ">=", "<", "<=", "==", "!="
+        op: &'static str,
         value: &'static str,
     },
     Range {
-        pattern: &'static str, // "18..=65", "0.0..100.0"
+        pattern: &'static str,
     },
     Regex {
         pattern: &'static str,
@@ -117,14 +62,37 @@ pub enum PatternNode {
         expr: &'static str,
     },
 
-    // Enum patterns
-    EnumVariant {
-        path: &'static str, // "Some", "Ok", "Status::Active"
-        args: Option<&'static [&'static PatternNode]>,
-    },
-
     // Special
-    Rest, // The ".." pattern
+    Rest,
+}
+
+impl fmt::Display for PatternNode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PatternNode::Struct { name, .. } => write!(f, "{} {{ ... }}", name),
+            PatternNode::Slice { is_ref, .. } => {
+                if *is_ref {
+                    write!(f, "&[...]")
+                } else {
+                    write!(f, "[...]")
+                }
+            }
+            PatternNode::Tuple { items } => write!(f, "({})", ".., ".repeat(items.len())),
+            PatternNode::EnumVariant { path, args } => {
+                if args.is_some() {
+                    write!(f, "{}(...)", path)
+                } else {
+                    write!(f, "{}", path)
+                }
+            }
+            PatternNode::Simple { value } => write!(f, "{}", value),
+            PatternNode::Comparison { op, value } => write!(f, "{} {}", op, value),
+            PatternNode::Range { pattern } => write!(f, "{}", pattern),
+            PatternNode::Regex { pattern } => write!(f, "=~ {}", pattern),
+            PatternNode::Like { expr } => write!(f, "=~ {}", expr),
+            PatternNode::Rest => write!(f, ".."),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -150,50 +118,173 @@ pub enum ErrorType {
     Slice,
     Equality, // For == patterns where we show both actual and expected
 }
-/// State maintained during tree traversal for error formatting.
-///
-/// This structure encapsulates all the state needed for the unified tree-traversal
-/// algorithm that handles both single and multiple errors with the same code path.
-struct TraversalState<'a> {
-    /// The sorted list of errors to process
-    errors: &'a [ErrorContext],
 
-    /// Current index into the errors array
-    error_index: usize,
+// ========== TWO-PASS ERROR RENDERING SYSTEM ==========
 
-    /// The accumulated output string
-    output: String,
-
-    /// Stack of breadcrumb entries for nested contexts
-    breadcrumb_stack: Vec<BreadcrumbEntry>,
-
-    /// Depth of last written breadcrumb (for managing intermediate breadcrumbs)
-    last_written_depth: Option<usize>,
-
-    /// Current traversal depth in the pattern tree
-    current_depth: usize,
-
-    /// Whether any breadcrumbs have been rendered globally (for multi-error context)
-    any_breadcrumbs_rendered: bool,
+/// Main structure representing all error output
+#[derive(Debug)]
+pub struct ErrorDisplay {
+    /// Header like "assert_struct! failed" or with error count
+    pub header: String,
+    /// One section per error
+    pub sections: Vec<ErrorSection>,
+    /// Closing breadcrumbs for opened structs (e.g., "}", "} ... }")
+    pub closing_breadcrumbs: Vec<String>,
 }
 
-/// Represents a breadcrumb entry in the nested structure context.
+/// A single error section in the output
+#[derive(Debug)]
+pub struct ErrorSection {
+    /// Opening breadcrumbs showing path to error (e.g., ["Response {", "... Profile {"])
+    pub opening_breadcrumbs: Vec<String>,
+    /// Location information for the error
+    pub location: ErrorLocation,
+    /// The pattern fragment containing the error
+    pub fragment: Fragment,
+}
+
+/// Location information for an error
+#[derive(Debug)]
+pub struct ErrorLocation {
+    /// Full field path (e.g., "user.profile.age")
+    pub field_path: String,
+    /// Line number in source file
+    pub line_number: u32,
+}
+
+/// Represents a fragment of the pattern AST with optional error annotation
+#[derive(Debug)]
+pub enum Fragment {
+    /// Simple leaf patterns (may or may not have error)
+    Annotated {
+        /// The pattern as string (e.g., ">= 18", "\"hello\"")
+        pattern: String,
+        /// Some if this is the error location
+        annotation: Option<ErrorAnnotation>,
+    },
+
+    /// Struct patterns (including enum structs like Status::Active { ... })
+    Struct {
+        /// Struct name (e.g., "Profile" or "Status::Active")
+        name: String,
+        /// Fields in the struct
+        fields: Vec<Fragment>,
+        /// Whether the struct has a rest pattern (..)
+        has_rest: bool,
+    },
+
+    /// Tuple patterns (including enum tuples like Some(...))
+    Tuple {
+        /// None for plain tuples, Some("Some") for enum variants
+        name: Option<String>,
+        /// The tuple elements
+        elements: Vec<Fragment>,
+    },
+
+    /// Slice patterns
+    Slice {
+        /// Whether it's &[...] or just [...]
+        is_ref: bool,
+        /// The slice elements
+        elements: Vec<Fragment>,
+    },
+
+    /// Struct field (for use within Fragment::Struct)
+    Field {
+        /// Field name
+        name: String,
+        /// The field's pattern (recursive)
+        value: Box<Fragment>,
+    },
+
+    /// Rest pattern ".."
+    Rest,
+}
+
+/// Error annotation information
+#[derive(Debug)]
+pub struct ErrorAnnotation {
+    /// The actual value that didn't match
+    pub actual_value: String,
+    /// Type of error
+    pub error_type: ErrorType,
+}
+
+// ========== PASS 1: STRUCTURE BUILDING ==========
+
+/// Build the error display structure from the pattern tree and errors.
 ///
-/// Breadcrumbs track the path through nested structures (Struct -> Slice -> Tuple, etc.)
-/// and help determine when to render intermediate context like "... InnerStruct {".
+/// This is Pass 1 of the two-pass system. It traverses the pattern tree,
+/// identifies error locations, and builds a structural representation
+/// suitable for rendering.
+pub fn build_error_display(root: &'static PatternNode, errors: Vec<ErrorContext>) -> ErrorDisplay {
+    if errors.is_empty() {
+        return ErrorDisplay {
+            header: "assert_struct! failed: no errors provided".to_string(),
+            sections: vec![],
+            closing_breadcrumbs: vec![],
+        };
+    }
+
+    // Sort errors by line number to maintain source order
+    let mut sorted_errors = errors;
+    sorted_errors.sort_by_key(|e| e.line_number);
+
+    // Create header based on error count
+    let header = if sorted_errors.len() == 1 {
+        "assert_struct! failed:".to_string()
+    } else {
+        format!("assert_struct! failed: {} mismatches", sorted_errors.len())
+    };
+
+    // Create traversal state
+    let mut state = TraversalState {
+        errors: sorted_errors,
+        error_index: 0,
+        sections: Vec::new(),
+        breadcrumb_stack: Vec::new(),
+        current_depth: 0,
+    };
+
+    // Traverse the pattern tree from root
+    traverse_pattern_tree(root, &mut state, vec![]);
+
+    // Build closing breadcrumbs
+    let closing_breadcrumbs = build_closing_breadcrumbs(&state.breadcrumb_stack);
+
+    ErrorDisplay {
+        header,
+        sections: state.sections,
+        closing_breadcrumbs,
+    }
+}
+
+/// State maintained during tree traversal
+struct TraversalState {
+    /// Sorted list of errors to process
+    errors: Vec<ErrorContext>,
+    /// Current index into errors array
+    error_index: usize,
+    /// Accumulated sections
+    sections: Vec<ErrorSection>,
+    /// Stack of breadcrumb entries for nested contexts
+    breadcrumb_stack: Vec<BreadcrumbEntry>,
+    /// Current traversal depth
+    current_depth: usize,
+}
+
+/// Represents a breadcrumb entry in the nested structure
 #[derive(Debug)]
 struct BreadcrumbEntry {
-    /// The pattern node for this breadcrumb level
-    node: &'static PatternNode,
-
+    /// The struct name for this breadcrumb
+    name: String,
     /// The depth at which this breadcrumb occurs
     depth: usize,
-
-    /// Whether this breadcrumb has been rendered to output yet
+    /// Whether this breadcrumb has been rendered
     rendered: bool,
 }
 
-impl<'a> TraversalState<'a> {
+impl TraversalState {
     /// Check if there are more errors to process
     fn has_next_error(&self) -> bool {
         self.error_index < self.errors.len()
@@ -220,148 +311,66 @@ impl<'a> TraversalState<'a> {
     /// Mark the current error as processed
     fn advance_error(&mut self) {
         self.error_index += 1;
-        self.last_written_depth = Some(self.current_depth);
     }
 }
 
-impl fmt::Display for ErrorType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ErrorType::Comparison => write!(f, "comparison"),
-            ErrorType::Range => write!(f, "range"),
-            ErrorType::Regex => write!(f, "regex pattern"),
-            ErrorType::Value => write!(f, "value"),
-            ErrorType::EnumVariant => write!(f, "enum variant"),
-            ErrorType::Slice => write!(f, "slice"),
-            ErrorType::Equality => write!(f, "equality"),
-        }
-    }
-}
+/// Traverse the pattern tree and build error sections
+fn traverse_pattern_tree(
+    node: &'static PatternNode,
+    state: &mut TraversalState,
+    field_path: Vec<String>,
+) {
+    // Check if current node is an error node
+    if state.next_error_matches(node) {
+        // Extract error data to avoid borrow issues
+        let error_data = state.current_error().map(|e| {
+            (
+                e.field_path.clone(),
+                e.line_number,
+                e.actual_value.clone(),
+                e.error_type.clone(),
+            )
+        });
 
-/// NEW: Formats errors using unified tree-traversal algorithm with root node.
-///
-/// This function implements the core algorithm requested by the user:
-/// - Takes root PatternNode AND list of errors as separate parameters
-/// - Uses unified code path for single/multiple errors with conditionals
-/// - Implements tree-traversal approach starting from root
-pub fn format_errors_with_root(root: &'static PatternNode, errors: Vec<ErrorContext>) -> String {
-    // Use the new two-pass implementation
-    let display = crate::error_v2::build_error_display(root, errors);
-    crate::error_v2::render_error_display(&display)
-}
-
-// OLD IMPLEMENTATION - TO BE REMOVED
-/*
-pub fn format_errors_with_root_old(root: &'static PatternNode, errors: Vec<ErrorContext>) -> String {
-    if errors.is_empty() {
-        return "assert_struct! failed: no errors provided".to_string();
-    }
-
-    // Sort errors by line number to maintain source order
-    let mut sorted_errors = errors;
-    sorted_errors.sort_by_key(|e| e.line_number);
-
-    // Create traversal state - unified for single/multiple errors
-    let mut state = TraversalState {
-        errors: &sorted_errors,
-        error_index: 0,
-        output: String::new(),
-        breadcrumb_stack: Vec::new(),
-        last_written_depth: None,
-        current_depth: 0,
-        any_breadcrumbs_rendered: false,
-    };
-
-    // Add header - conditional formatting based on error count
-    if sorted_errors.len() == 1 {
-        state.output.push_str("assert_struct! failed:\n\n");
-    } else {
-        state.output.push_str(&format!(
-            "assert_struct! failed: {} mismatches\n",
-            sorted_errors.len()
-        ));
-    }
-
-    // Start unified tree traversal from root
-    traverse_tree(root, &mut state);
-
-    // Render closing breadcrumbs for all opened containers
-    render_final_closing_breadcrumbs(&mut state);
-
-    state.output
-}
-*/
-
-// Unified tree-traversal implementation
-
-/// Core unified tree traversal function.
-///
-/// This function implements the unified tree-traversal algorithm that handles both
-/// single and multiple errors with the same code path, using conditionals rather
-/// than split logic.
-fn traverse_tree(node: &'static PatternNode, state: &mut TraversalState) {
-    // Check if current node matches next error
-    let is_error_node = state.next_error_matches(node);
-
-    if is_error_node {
-        // Check if this is a tuple element error that should be rendered at the tuple level
-        if let Some(error) = state.current_error() {
-            if is_tuple_element_error(&error.field_path) {
-                // Skip rendering at this level - we'll render at the tuple parent level
+        if let Some((error_field_path, error_line, _actual_value, _error_type)) = error_data {
+            // Check for tuple element errors (should be handled at parent level)
+            if is_tuple_element_error(&error_field_path) {
+                // Skip - will be handled when we reach the tuple itself
                 state.advance_error();
                 return;
             }
+
+            // Build the fragment for this error (need to recreate error context)
+            let error_ctx = state.current_error().unwrap();
+            let fragment = build_error_fragment(node, error_ctx, state);
+
+            // Collect opening breadcrumbs
+            let opening_breadcrumbs = collect_opening_breadcrumbs(state);
+
+            // Create the error section
+            let section = ErrorSection {
+                opening_breadcrumbs,
+                location: ErrorLocation {
+                    field_path: error_field_path,
+                    line_number: error_line,
+                },
+                fragment,
+            };
+
+            state.sections.push(section);
+            state.advance_error();
         }
-
-        // Render any pending breadcrumbs before the error
-        render_breadcrumbs_to_error(state);
-
-        // Render the error based on node type
-        match node {
-            PatternNode::Struct { .. } => {
-                render_struct_error(node, state);
-            }
-            PatternNode::Slice { .. } => {
-                render_slice_error(node, state);
-            }
-            PatternNode::Tuple { .. } => {
-                render_tuple_error(node, state);
-            }
-            PatternNode::EnumVariant { .. } => {
-                render_enum_error(node, state);
-            }
-            PatternNode::Simple { .. } => {
-                render_simple_error(node, state);
-            }
-            PatternNode::Comparison { .. } => {
-                render_comparison_error(node, state);
-            }
-            PatternNode::Range { .. } => {
-                render_range_error(node, state);
-            }
-            PatternNode::Regex { .. } => {
-                render_regex_error(node, state);
-            }
-            PatternNode::Like { .. } => {
-                render_like_error(node, state);
-            }
-            PatternNode::Rest => {
-                // Rest patterns shouldn't be error nodes, but handle gracefully
-                render_simple_error(node, state);
-            }
-        }
-
-        state.advance_error();
     }
 
     // Continue traversal based on node type
     match node {
-        PatternNode::Struct { fields, .. } => {
-            // Add to breadcrumb stack if contains future errors
-            let has_future_errors = contains_future_errors(node, state);
-            if has_future_errors {
+        PatternNode::Struct { name, fields, .. } => {
+            // Check if this struct contains future errors
+            let contains_errors = contains_future_errors(node, state);
+
+            if contains_errors {
                 state.breadcrumb_stack.push(BreadcrumbEntry {
-                    node,
+                    name: name.to_string(),
                     depth: state.current_depth,
                     rendered: false,
                 });
@@ -370,560 +379,187 @@ fn traverse_tree(node: &'static PatternNode, state: &mut TraversalState) {
             state.current_depth += 1;
             for (field_name, field_node) in fields.iter() {
                 if *field_name != ".." {
-                    // Skip rest patterns
-                    traverse_tree(field_node, state);
+                    let mut new_path = field_path.clone();
+                    new_path.push(field_name.to_string());
+                    traverse_pattern_tree(field_node, state, new_path);
                 }
-            }
-            state.current_depth -= 1;
-        }
-        PatternNode::Slice { items, .. } => {
-            // Slices no longer use breadcrumbs - render inline with error
-            state.current_depth += 1;
-            for item in items.iter() {
-                traverse_tree(item, state);
             }
             state.current_depth -= 1;
         }
         PatternNode::Tuple { items } => {
-            // Check if this tuple has child errors that need to be rendered at this level
-            let tuple_errors = collect_tuple_child_errors(node, state);
+            // Check for tuple element errors at this level
+            let tuple_errors = collect_tuple_child_errors(node, state, &field_path);
 
             if !tuple_errors.is_empty() {
-                // Render tuple errors at this level
-                for error_data in tuple_errors {
-                    render_breadcrumbs_to_error(state);
-                    render_tuple_with_error_context(node, error_data.0, error_data.1, state);
+                // Extract error data to avoid borrow issues
+                let error_count = tuple_errors.len();
+                let first_error_line = tuple_errors[0].line_number;
+                let first_error_path = tuple_errors[0].field_path.clone();
+
+                // Build a tuple fragment with all elements
+                let fragment = build_tuple_fragment_with_errors(node, &tuple_errors, &field_path);
+
+                let opening_breadcrumbs = collect_opening_breadcrumbs(state);
+
+                // For now, panic if multiple errors in same tuple (TODO: handle this)
+                if error_count > 1 {
+                    todo!("Multiple errors in same tuple not yet supported");
+                }
+
+                // Use the error's field path, but remove the numeric suffix for display
+                let display_path = {
+                    let path = &first_error_path;
+                    // Remove the numeric index at the end for tuple display
+                    if let Some(dot_pos) = path.rfind('.') {
+                        let (base, suffix) = path.split_at(dot_pos + 1);
+                        if suffix.parse::<usize>().is_ok() {
+                            base[..base.len() - 1].to_string() // Remove the dot too
+                        } else {
+                            path.to_string()
+                        }
+                    } else {
+                        path.to_string()
+                    }
+                };
+
+                let section = ErrorSection {
+                    opening_breadcrumbs,
+                    location: ErrorLocation {
+                        field_path: display_path,
+                        line_number: first_error_line,
+                    },
+                    fragment,
+                };
+
+                state.sections.push(section);
+
+                // Advance past all tuple errors
+                for _ in 0..error_count {
                     state.advance_error();
                 }
             } else {
-                // No tuple errors, continue normal traversal
+                // No errors in this tuple, continue traversal
                 state.current_depth += 1;
-                for item in items.iter() {
-                    traverse_tree(item, state);
+                for (i, item) in items.iter().enumerate() {
+                    let mut new_path = field_path.clone();
+                    new_path.push(i.to_string());
+                    traverse_pattern_tree(item, state, new_path);
                 }
                 state.current_depth -= 1;
             }
         }
+        PatternNode::Slice { items, .. } => {
+            state.current_depth += 1;
+            for (i, item) in items.iter().enumerate() {
+                let mut new_path = field_path.clone();
+                new_path.push(format!("[{}]", i));
+                traverse_pattern_tree(item, state, new_path);
+            }
+            state.current_depth -= 1;
+        }
         PatternNode::EnumVariant { args, .. } => {
             if let Some(args) = args {
-                // Check if this enum variant has tuple child errors that need to be rendered at this level
-                let tuple_errors = collect_tuple_child_errors(node, state);
+                // Enum variants with args are handled like tuples
+                let tuple_errors = collect_tuple_child_errors(node, state, &field_path);
 
                 if !tuple_errors.is_empty() {
-                    // Render enum tuple errors at this level
-                    for error_data in tuple_errors {
-                        render_breadcrumbs_to_error(state);
-                        render_tuple_with_error_context(node, error_data.0, error_data.1, state);
+                    // Extract error data to avoid borrow issues
+                    let error_count = tuple_errors.len();
+                    let first_error_line = tuple_errors[0].line_number;
+                    let first_error_path = tuple_errors[0].field_path.clone();
+
+                    let fragment =
+                        build_enum_tuple_fragment_with_errors(node, &tuple_errors, &field_path);
+                    let opening_breadcrumbs = collect_opening_breadcrumbs(state);
+
+                    if error_count > 1 {
+                        todo!("Multiple errors in same enum tuple not yet supported");
+                    }
+
+                    // Use the error's field path, but remove the numeric suffix for display
+                    let display_path = {
+                        let path = &first_error_path;
+                        // Remove the numeric index at the end for tuple display
+                        if let Some(dot_pos) = path.rfind('.') {
+                            let (base, suffix) = path.split_at(dot_pos + 1);
+                            if suffix.parse::<usize>().is_ok() {
+                                base[..base.len() - 1].to_string() // Remove the dot too
+                            } else {
+                                path.to_string()
+                            }
+                        } else {
+                            path.to_string()
+                        }
+                    };
+
+                    let section = ErrorSection {
+                        opening_breadcrumbs,
+                        location: ErrorLocation {
+                            field_path: display_path,
+                            line_number: first_error_line,
+                        },
+                        fragment,
+                    };
+
+                    state.sections.push(section);
+
+                    for _ in 0..error_count {
                         state.advance_error();
                     }
                 } else {
-                    // No tuple errors, continue normal traversal
                     state.current_depth += 1;
-                    for arg in args.iter() {
-                        traverse_tree(arg, state);
+                    for (i, arg) in args.iter().enumerate() {
+                        let mut new_path = field_path.clone();
+                        new_path.push(i.to_string());
+                        traverse_pattern_tree(arg, state, new_path);
                     }
                     state.current_depth -= 1;
                 }
             }
         }
         // Leaf nodes don't need further traversal
-        PatternNode::Simple { .. }
-        | PatternNode::Comparison { .. }
-        | PatternNode::Range { .. }
-        | PatternNode::Regex { .. }
-        | PatternNode::Like { .. }
-        | PatternNode::Rest => {}
+        _ => {}
     }
 }
 
-/// Check if a node contains any future errors that haven't been processed yet.
-fn contains_future_errors(node: &'static PatternNode, state: &TraversalState) -> bool {
-    for i in state.error_index..state.errors.len() {
-        if let Some(error_node) = state.errors[i].error_node {
-            if node_contains_recursive(node, error_node) {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-/// Check if a field path represents a tuple element error (ends with numeric index)
-fn is_tuple_element_error(field_path: &str) -> bool {
-    field_path
-        .split('.')
-        .last()
-        .map(|s| s.parse::<usize>().is_ok())
-        .unwrap_or(false)
-}
-
-/// Collect all tuple child errors that should be rendered at this tuple level
-fn collect_tuple_child_errors(
-    tuple_node: &'static PatternNode,
-    state: &TraversalState,
-) -> Vec<((ErrorType, String, u32, String), usize)> {
-    let mut tuple_errors = Vec::new();
-
-    // Look for errors that belong to this tuple's children
-    for i in state.error_index..state.errors.len() {
-        let error = &state.errors[i];
-
-        if is_tuple_element_error(&error.field_path) {
-            // Extract the element index
-            if let Some(element_index) = error
-                .field_path
-                .split('.')
-                .last()
-                .and_then(|s| s.parse::<usize>().ok())
-            {
-                // Check if this error belongs to our tuple
-                if let Some(error_node) = error.error_node {
-                    if node_contains_recursive(tuple_node, error_node) {
-                        let error_data = (
-                            error.error_type.clone(),
-                            error.field_path.clone(),
-                            error.line_number,
-                            error.actual_value.clone(),
-                        );
-                        tuple_errors.push((error_data, element_index));
-                    }
-                }
-            }
-        }
-    }
-
-    tuple_errors
-}
-
-/// Check if a root node contains a target node recursively.
-fn node_contains_recursive(root: &'static PatternNode, target: &'static PatternNode) -> bool {
-    if std::ptr::eq(root, target) {
-        return true;
-    }
-
-    match root {
-        PatternNode::Struct { fields, .. } => fields
-            .iter()
-            .any(|(_, field_node)| node_contains_recursive(field_node, target)),
-        PatternNode::EnumVariant {
-            args: Some(args), ..
-        } => args.iter().any(|arg| node_contains_recursive(arg, target)),
-        PatternNode::Slice { items, .. } => items
-            .iter()
-            .any(|item| node_contains_recursive(item, target)),
-        PatternNode::Tuple { items } => items
-            .iter()
-            .any(|item| node_contains_recursive(item, target)),
-        _ => false,
-    }
-}
-
-/// Render breadcrumbs leading up to an error.
-fn render_breadcrumbs_to_error(state: &mut TraversalState) {
-    for entry in &mut state.breadcrumb_stack {
-        if !entry.rendered && entry.depth <= state.current_depth {
-            match entry.node {
-                PatternNode::Struct { name, .. } => {
-                    if state.output.ends_with('\n') && !state.any_breadcrumbs_rendered {
-                        // First breadcrumb ever (root level, first error)
-                        state.output.push_str(&format!("   | {} {{", name));
-                    } else if state.output.ends_with('\n') {
-                        // Start of new section but breadcrumbs were rendered before
-                        state.output.push_str(&format!("   | ... {} {{", name));
-                    } else {
-                        // Intermediate breadcrumb on same line
-                        state.output.push_str(&format!(" ... {} {{", name));
-                    }
-                }
-                _ => {
-                    // Only struct patterns use breadcrumbs now
-                }
-            }
-            entry.rendered = true;
-            state.any_breadcrumbs_rendered = true;
-        }
-    }
-
-    // Add newline before error if we rendered breadcrumbs
-    if state.breadcrumb_stack.iter().any(|e| e.rendered) {
-        state.output.push('\n');
-    }
-}
-
-/// Render all closing breadcrumbs for rendered containers in a single line.
-fn render_final_closing_breadcrumbs(state: &mut TraversalState) {
-    // Collect all rendered breadcrumbs that need closing
-    let rendered_breadcrumbs: Vec<_> = state
-        .breadcrumb_stack
-        .iter()
-        .filter(|entry| entry.rendered)
-        .collect();
-
-    if rendered_breadcrumbs.is_empty() {
-        return;
-    }
-
-    // Build the closing breadcrumb line: "   | } ... }" or "   | ) ... }"
-    let mut closing_parts = Vec::new();
-
-    // Process breadcrumbs in reverse order (innermost to outermost)
-    for entry in rendered_breadcrumbs.iter().rev() {
-        let closing_char = match entry.node {
-            PatternNode::Struct { .. } => "}",
-            _ => continue, // Only struct patterns use breadcrumbs now
-        };
-        closing_parts.push(closing_char);
-    }
-
-    if !closing_parts.is_empty() {
-        // Join with " ... " to mirror opening breadcrumb style
-        let closing_line = closing_parts.join(" ... ");
-        state.output.push_str(&format!("   | {}\n", closing_line));
-    }
-}
-
-// Error rendering functions for each node type
-
-fn render_struct_error(node: &'static PatternNode, state: &mut TraversalState) {
-    if let Some(_) = state.current_error() {
-        // For struct errors, we typically render the field that failed
-        // This is handled by the traversal finding the actual error node
-        render_simple_error(node, state);
-    }
-}
-
-fn render_slice_error(node: &'static PatternNode, state: &mut TraversalState) {
-    render_simple_error(node, state);
-}
-
-fn render_tuple_error(node: &'static PatternNode, state: &mut TraversalState) {
-    if let PatternNode::Tuple { items } = node {
-        if let Some(error) = state.current_error() {
-            // Extract the tuple element index from the field path
-            // e.g., "holder.data.0" -> index 0
-            let field_path = &error.field_path;
-            let element_index = field_path
-                .split('.')
-                .last()
-                .and_then(|s| s.parse::<usize>().ok())
-                .unwrap_or(0);
-
-            if element_index < items.len() {
-                // Extract error data to avoid borrowing issues
-                let error_data = (
-                    error.error_type.clone(),
-                    error.field_path.clone(),
-                    error.line_number,
-                    error.actual_value.clone(),
-                );
-
-                // We have a valid tuple error, render the full tuple context
-                render_tuple_with_error_context(node, error_data, element_index, state);
-                return;
-            }
-        }
-    }
-
-    // Fallback to simple error rendering if not a valid tuple error
-    render_simple_error(node, state);
-}
-
-/// Render a tuple with full context, highlighting the failing element
-fn render_tuple_with_error_context(
+/// Build a fragment for an error node
+fn build_error_fragment(
     node: &'static PatternNode,
-    error_data: (ErrorType, String, u32, String), // (error_type, field_path, line_number, actual_value)
-    failing_element_index: usize,
-    state: &mut TraversalState,
-) {
-    // Extract tuple items - handle both Tuple and EnumVariant nodes
-    let items = match node {
-        PatternNode::Tuple { items } => items,
-        PatternNode::EnumVariant {
-            args: Some(args), ..
-        } => args,
-        _ => return, // Not a tuple or enum variant with args
-    };
+    error: &ErrorContext,
+    _state: &TraversalState,
+) -> Fragment {
+    // Extract field name if this is a struct field
+    let field_name = error.field_path.split('.').last().unwrap_or("");
 
-    // Extract values for rendering
-    let (_error_type, field_path, line_number, actual_value) = error_data;
+    // Check if field_name is all digits to identify tuple element paths
+    // This is checking whether the last part of the field path (e.g., "0" in "user.0") 
+    // consists entirely of digits, which indicates it's a tuple element index rather than
+    // a named struct field
+    let is_tuple_element = field_name.chars().all(|c| c.is_ascii_digit());
 
-    // Build the field path without the element index (e.g., \"holder.data.0\" -> \"holder.data\")
-    let tuple_field_path = field_path.rsplitn(2, '.').nth(1).unwrap_or(&field_path);
+    // Determine if this is a complex pattern that shouldn't show field names
+    let is_complex_pattern = matches!(
+        node,
+        PatternNode::EnumVariant { .. }
+            | PatternNode::Range { .. }
+            | PatternNode::Regex { .. }
+            | PatternNode::Like { .. }
+    );
 
-    state.output.push_str("mismatch:\n");
-    state.output.push_str(&format!(
-        "  --> `{}` (line {})\n",
-        tuple_field_path, line_number
-    ));
-
-    // Determine if we're in a breadcrumb context and need field-level indentation
-    let has_breadcrumbs = state.breadcrumb_stack.iter().any(|e| e.rendered);
-
-    // Extract field name from path for context (e.g., \"holder.data\" -> \"data\")
-    let field_name = tuple_field_path.split('.').last().unwrap_or("");
-
-    let should_show_field_context = has_breadcrumbs && !field_name.is_empty();
-    let indent = if should_show_field_context {
-        "    "
+    // Build the appropriate fragment based on node type and context
+    if !is_tuple_element && !field_name.is_empty() && !is_complex_pattern {
+        // This is a simple struct field
+        Fragment::Field {
+            name: field_name.to_string(),
+            value: Box::new(build_pattern_fragment(node, Some(error))),
+        }
     } else {
-        ""
-    }; // 4 spaces for struct fields
-
-    // Build the appropriate pattern string based on node type
-    let pattern_prefix = match node {
-        PatternNode::EnumVariant { path, .. } => {
-            format!("{}", path)
-        }
-        _ => String::new(),
-    };
-
-    // Build the full tuple pattern string
-    let tuple_pattern_elements: Vec<String> = items
-        .iter()
-        .map(|item| format_pattern_simple(item))
-        .collect();
-    let full_tuple_pattern = format!("{}({})", pattern_prefix, tuple_pattern_elements.join(", "));
-
-    if should_show_field_context {
-        // Render with field context: \"   |     data: (60, \"test\"),\"
-        state.output.push_str(&format!(
-            "   | {}{}: {},\n",
-            indent, field_name, full_tuple_pattern
-        ));
-
-        // Calculate underline position
-        let field_prefix = format!("{}{}: {}(", indent, field_name, pattern_prefix);
-        let field_prefix_len = field_prefix.len();
-
-        // Find the position of the failing element within the tuple
-        let mut element_position = 0;
-        for i in 0..failing_element_index {
-            element_position += tuple_pattern_elements[i].len();
-            element_position += 2; // ", " separator after this element
-        }
-
-        let failing_element_pattern = &tuple_pattern_elements[failing_element_index];
-        let underline_spaces = " ".repeat(field_prefix_len + element_position);
-        let underline = "^".repeat(failing_element_pattern.len());
-
-        state.output.push_str(&format!(
-            "   | {}{} actual: {}\n",
-            underline_spaces, underline, actual_value
-        ));
-    } else {
-        // Render without field context
-        state
-            .output
-            .push_str(&format!("   | {}{}\n", indent, full_tuple_pattern));
-
-        // Calculate underline position for the failing element
-        let mut element_position = pattern_prefix.len() + 1; // Start after prefix and opening parenthesis
-        for i in 0..failing_element_index {
-            if i > 0 {
-                element_position += 2; // ", " separator
-            }
-            element_position += tuple_pattern_elements[i].len();
-        }
-
-        let failing_element_pattern = &tuple_pattern_elements[failing_element_index];
-        let underline_spaces = " ".repeat(indent.len() + element_position);
-        let underline = "^".repeat(failing_element_pattern.len());
-
-        state.output.push_str(&format!(
-            "   | {}{} actual: {}\n",
-            underline_spaces, underline, actual_value
-        ));
+        // Direct pattern without field wrapper (complex patterns, tuple elements, etc.)
+        build_pattern_fragment(node, Some(error))
     }
 }
 
-fn render_enum_error(node: &'static PatternNode, state: &mut TraversalState) {
-    render_simple_error(node, state);
-}
-
-fn render_simple_error(node: &'static PatternNode, state: &mut TraversalState) {
-    if let Some(error) = state.current_error() {
-        // Extract values before borrowing state mutably
-        let _error_type = error.error_type.clone();
-        let field_path = error.field_path.clone();
-        let line_number = error.line_number;
-        let actual_value = error.actual_value.clone();
-
-        state.output.push_str("mismatch:\n");
-        state
-            .output
-            .push_str(&format!("  --> `{}` (line {})\n", field_path, line_number));
-
-        // Determine if we're in a breadcrumb context and need field-level indentation
-        let has_breadcrumbs = state.breadcrumb_stack.iter().any(|e| e.rendered);
-
-        // Extract field name from path for context (e.g., "user.age" -> "age")
-        let field_name = field_path.split('.').last().unwrap_or("");
-
-        // Determine if we should show field context and indentation
-        // Only for simple struct fields, not complex patterns (enum variants, etc.)
-        // Note: Comparison patterns should show field names when they're direct struct fields
-        let is_complex_pattern = matches!(
-            node,
-            PatternNode::EnumVariant { .. }
-                | PatternNode::Range { .. }
-                | PatternNode::Regex { .. }
-                | PatternNode::Like { .. }
-        );
-
-        // Check if field_name is all digits to identify tuple element paths.
-        // Tuple elements get numeric indices in their paths (e.g., "holder.data.0" where "0" is the last segment)
-        // while struct fields have named paths (e.g., "user.profile.age" where "age" is the last segment).
-        // These numeric indices are generated in expand.rs:990 via `elem_path.push(i.to_string())`.
-        // We don't want to show "0: pattern" for tuple elements, just the pattern itself.
-        let should_show_field_context = has_breadcrumbs
-            && !field_name.is_empty()
-            && !field_name.chars().all(|c| c.is_ascii_digit())
-            && !is_complex_pattern;
-
-        let indent = if should_show_field_context {
-            "    "
-        } else {
-            ""
-        }; // 4 spaces for struct fields only
-
-        let pattern_str = format_pattern_simple(node);
-
-        if should_show_field_context {
-            // Render with field context: "   |     age: 25,"
-            state.output.push_str(&format!(
-                "   | {}{}: {},\n",
-                indent, field_name, pattern_str
-            ));
-
-            // Position underline under the pattern value, not the field name
-            let field_prefix_len = field_name.len() + 2; // "age: " = field_name + ": "
-            let underline = "^".repeat(pattern_str.len());
-            let underline_spaces = " ".repeat(field_prefix_len);
-            state.output.push_str(&format!(
-                "   | {}{}{} actual: {}\n",
-                indent, underline_spaces, underline, actual_value
-            ));
-        } else {
-            // Render without field context: "   | 60" or "   |     60" if indented
-            state
-                .output
-                .push_str(&format!("   | {}{}\n", indent, pattern_str));
-
-            let underline = "^".repeat(pattern_str.len());
-            state.output.push_str(&format!(
-                "   | {}{} actual: {}\n",
-                indent, underline, actual_value
-            ));
-        }
-    }
-}
-
-fn render_comparison_error(node: &'static PatternNode, state: &mut TraversalState) {
-    render_simple_error(node, state);
-}
-
-fn render_range_error(node: &'static PatternNode, state: &mut TraversalState) {
-    render_simple_error(node, state);
-}
-
-fn render_regex_error(node: &'static PatternNode, state: &mut TraversalState) {
-    render_simple_error(node, state);
-}
-
-fn render_like_error(node: &'static PatternNode, state: &mut TraversalState) {
-    render_simple_error(node, state);
-}
-
-/// Finds the PatternNode corresponding to an error by traversing the pattern AST.
-///
-/// ## Purpose
-///
-/// This function resolves error field paths to their exact PatternNode locations in the AST.
-/// It's a critical component of the tree-traversal algorithm because it allows us to find
-/// the exact pattern that corresponds to each error without string manipulation.
-///
-/// ## Field Path Resolution Strategy
-///
-/// Error field paths have the structure: `variable_name.field1.field2...fieldN[.variant]`
-///
-/// Examples:
-/// - `user.name` → Find field "name" in the root struct
-/// - `account.profile.bio` → Find field "profile" in root, then "bio" in the nested struct
-/// - `settings.theme.Some` → Find field "theme" in root (ignore the ".Some" variant suffix)
-/// - `holder.data.0` → Find field "data" in root, then index 0 in the tuple/slice
-/// - `inventory.items.[1].scores.[1]` → Find field "items", then index 1, then field "scores", then index 1
-///
-/// ### Key Insights
-///
-/// 1. **Skip variable name**: The first component (`user`, `account`, etc.) is the variable name,
-///    not part of the pattern structure.
-///
-/// 2. **Handle enum variants**: For Option/Result patterns, error paths include the variant
-///    name (`.Some`, `.Ok`, etc.) but we want to find the field containing the Option/Result,
-///    not the variant itself.
-///
-/// 3. **Handle slice indexing**: Slice indices are formatted as `[index]` in error paths,
-///    but need to be converted to numeric indices for AST traversal.
-///
-/// 4. **Use AST traversal**: Rather than string manipulation, we traverse the PatternNode
-///    tree to find the exact node, which handles nested structures correctly.
-///
-/// ## Error Cases
-///
-/// Returns `None` if:
-/// - The field path doesn't exist in the pattern tree
-/// - The error path format is malformed
-/// - There's a mismatch between the error path and pattern structure
-
-/// Formats a single error at its leaf field location with precise positioning.
-///
-/// ## Purpose
-///
-/// This function handles the final formatting of individual errors, including:
-/// - Error type and location information
-/// - Field pattern display
-/// - Precise underline positioning
-/// - Special handling for different pattern types
-///
-/// ## Key Formatting Insights
-///
-/// ### Error Path Display Cleanup
-///
-/// The function cleans up error field paths for better user experience:
-/// - `settings.theme.Some` → display as `settings.theme`
-/// - `result.value.Ok` → display as `result.value`
-/// - `holder.data.0` → display as `holder.data.0` (preserve numeric indices)
-///
-/// ### Precise Underline Positioning
-///
-/// Different pattern types require different underline strategies:
-///
-/// 1. **Simple patterns** (`"value"`): Underline the entire value
-/// 2. **Equality patterns** (`== "value"`): Underline just the value part
-/// 3. **Comparison patterns** (`> 100`): Underline the entire comparison
-/// 4. **Enum patterns** (`Some("dark")`):
-///    - For equality: underline the entire pattern `Some("dark")`
-///    - For comparison: underline just the inner part `> 12`
-///
-/// ### Positioning Calculation Strategy
-///
-/// Column positions are calculated based on the field line structure:
-/// ```text
-/// "   | " + indent + field_name + ": " + pattern
-///  ^       ^         ^             ^     ^
-///  0       4         varies        +2    prefix_len
-/// ```
-///
-/// This ensures that underlines appear exactly under the relevant part of the pattern.
-///
-/// ## Pattern Type Handling
-///
-/// The function includes specialized logic for:
-/// - **EnumVariant**: Special positioning for Option/Result patterns
-/// - **Comparison**: Different underline strategies for equality vs comparison operators
-/// - **Simple**: Direct value underlining
-/// - **Range, Regex, Like**: Pattern-specific formatting
-
+/// Format a pattern node to a simple string representation
 fn format_pattern_simple(node: &'static PatternNode) -> String {
     match node {
         PatternNode::Simple { value } => value.to_string(),
@@ -966,362 +602,462 @@ fn format_pattern_simple(node: &'static PatternNode) -> String {
     }
 }
 
-// ========== STRUCTURED ERROR RENDERING (NEW ARCHITECTURE) ==========
+/// Build a pattern fragment from a PatternNode
+fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContext>) -> Fragment {
+    let annotation = error.map(|e| ErrorAnnotation {
+        actual_value: e.actual_value.clone(),
+        error_type: e.error_type.clone(),
+    });
 
-#[cfg(feature = "structured_errors")]
-mod structured {
-    use super::*;
-    use crate::error_document::*;
-
-    /// NEW: Main entry point for structured error rendering with feature flag.
-    ///
-    /// This function provides the new structured approach to error rendering
-    /// that eliminates manual character counting and off-by-one errors.
-    pub fn format_errors_with_root_structured(
-        root: &'static PatternNode,
-        errors: Vec<ErrorContext>,
-    ) -> String {
-        if errors.is_empty() {
-            return "assert_struct! failed: no errors provided".to_string();
-        }
-
-        // Sort errors by line number to maintain source order
-        let mut sorted_errors = errors;
-        sorted_errors.sort_by_key(|e| e.line_number);
-
-        // Build error document
-        let mut document = ErrorDocument::new();
-
-        // Convert each error to a structured section
-        for error in sorted_errors {
-            if let Some(section) = build_error_section(&error) {
-                document.add_section(section);
-            }
-        }
-
-        document.render()
-    }
-
-    /// Convert an ErrorContext into a structured ErrorSection.
-    fn build_error_section(error: &ErrorContext) -> Option<ErrorSection> {
-        // Check if this is a tuple element error based on field path
-        if is_tuple_element_error(&error.field_path) {
-            // For tuple element errors, we need to find the tuple pattern from the root
-            // For now, create a synthetic tuple pattern - this will be improved when
-            // we integrate with the tree traversal logic
-            return build_tuple_error_section_synthetic(error);
-        }
-
-        if let Some(error_node) = error.error_node {
-            match error_node {
-                PatternNode::Tuple { .. } | PatternNode::EnumVariant { args: Some(_), .. } => {
-                    build_tuple_error_section(error_node, error)
+    match node {
+        PatternNode::Simple { value } => Fragment::Annotated {
+            pattern: value.to_string(),
+            annotation,
+        },
+        PatternNode::Comparison { op, value } => Fragment::Annotated {
+            pattern: format!("{} {}", op, value),
+            annotation,
+        },
+        PatternNode::Range { pattern } => Fragment::Annotated {
+            pattern: pattern.to_string(),
+            annotation,
+        },
+        PatternNode::Regex { pattern } => Fragment::Annotated {
+            pattern: format!("=~ {}", pattern),
+            annotation,
+        },
+        PatternNode::Like { expr } => Fragment::Annotated {
+            pattern: format!("=~ {}", expr),
+            annotation,
+        },
+        PatternNode::EnumVariant { path, args } => {
+            if let Some(args) = args {
+                if !args.is_empty() {
+                    // Render full enum variant with arguments
+                    let arg_str = args
+                        .iter()
+                        .map(|arg| format_pattern_simple(arg))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    Fragment::Annotated {
+                        pattern: format!("{}({})", path, arg_str),
+                        annotation,
+                    }
+                } else {
+                    // Unit variant
+                    Fragment::Annotated {
+                        pattern: path.to_string(),
+                        annotation,
+                    }
                 }
-                _ => build_simple_error_section(error_node, error),
-            }
-        } else {
-            // Fallback for errors without node information
-            build_simple_error_section_fallback(error)
-        }
-    }
-
-    /// Build an error section for tuple patterns using structured rendering.
-    fn build_tuple_error_section(
-        node: &'static PatternNode,
-        error: &ErrorContext,
-    ) -> Option<ErrorSection> {
-        // Extract tuple items - handle both Tuple and EnumVariant nodes
-        let items = match node {
-            PatternNode::Tuple { items } => items,
-            PatternNode::EnumVariant {
-                args: Some(args), ..
-            } => args,
-            _ => return None,
-        };
-
-        // Extract the tuple element index from the field path
-        let element_index = error
-            .field_path
-            .split('.')
-            .last()
-            .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(0);
-
-        if element_index >= items.len() {
-            return None;
-        }
-
-        // Build the field path without the element index
-        let tuple_field_path = error
-            .field_path
-            .rsplitn(2, '.')
-            .nth(1)
-            .unwrap_or(&error.field_path);
-
-        // Build content line with automatic position tracking
-        let mut content_builder = LineBuilder::new();
-
-        // Add indentation (TODO: determine based on breadcrumb context)
-        content_builder.add("    ", SegmentStyle::Normal);
-
-        // Add field name if we have one
-        let field_name = tuple_field_path.split('.').last().unwrap_or("");
-        if !field_name.is_empty() {
-            content_builder.add(&format!("{}: ", field_name), SegmentStyle::FieldName);
-        }
-
-        // Build tuple pattern and track the failing element
-        let mut failing_element_range = None;
-
-        // Add enum prefix if needed
-        let pattern_prefix = match node {
-            PatternNode::EnumVariant { path, .. } => format!("{}", path),
-            _ => String::new(),
-        };
-
-        if !pattern_prefix.is_empty() {
-            content_builder.add(&pattern_prefix, SegmentStyle::Pattern);
-        }
-
-        content_builder.add("(", SegmentStyle::Pattern);
-
-        // Add each tuple element, tracking the failing one
-        for (i, item) in items.iter().enumerate() {
-            if i > 0 {
-                content_builder.add(", ", SegmentStyle::Pattern);
-            }
-
-            let element_str = format_pattern_simple(item);
-            if i == element_index {
-                // Track this element's position for underline
-                let (start, end) = content_builder.add(&element_str, SegmentStyle::Pattern);
-                failing_element_range = Some((start, end));
             } else {
-                content_builder.add(&element_str, SegmentStyle::Pattern);
+                // Unit variant
+                Fragment::Annotated {
+                    pattern: path.to_string(),
+                    annotation,
+                }
             }
         }
-
-        content_builder.add("),", SegmentStyle::Pattern);
-
-        // Create the content line
-        let content_line = Line::from_builder("   | ", content_builder);
-
-        // Create the underline line using the tracked position
-        let (underline_start, underline_end) = failing_element_range?;
-
-        let underline = UnderlineLine::new(
-            "   | ",
-            underline_start,
-            underline_end,
-            error.actual_value.clone(),
-        );
-
-        // Create error line with proper location info
-        let error_line = ErrorLine::new(
-            content_line,
-            underline,
-            tuple_field_path.to_string(),
-            error.line_number,
-        );
-
-        // Create section
-        let section = ErrorSection::new(error_line);
-
-        Some(section)
+        PatternNode::Rest => Fragment::Rest,
+        _ => Fragment::Annotated {
+            pattern: "<complex>".to_string(),
+            annotation,
+        },
     }
+}
 
-    /// Build a tuple error section for tuple element errors detected by field path.
-    ///
-    /// This function handles the case where we have a tuple element error (like "holder.data.0")
-    /// but the error_node points to the individual element, not the tuple. We create a synthetic
-    /// tuple representation for proper rendering.
-    fn build_tuple_error_section_synthetic(error: &ErrorContext) -> Option<ErrorSection> {
-        // Extract the tuple element index from the field path
-        let element_index = error
-            .field_path
-            .split('.')
+/// Build a tuple fragment with error annotations
+fn build_tuple_fragment_with_errors(
+    node: &'static PatternNode,
+    errors: &[&ErrorContext],
+    field_path: &[String],
+) -> Fragment {
+    if let PatternNode::Tuple { items } = node {
+        // Build field fragment if this tuple is a struct field
+        let field_name = field_path
             .last()
-            .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(0);
+            .filter(|name| !name.chars().all(|c| c.is_ascii_digit()))
+            .cloned();
 
-        // Build the field path without the element index
-        let tuple_field_path = error
-            .field_path
-            .rsplitn(2, '.')
-            .nth(1)
-            .unwrap_or(&error.field_path);
+        let elements = items
+            .iter()
+            .enumerate()
+            .map(|(i, item)| {
+                // Check if this element has an error
+                let element_error = errors
+                    .iter()
+                    .find(|e| e.field_path.ends_with(&format!(".{}", i)));
 
-        // Build content line with automatic position tracking
-        let mut content_builder = LineBuilder::new();
+                build_pattern_fragment(item, element_error.copied())
+            })
+            .collect();
 
-        // Add indentation (TODO: determine based on breadcrumb context)
-        content_builder.add("    ", SegmentStyle::Normal);
-
-        // Add field name if we have one
-        let field_name = tuple_field_path.split('.').last().unwrap_or("");
-        if !field_name.is_empty() {
-            content_builder.add(&format!("{}: ", field_name), SegmentStyle::FieldName);
-        }
-
-        // For synthetic tuple, we'll create a representation that matches the old format
-        // In the real implementation, we would traverse the pattern tree to get the actual patterns
-        content_builder.add("(", SegmentStyle::Pattern);
-
-        // For now, we'll simulate the typical tuple pattern seen in tests
-        // This is just a demonstration - the full implementation would get actual pattern data
-        match element_index {
-            0 => {
-                // First element is failing
-                let (start, end) = content_builder.add(&error.pattern_str, SegmentStyle::Pattern);
-                content_builder.add(", \"test\"", SegmentStyle::Pattern);
-                content_builder.add("),", SegmentStyle::Pattern);
-                // Return here to avoid the loop logic below
-                let content_line = Line::from_builder("   | ", content_builder);
-                let underline = UnderlineLine::new("   | ", start, end, error.actual_value.clone());
-                let error_line = ErrorLine::new(
-                    content_line,
-                    underline,
-                    tuple_field_path.to_string(),
-                    error.line_number,
-                );
-                return Some(ErrorSection::new(error_line));
-            }
-            1 => {
-                // Second element is failing
-                content_builder.add("60, ", SegmentStyle::Pattern);
-                let (start, end) = content_builder.add(&error.pattern_str, SegmentStyle::Pattern);
-                content_builder.add("),", SegmentStyle::Pattern);
-                // Return here to avoid the loop logic below
-                let content_line = Line::from_builder("   | ", content_builder);
-                let underline = UnderlineLine::new("   | ", start, end, error.actual_value.clone());
-                let error_line = ErrorLine::new(
-                    content_line,
-                    underline,
-                    tuple_field_path.to_string(),
-                    error.line_number,
-                );
-                return Some(ErrorSection::new(error_line));
-            }
-            _ => {
-                // General case - add failing element at the right position
-                let (start, end) = content_builder.add(&error.pattern_str, SegmentStyle::Pattern);
-                content_builder.add("),", SegmentStyle::Pattern);
-                // Return here to avoid the loop logic below
-                let content_line = Line::from_builder("   | ", content_builder);
-                let underline = UnderlineLine::new("   | ", start, end, error.actual_value.clone());
-                let error_line = ErrorLine::new(
-                    content_line,
-                    underline,
-                    tuple_field_path.to_string(),
-                    error.line_number,
-                );
-                return Some(ErrorSection::new(error_line));
-            }
-        }
-    }
-
-    /// Build an error section for simple patterns using structured rendering.
-    fn build_simple_error_section(
-        node: &'static PatternNode,
-        error: &ErrorContext,
-    ) -> Option<ErrorSection> {
-        // Build content line
-        let mut content_builder = LineBuilder::new();
-
-        // Add indentation (TODO: determine based on breadcrumb context)
-        content_builder.add("    ", SegmentStyle::Normal);
-
-        // Extract field name from path
-        let field_name = error.field_path.split('.').last().unwrap_or("");
-
-        // Determine if we should show field context
-        let is_complex_pattern = matches!(
-            node,
-            PatternNode::EnumVariant { .. }
-                | PatternNode::Comparison { .. }
-                | PatternNode::Range { .. }
-                | PatternNode::Regex { .. }
-                | PatternNode::Like { .. }
-        );
-
-        let should_show_field_context = !field_name.is_empty()
-            && !field_name.chars().all(|c| c.is_ascii_digit())
-            && !is_complex_pattern;
-
-        let pattern_str = format_pattern_simple(node);
-        let failing_range = if should_show_field_context {
-            // Render with field context
-            content_builder.add(&format!("{}: ", field_name), SegmentStyle::FieldName);
-            content_builder.add(&format!("{},", pattern_str), SegmentStyle::Pattern)
-        } else {
-            // Render without field context
-            content_builder.add(&pattern_str, SegmentStyle::Pattern)
+        let tuple_fragment = Fragment::Tuple {
+            name: None,
+            elements,
         };
 
-        // Create content line
-        let content_line = Line::from_builder("   | ", content_builder);
-
-        // Create underline
-        let underline = UnderlineLine::new(
-            "   | ",
-            failing_range.0,
-            failing_range.1 - 1, // Adjust for comma
-            error.actual_value.clone(),
-        );
-
-        // Create error line
-        let error_line = ErrorLine::new(
-            content_line,
-            underline,
-            error.field_path.clone(),
-            error.line_number,
-        );
-
-        // Create section
-        let section = ErrorSection::new(error_line);
-
-        Some(section)
-    }
-
-    /// Fallback for building error sections when node information is missing.
-    fn build_simple_error_section_fallback(error: &ErrorContext) -> Option<ErrorSection> {
-        // Build a simple content line with just the field path
-        let mut content_builder = LineBuilder::new();
-        let field_path = format!("{}: <pattern>", error.field_path);
-        let (start, end) = content_builder.add(&field_path, SegmentStyle::Pattern);
-
-        let content_line = Line::from_builder("   | ", content_builder);
-
-        let underline = UnderlineLine::new("   | ", start, end, error.actual_value.clone());
-
-        let error_line = ErrorLine::new(
-            content_line,
-            underline,
-            error.field_path.clone(),
-            error.line_number,
-        );
-        let section = ErrorSection::new(error_line);
-
-        Some(section)
+        if let Some(name) = field_name {
+            Fragment::Field {
+                name,
+                value: Box::new(tuple_fragment),
+            }
+        } else {
+            tuple_fragment
+        }
+    } else {
+        Fragment::Annotated {
+            pattern: "<error>".to_string(),
+            annotation: None,
+        }
     }
 }
 
-/// Main entry point with feature flag support.
+/// Build an enum tuple fragment with error annotations
+fn build_enum_tuple_fragment_with_errors(
+    node: &'static PatternNode,
+    errors: &[&ErrorContext],
+    field_path: &[String],
+) -> Fragment {
+    if let PatternNode::EnumVariant {
+        path,
+        args: Some(args),
+        ..
+    } = node
+    {
+        let field_name = field_path
+            .last()
+            .filter(|name| !name.chars().all(|c| c.is_ascii_digit()))
+            .cloned();
+
+        let elements = args
+            .iter()
+            .enumerate()
+            .map(|(i, item)| {
+                let element_error = errors
+                    .iter()
+                    .find(|e| e.field_path.ends_with(&format!(".{}", i)));
+
+                build_pattern_fragment(item, element_error.copied())
+            })
+            .collect();
+
+        let tuple_fragment = Fragment::Tuple {
+            name: Some(path.to_string()),
+            elements,
+        };
+
+        if let Some(name) = field_name {
+            Fragment::Field {
+                name,
+                value: Box::new(tuple_fragment),
+            }
+        } else {
+            tuple_fragment
+        }
+    } else {
+        Fragment::Annotated {
+            pattern: "<error>".to_string(),
+            annotation: None,
+        }
+    }
+}
+
+/// Check if a field path represents a tuple element error
+fn is_tuple_element_error(field_path: &str) -> bool {
+    field_path
+        .split('.')
+        .last()
+        .map(|s| s.parse::<usize>().is_ok())
+        .unwrap_or(false)
+}
+
+/// Collect tuple child errors that should be rendered at this level
+fn collect_tuple_child_errors<'a>(
+    tuple_node: &'static PatternNode,
+    state: &'a TraversalState,
+    _field_path: &[String],
+) -> Vec<&'a ErrorContext> {
+    let mut tuple_errors = Vec::new();
+
+    for i in state.error_index..state.errors.len() {
+        let error = &state.errors[i];
+
+        if is_tuple_element_error(&error.field_path) {
+            if let Some(error_node) = error.error_node {
+                if node_contains_recursive(tuple_node, error_node) {
+                    tuple_errors.push(error);
+                }
+            }
+        }
+    }
+
+    tuple_errors
+}
+
+/// Check if a node contains any future errors
+fn contains_future_errors(node: &'static PatternNode, state: &TraversalState) -> bool {
+    for i in state.error_index..state.errors.len() {
+        if let Some(error_node) = state.errors[i].error_node {
+            if node_contains_recursive(node, error_node) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Check if a root node contains a target node recursively
+fn node_contains_recursive(root: &'static PatternNode, target: &'static PatternNode) -> bool {
+    if std::ptr::eq(root, target) {
+        return true;
+    }
+
+    match root {
+        PatternNode::Struct { fields, .. } => fields
+            .iter()
+            .any(|(_, field_node)| node_contains_recursive(field_node, target)),
+        PatternNode::EnumVariant {
+            args: Some(args), ..
+        } => args.iter().any(|arg| node_contains_recursive(arg, target)),
+        PatternNode::Slice { items, .. } => items
+            .iter()
+            .any(|item| node_contains_recursive(item, target)),
+        PatternNode::Tuple { items } => items
+            .iter()
+            .any(|item| node_contains_recursive(item, target)),
+        _ => false,
+    }
+}
+
+/// Collect opening breadcrumbs that haven't been rendered yet
+fn collect_opening_breadcrumbs(state: &mut TraversalState) -> Vec<String> {
+    let mut breadcrumbs = Vec::new();
+
+    // Check if any breadcrumbs have been rendered globally before this call
+    let any_previously_rendered = state.breadcrumb_stack.iter().any(|e| e.rendered);
+
+    for entry in &mut state.breadcrumb_stack {
+        if !entry.rendered && entry.depth <= state.current_depth {
+            // Add "... " prefix if:
+            // 1. This is not the very first breadcrumb ever (any_previously_rendered), OR
+            // 2. There are already breadcrumbs in this current batch
+            let prefix = if breadcrumbs.is_empty() && !any_previously_rendered {
+                ""
+            } else {
+                "... "
+            };
+            breadcrumbs.push(format!("{}{} {{", prefix, entry.name));
+            entry.rendered = true;
+        }
+    }
+
+    breadcrumbs
+}
+
+/// Build closing breadcrumbs for all rendered entries
+fn build_closing_breadcrumbs(breadcrumb_stack: &[BreadcrumbEntry]) -> Vec<String> {
+    let rendered: Vec<_> = breadcrumb_stack.iter().filter(|e| e.rendered).collect();
+
+    if rendered.is_empty() {
+        return vec![];
+    }
+
+    // Build closing line like "} ... }"
+    let closings: Vec<_> = rendered.iter().map(|_| "}").collect();
+    vec![closings.join(" ... ")]
+}
+
+// ========== PASS 2: RENDERING ==========
+
+/// Render the error display structure to a string.
 ///
-/// This function chooses between the old and new error rendering systems
-/// based on the structured_errors feature flag.
-#[cfg(feature = "structured_errors")]
-pub fn format_errors_with_root_dispatch(
-    root: &'static PatternNode,
-    errors: Vec<ErrorContext>,
-) -> String {
-    structured::format_errors_with_root_structured(root, errors)
+/// This is Pass 2 of the two-pass system. It takes the structural
+/// representation and renders it to a formatted string.
+pub fn render_error_display(display: &ErrorDisplay) -> String {
+    let mut output = String::new();
+
+    // Render header
+    output.push_str(&display.header);
+    output.push('\n');
+
+    if !display.sections.is_empty() {
+        output.push('\n');
+    }
+
+    // Track indentation level across all sections
+    let mut indentation_level = 0;
+
+    // Render each section
+    for section in &display.sections {
+        render_section(section, &mut output, &mut indentation_level);
+    }
+
+    // Render closing breadcrumbs
+    for closing in &display.closing_breadcrumbs {
+        output.push_str("   | ");
+        output.push_str(closing);
+        output.push('\n');
+    }
+
+    output
 }
 
-#[cfg(not(feature = "structured_errors"))]
-pub fn format_errors_with_root_dispatch(
-    root: &'static PatternNode,
-    errors: Vec<ErrorContext>,
-) -> String {
-    format_errors_with_root(root, errors)
+/// Render a single error section
+fn render_section(section: &ErrorSection, output: &mut String, indentation_level: &mut usize) {
+    // Render opening breadcrumbs and update indentation level
+    for breadcrumb in &section.opening_breadcrumbs {
+        if output.ends_with('\n') {
+            output.push_str("   | ");
+        } else {
+            output.push(' ');
+        }
+        output.push_str(breadcrumb);
+
+        // If this breadcrumb opens a container (ends with "{"), increment indentation level
+        if breadcrumb.ends_with('{') {
+            *indentation_level += 1;
+        }
+    }
+
+    if !section.opening_breadcrumbs.is_empty() {
+        output.push('\n');
+    }
+
+    // Render error location
+    output.push_str("mismatch:\n");
+    output.push_str(&format!(
+        "  --> `{}` (line {})\n",
+        section.location.field_path, section.location.line_number
+    ));
+
+    // Determine indentation based on current indentation level and fragment type
+    // Check if this is a field fragment (which needs indentation when inside a container)
+    let is_field_fragment = matches!(section.fragment, Fragment::Field { .. });
+
+    let base_indent = if *indentation_level > 0 && is_field_fragment {
+        "    "
+    } else {
+        ""
+    };
+
+    // Render the fragment and collect annotation positions
+    let mut pattern_line = String::from("   | ");
+    pattern_line.push_str(base_indent);
+
+    let mut annotations = Vec::new();
+    render_fragment(
+        &section.fragment,
+        &mut pattern_line,
+        &mut annotations,
+        base_indent.len(),
+    );
+
+    pattern_line.push('\n');
+    output.push_str(&pattern_line);
+
+    // Render underlines for annotations
+    for (start_pos, end_pos, annotation) in annotations {
+        let spaces = " ".repeat(start_pos);
+        let underline = "^".repeat(end_pos - start_pos);
+        output.push_str(&format!(
+            "   | {}{} actual: {}\n",
+            spaces, underline, annotation.actual_value
+        ));
+    }
+}
+
+/// Render a fragment and track annotation positions
+fn render_fragment<'a>(
+    fragment: &'a Fragment,
+    output: &mut String,
+    annotations: &mut Vec<(usize, usize, &'a ErrorAnnotation)>,
+    current_indent: usize,
+) {
+    match fragment {
+        Fragment::Annotated {
+            pattern,
+            annotation,
+        } => {
+            // Position is relative to start of line content (after "   | ")
+            let start_pos = output.len() - 5; // Current position after "   | "
+            output.push_str(pattern);
+            let end_pos = output.len() - 5;
+
+            if let Some(ann) = annotation {
+                annotations.push((start_pos, end_pos, ann));
+            }
+        }
+        Fragment::Field { name, value } => {
+            output.push_str(name);
+            output.push_str(": ");
+            render_fragment(value, output, annotations, current_indent);
+            output.push(',');
+        }
+        Fragment::Struct {
+            name,
+            fields,
+            has_rest,
+        } => {
+            output.push_str(name);
+            output.push_str(" { ");
+
+            for (i, field) in fields.iter().enumerate() {
+                if i > 0 {
+                    output.push_str(", ");
+                }
+                render_fragment(field, output, annotations, current_indent);
+            }
+
+            if *has_rest {
+                if !fields.is_empty() {
+                    output.push_str(", ");
+                }
+                output.push_str("..");
+            }
+
+            output.push_str(" }");
+        }
+        Fragment::Tuple { name, elements } => {
+            if let Some(n) = name {
+                output.push_str(n);
+            }
+            output.push('(');
+
+            for (i, element) in elements.iter().enumerate() {
+                if i > 0 {
+                    output.push_str(", ");
+                }
+                render_fragment(element, output, annotations, current_indent);
+            }
+
+            output.push(')');
+        }
+        Fragment::Slice { is_ref, elements } => {
+            if *is_ref {
+                output.push('&');
+            }
+            output.push('[');
+
+            for (i, element) in elements.iter().enumerate() {
+                if i > 0 {
+                    output.push_str(", ");
+                }
+                render_fragment(element, output, annotations, current_indent);
+            }
+
+            output.push(']');
+        }
+        Fragment::Rest => {
+            output.push_str("..");
+        }
+    }
+}
+
+// ========== PUBLIC API ==========
+
+/// Main entry point for formatting errors with the pattern tree
+pub fn format_errors_with_root(root: &'static PatternNode, errors: Vec<ErrorContext>) -> String {
+    let display = build_error_display(root, errors);
+    render_error_display(&display)
 }

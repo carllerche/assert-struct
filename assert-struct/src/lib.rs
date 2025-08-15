@@ -534,17 +534,11 @@ pub use assert_struct_macros::assert_struct;
 // Error handling module
 pub mod error;
 
-// Structured error document module (new architecture)
-pub mod error_document;
-
-// New two-pass error rendering system
-mod error_v2;
-
 // Hidden module for macro support functions
 #[doc(hidden)]
 pub mod __macro_support {
     pub use crate::error::{
-        ErrorContext, ErrorType, format_errors_with_root, format_errors_with_root_dispatch,
+        ErrorContext, ErrorType, format_errors_with_root,
     };
 }
 
