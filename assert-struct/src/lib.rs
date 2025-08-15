@@ -532,12 +532,13 @@
 pub use assert_struct_macros::assert_struct;
 
 // Error handling module
+#[doc(hidden)]
 pub mod error;
 
 // Hidden module for macro support functions
 #[doc(hidden)]
 pub mod __macro_support {
-    pub use crate::error::{ErrorContext, ErrorType, format_errors_with_root};
+    pub use crate::error::{ErrorContext, ErrorType, PatternNode, format_errors_with_root};
 }
 
 /// A trait for pattern matching, similar to `PartialEq` but for flexible matching.

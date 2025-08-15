@@ -123,7 +123,7 @@ pub enum ErrorType {
 
 /// Main structure representing all error output
 #[derive(Debug)]
-pub struct ErrorDisplay {
+pub(crate) struct ErrorDisplay {
     /// Header like "assert_struct! failed" or with error count
     pub header: String,
     /// One section per error
@@ -134,7 +134,7 @@ pub struct ErrorDisplay {
 
 /// A single error section in the output
 #[derive(Debug)]
-pub struct ErrorSection {
+pub(crate) struct ErrorSection {
     /// Opening breadcrumbs showing path to error (e.g., ["Response {", "... Profile {"])
     pub opening_breadcrumbs: Vec<String>,
     /// Location information for the error
@@ -145,7 +145,7 @@ pub struct ErrorSection {
 
 /// Location information for an error
 #[derive(Debug)]
-pub struct ErrorLocation {
+pub(crate) struct ErrorLocation {
     /// Full field path (e.g., "user.profile.age")
     pub field_path: String,
     /// Line number in source file
@@ -154,7 +154,7 @@ pub struct ErrorLocation {
 
 /// Represents a fragment of the pattern AST with optional error annotation
 #[derive(Debug)]
-pub enum Fragment {
+pub(crate) enum Fragment {
     /// Simple leaf patterns (may or may not have error)
     Annotated {
         /// The pattern as string (e.g., ">= 18", "\"hello\"")
@@ -203,7 +203,7 @@ pub enum Fragment {
 
 /// Error annotation information
 #[derive(Debug)]
-pub struct ErrorAnnotation {
+pub(crate) struct ErrorAnnotation {
     /// The actual value that didn't match
     pub actual_value: String,
     /// Type of error
@@ -217,7 +217,7 @@ pub struct ErrorAnnotation {
 /// This is Pass 1 of the two-pass system. It traverses the pattern tree,
 /// identifies error locations, and builds a structural representation
 /// suitable for rendering.
-pub fn build_error_display(root: &'static PatternNode, errors: Vec<ErrorContext>) -> ErrorDisplay {
+pub(crate) fn build_error_display(root: &'static PatternNode, errors: Vec<ErrorContext>) -> ErrorDisplay {
     if errors.is_empty() {
         return ErrorDisplay {
             header: "assert_struct! failed: no errors provided".to_string(),
@@ -871,7 +871,7 @@ fn build_closing_breadcrumbs(breadcrumb_stack: &[BreadcrumbEntry]) -> Vec<String
 ///
 /// This is Pass 2 of the two-pass system. It takes the structural
 /// representation and renders it to a formatted string.
-pub fn render_error_display(display: &ErrorDisplay) -> String {
+pub(crate) fn render_error_display(display: &ErrorDisplay) -> String {
     let mut output = String::new();
 
     // Render header

@@ -17,7 +17,7 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
         .map(|(id, def)| {
             let ident = Ident::new(&format!("__PATTERN_NODE_{}", id), Span::call_site());
             quote! {
-                const #ident: ::assert_struct::error::PatternNode = #def;
+                const #ident: ::assert_struct::__macro_support::PatternNode = #def;
             }
         })
         .collect();
@@ -35,7 +35,7 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
             #(#node_constants)*
 
             // Store the pattern tree root
-            const __PATTERN_TREE: &::assert_struct::error::PatternNode = &#root_ref;
+            const __PATTERN_TREE: &::assert_struct::__macro_support::PatternNode = &#root_ref;
 
             // Create error collection vector
             let mut __errors: Vec<::assert_struct::__macro_support::ErrorContext> = Vec::new();
@@ -104,7 +104,7 @@ fn generate_pattern_nodes(
     if node_id == usize::MAX {
         // For rest patterns, return inline node definition without creating a constant
         return quote! {
-            ::assert_struct::error::PatternNode::Rest
+            ::assert_struct::__macro_support::PatternNode::Rest
         };
     }
 
@@ -117,7 +117,7 @@ fn generate_pattern_nodes(
                 .replace("& [", "&[")
                 .replace("& mut [", "&mut [");
             quote! {
-                ::assert_struct::error::PatternNode::Simple {
+                ::assert_struct::__macro_support::PatternNode::Simple {
                     value: #value_str,
                 }
             }
@@ -133,7 +133,7 @@ fn generate_pattern_nodes(
             };
             let value_str = quote! { #expr }.to_string();
             quote! {
-                ::assert_struct::error::PatternNode::Comparison {
+                ::assert_struct::__macro_support::PatternNode::Comparison {
                     op: #op_str,
                     value: #value_str,
                 }
@@ -142,7 +142,7 @@ fn generate_pattern_nodes(
         Pattern::Range { expr, .. } => {
             let pattern_str = quote! { #expr }.to_string();
             quote! {
-                ::assert_struct::error::PatternNode::Range {
+                ::assert_struct::__macro_support::PatternNode::Range {
                     pattern: #pattern_str,
                 }
             }
@@ -151,7 +151,7 @@ fn generate_pattern_nodes(
         Pattern::Regex { pattern, .. } => {
             let pattern_str = format!("r\"{}\"", pattern);
             quote! {
-                ::assert_struct::error::PatternNode::Regex {
+                ::assert_struct::__macro_support::PatternNode::Regex {
                     pattern: #pattern_str,
                 }
             }
@@ -160,14 +160,14 @@ fn generate_pattern_nodes(
         Pattern::Like { expr, .. } => {
             let expr_str = quote! { #expr }.to_string();
             quote! {
-                ::assert_struct::error::PatternNode::Like {
+                ::assert_struct::__macro_support::PatternNode::Like {
                     expr: #expr_str,
                 }
             }
         }
         Pattern::Rest { .. } => {
             quote! {
-                ::assert_struct::error::PatternNode::Rest
+                ::assert_struct::__macro_support::PatternNode::Rest
             }
         }
         Pattern::Tuple { path, elements, .. } => {
@@ -179,14 +179,14 @@ fn generate_pattern_nodes(
             if let Some(enum_path) = path {
                 let path_str = quote!(#enum_path).to_string().replace(" :: ", "::");
                 quote! {
-                    ::assert_struct::error::PatternNode::EnumVariant {
+                    ::assert_struct::__macro_support::PatternNode::EnumVariant {
                         path: #path_str,
                         args: Some(&[#(&#child_refs),*]),
                     }
                 }
             } else {
                 quote! {
-                    ::assert_struct::error::PatternNode::Tuple {
+                    ::assert_struct::__macro_support::PatternNode::Tuple {
                         items: &[#(&#child_refs),*],
                     }
                 }
@@ -200,7 +200,7 @@ fn generate_pattern_nodes(
 
             let is_ref = true; // Default for now
             quote! {
-                ::assert_struct::error::PatternNode::Slice {
+                ::assert_struct::__macro_support::PatternNode::Slice {
                     items: &[#(&#child_refs),*],
                     is_ref: #is_ref,
                 }
@@ -225,17 +225,17 @@ fn generate_pattern_nodes(
             if *rest {
                 // Rest patterns are handled inline, no need for a separate node
                 quote! {
-                    ::assert_struct::error::PatternNode::Struct {
+                    ::assert_struct::__macro_support::PatternNode::Struct {
                         name: #name_str,
                         fields: &[
                             #(#field_entries,)*
-                            ("..", &::assert_struct::error::PatternNode::Rest)
+                            ("..", &::assert_struct::__macro_support::PatternNode::Rest)
                         ],
                     }
                 }
             } else {
                 quote! {
-                    ::assert_struct::error::PatternNode::Struct {
+                    ::assert_struct::__macro_support::PatternNode::Struct {
                         name: #name_str,
                         fields: &[#(#field_entries),*],
                     }
