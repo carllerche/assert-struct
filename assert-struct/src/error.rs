@@ -245,6 +245,14 @@ impl fmt::Display for ErrorType {
 /// - Uses unified code path for single/multiple errors with conditionals
 /// - Implements tree-traversal approach starting from root
 pub fn format_errors_with_root(root: &'static PatternNode, errors: Vec<ErrorContext>) -> String {
+    // Use the new two-pass implementation
+    let display = crate::error_v2::build_error_display(root, errors);
+    crate::error_v2::render_error_display(&display)
+}
+
+// OLD IMPLEMENTATION - TO BE REMOVED
+/*
+pub fn format_errors_with_root_old(root: &'static PatternNode, errors: Vec<ErrorContext>) -> String {
     if errors.is_empty() {
         return "assert_struct! failed: no errors provided".to_string();
     }
@@ -282,6 +290,7 @@ pub fn format_errors_with_root(root: &'static PatternNode, errors: Vec<ErrorCont
 
     state.output
 }
+*/
 
 // Unified tree-traversal implementation
 

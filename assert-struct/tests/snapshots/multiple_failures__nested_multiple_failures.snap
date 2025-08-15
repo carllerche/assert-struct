@@ -3,17 +3,16 @@ source: assert-struct/tests/multiple_failures.rs
 expression: message
 ---
 assert_struct! failed: 3 mismatches
+
    | Account { ... Profile {
 mismatch:
   --> `account.profile.bio` (line 29)
    |     bio: "A detailed bio that is much longer",
    |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ actual: "Hello"
-
 mismatch:
   --> `account.profile.verified` (line 30)
    |     verified: true,
    |               ^^^^ actual: false
-
 mismatch:
   --> `account.profile.followers` (line 31)
    |     followers: > 100,

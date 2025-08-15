@@ -537,6 +537,9 @@ pub mod error;
 // Structured error document module (new architecture)
 pub mod error_document;
 
+// New two-pass error rendering system
+mod error_v2;
+
 // Hidden module for macro support functions
 #[doc(hidden)]
 pub mod __macro_support {
