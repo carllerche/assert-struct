@@ -761,6 +761,11 @@ fn render_simple_error(node: &'static PatternNode, state: &mut TraversalState) {
                 | PatternNode::Like { .. }
         );
 
+        // Check if field_name is all digits to identify tuple element paths.
+        // Tuple elements get numeric indices in their paths (e.g., "holder.data.0" where "0" is the last segment)
+        // while struct fields have named paths (e.g., "user.profile.age" where "age" is the last segment).
+        // These numeric indices are generated in expand.rs:990 via `elem_path.push(i.to_string())`.
+        // We don't want to show "0: pattern" for tuple elements, just the pattern itself.
         let should_show_field_context = has_breadcrumbs
             && !field_name.is_empty()
             && !field_name.chars().all(|c| c.is_ascii_digit())
