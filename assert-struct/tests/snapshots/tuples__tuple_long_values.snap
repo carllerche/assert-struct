@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | TupleHolder {
 mismatch:
-  --> `holder.triple` (line 24)
+  --> `holder.triple` (line 25)
    |     triple: (1000, "different_but_also_very_long_string_that_needs_truncation", true),
    |              ^^^^ actual: 999
    | }

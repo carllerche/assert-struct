@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 #[cfg(feature = "regex")]
 use assert_struct::{Like, assert_struct};
 #[cfg(feature = "regex")]

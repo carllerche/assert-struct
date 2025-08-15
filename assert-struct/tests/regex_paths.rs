@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 #[cfg(feature = "regex")]
 use assert_struct::assert_struct;
 

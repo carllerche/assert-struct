@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | Data {
 mismatch:
-  --> `data.value.Some` (line 12)
+  --> `data.value.Some` (line 13)
    |     Some: > 30,
    |           ^^^^ actual: 25
    | }

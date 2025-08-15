@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | Pod { ... Container { ... Metrics {
 mismatch:
-  --> `pod.container.metrics.cpu_usage` (line 38)
+  --> `pod.container.metrics.cpu_usage` (line 39)
    |     cpu_usage: < 50.0,
    |                ^^^^^^ actual: 75.5
    | } ... } ... }

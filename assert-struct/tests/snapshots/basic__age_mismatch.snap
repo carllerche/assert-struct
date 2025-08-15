@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | User {
 mismatch:
-  --> `user.age` (line 19)
+  --> `user.age` (line 20)
    |     age: 25,
    |          ^^ actual: 30
    | }

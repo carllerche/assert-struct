@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use assert_struct::assert_struct;
 
 // Helper functions for testing

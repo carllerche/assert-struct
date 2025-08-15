@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | TupleHolder {
 mismatch:
-  --> `holder.pair` (line 19)
+  --> `holder.pair` (line 20)
    |     pair: (> 100, "other"),
    |            ^^^^^ actual: 75
    | }

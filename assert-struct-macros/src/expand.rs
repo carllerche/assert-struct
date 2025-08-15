@@ -31,21 +31,26 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
     // Wrap in a block to avoid variable name conflicts
     quote! {
         {
-            // Generate all node constants
-            #(#node_constants)*
+            // Suppress clippy warnings that are expected in macro-generated code
+            #[allow(clippy::neg_cmp_op_on_partial_ord, clippy::op_ref, clippy::zero_prefixed_literal)]
+            let __assert_struct_result = {
+                // Generate all node constants
+                #(#node_constants)*
 
-            // Store the pattern tree root
-            const __PATTERN_TREE: &::assert_struct::__macro_support::PatternNode = &#root_ref;
+                // Store the pattern tree root
+                const __PATTERN_TREE: &::assert_struct::__macro_support::PatternNode = &#root_ref;
 
-            // Create error collection vector
-            let mut __errors: Vec<::assert_struct::__macro_support::ErrorContext> = Vec::new();
+                // Create error collection vector
+                let mut __errors: Vec<::assert_struct::__macro_support::ErrorContext> = Vec::new();
 
-            #assertion
+                #assertion
 
-            // Check if any errors were collected
-            if !__errors.is_empty() {
-                panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, __errors));
-            }
+                // Check if any errors were collected
+                if !__errors.is_empty() {
+                    panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, __errors));
+                }
+            };
+            __assert_struct_result
         }
     }
 }

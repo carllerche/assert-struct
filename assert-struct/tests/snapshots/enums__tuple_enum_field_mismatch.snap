@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | MessageQueue {
 mismatch:
-  --> `msg.current` (line 25)
+  --> `msg.current` (line 26)
    |     current: Message::Complex(42, "test", true),
    |                                   ^^^^^^ actual: "wrong"
    | }

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 pub fn test_case() {
     // This test exists to document that multiple .. patterns are not allowed
     // The actual test is commented out because it would fail to compile

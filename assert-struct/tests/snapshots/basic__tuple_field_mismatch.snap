@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | TupleHolder {
 mismatch:
-  --> `holder.data` (line 21)
+  --> `holder.data` (line 22)
    |     data: (60, "test"),
    |            ^^ actual: 50
    | }

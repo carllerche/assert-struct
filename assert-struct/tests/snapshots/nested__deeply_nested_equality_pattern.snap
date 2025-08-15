@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | System { ... Server { ... Database {
 mismatch:
-  --> `system.server.database.version` (line 38)
+  --> `system.server.database.version` (line 39)
    |     version: == 6,
    |              ^^^^ actual: 5
    | } ... } ... }

@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | Container {
 mismatch:
-  --> `container.items.[2]` (line 20)
+  --> `container.items.[2]` (line 21)
    |     [2]: 4,
    |          ^ actual: 3
    | }

@@ -5,6 +5,6 @@ expression: message
 assert_struct! failed:
 
 mismatch:
-  --> `value` (line 6)
+  --> `value` (line 7)
    | None
    | ^^^^ actual: Some(10)

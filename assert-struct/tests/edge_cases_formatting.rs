@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use assert_struct::assert_struct;
 
 // Test 1: Large structures with pattern pruning

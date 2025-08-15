@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | Container {
 mismatch:
-  --> `container.value.Some` (line 19)
+  --> `container.value.Some` (line 20)
    |     Some: (100, "other".to_string(), true),
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ actual: (75, "test", false)
    | }

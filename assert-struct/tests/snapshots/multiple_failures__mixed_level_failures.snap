@@ -6,12 +6,12 @@ assert_struct! failed: 2 mismatches
 
    | User {
 mismatch:
-  --> `user.age` (line 32)
+  --> `user.age` (line 33)
    |     age: 30,
    |          ^^ actual: 25
    | ... Address {
 mismatch:
-  --> `user.address.city` (line 36)
+  --> `user.address.city` (line 37)
    |     city: "Shelbyville",
    |           ^^^^^^^^^^^^^ actual: "Springfield"
    | } ... }

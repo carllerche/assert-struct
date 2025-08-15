@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | Customer { ... Contact { ... Validation {
 mismatch:
-  --> `customer.contact.validation.email` (line 38)
+  --> `customer.contact.validation.email` (line 39)
    | =~ r".*@company\.com$"
    | ^^^^^^^^^^^^^^^^^^^^^^ actual: "john@example.com"
    | } ... } ... }

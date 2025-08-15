@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | Game { ... Player { ... Score {
 mismatch:
-  --> `game.player.score.points` (line 38)
+  --> `game.player.score.points` (line 39)
    |     points: >= 100,
    |             ^^^^^^ actual: 80
    | } ... } ... }
