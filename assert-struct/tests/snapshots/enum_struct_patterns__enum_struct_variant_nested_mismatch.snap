@@ -4,7 +4,7 @@ expression: message
 ---
 assert_struct! failed:
 
-   | Request { ... Statement :: Execute { ... Query {
+   | Request { ... Statement::Execute { ... Query {
 mismatch:
   --> `request.statement.query.name` (line 36)
    |     name: "delete_user",

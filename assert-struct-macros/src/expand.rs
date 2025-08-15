@@ -214,7 +214,8 @@ fn generate_pattern_nodes(
         Pattern::Struct {
             path, fields, rest, ..
         } => {
-            let name_str = quote! { #path }.to_string();
+            // Fix: Remove spaces around :: when converting path to string
+            let name_str = quote! { #path }.to_string().replace(" :: ", "::");
 
             let field_entries: Vec<TokenStream> = fields
                 .iter()
