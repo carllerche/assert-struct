@@ -1446,9 +1446,10 @@ fn generate_enum_tuple_assertion_with_collection(
         .collect();
 
     let field_path_str = field_path.join(".");
+    let span = variant_path.span();
 
     if is_ref {
-        quote! {
+        quote_spanned! {span=>
             match #value_expr {
                 #variant_path(#(#element_names),*) => {
                     #(#element_assertions)*
@@ -1456,10 +1457,37 @@ fn generate_enum_tuple_assertion_with_collection(
                 _ => {
                     let __line = line!();
                     let __file = file!();
+
+                    // Format the actual value more concisely for enum variants
+                    let __actual_str = {
+                        let debug_str = format!("{:?}", #value_expr);
+                        // Try to extract just the variant name with (..) for better readability
+                        if let Some(paren_pos) = debug_str.find('(') {
+                            if let Some(variant_end) = debug_str[..paren_pos].rfind(|c: char| c.is_alphabetic() || c == '_') {
+                                // Find the start of the variant name (after :: or at beginning)
+                                let variant_start = debug_str[..=variant_end].rfind("::").map(|i| i + 2).unwrap_or(0);
+                                format!("{}(..)", &debug_str[variant_start..paren_pos])
+                            } else {
+                                debug_str
+                            }
+                        } else if let Some(brace_pos) = debug_str.find('{') {
+                            // Struct variant
+                            if let Some(variant_end) = debug_str[..brace_pos].rfind(|c: char| c.is_alphabetic() || c == '_') {
+                                let variant_start = debug_str[..=variant_end].rfind("::").map(|i| i + 2).unwrap_or(0);
+                                format!("{} {{ .. }}", &debug_str[variant_start..brace_pos].trim())
+                            } else {
+                                debug_str
+                            }
+                        } else {
+                            // Unit variant or simple value - use as is
+                            debug_str
+                        }
+                    };
+
                     let __error = ::assert_struct::__macro_support::ErrorContext {
                         field_path: #field_path_str.to_string(),
                         pattern_str: stringify!(#variant_path).to_string(),
-                        actual_value: format!("{:?}", #value_expr),
+                        actual_value: __actual_str,
                         line_number: __line,
                         file_name: __file,
                         error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
@@ -1474,7 +1502,7 @@ fn generate_enum_tuple_assertion_with_collection(
             }
         }
     } else {
-        quote! {
+        quote_spanned! {span=>
             match &#value_expr {
                 #variant_path(#(#element_names),*) => {
                     #(#element_assertions)*
@@ -1516,6 +1544,7 @@ fn generate_enum_tuple_assertion_with_path(
     // Non-empty = tuple variant (e.g., Some(42), Event::Click(x, y))
 
     let field_path_str = field_path.join(".");
+    let span = variant_path.span();
 
     // Generate match pattern and assertions based on whether we have elements
     let (match_pattern, inner_assertions) = if elements.is_empty() {
@@ -1560,7 +1589,7 @@ fn generate_enum_tuple_assertion_with_path(
     };
 
     if is_ref {
-        quote! {
+        quote_spanned! {span=>
             match #value_expr {
                 #match_pattern => {
                     #inner_assertions
@@ -1568,10 +1597,37 @@ fn generate_enum_tuple_assertion_with_path(
                 _ => {
                     let __line = line!();
                     let __file = file!();
+
+                    // Format the actual value more concisely for enum variants
+                    let __actual_str = {
+                        let debug_str = format!("{:?}", #value_expr);
+                        // Try to extract just the variant name with (..) for better readability
+                        if let Some(paren_pos) = debug_str.find('(') {
+                            if let Some(variant_end) = debug_str[..paren_pos].rfind(|c: char| c.is_alphabetic() || c == '_') {
+                                // Find the start of the variant name (after :: or at beginning)
+                                let variant_start = debug_str[..=variant_end].rfind("::").map(|i| i + 2).unwrap_or(0);
+                                format!("{}(..)", &debug_str[variant_start..paren_pos])
+                            } else {
+                                debug_str
+                            }
+                        } else if let Some(brace_pos) = debug_str.find('{') {
+                            // Struct variant
+                            if let Some(variant_end) = debug_str[..brace_pos].rfind(|c: char| c.is_alphabetic() || c == '_') {
+                                let variant_start = debug_str[..=variant_end].rfind("::").map(|i| i + 2).unwrap_or(0);
+                                format!("{} {{ .. }}", &debug_str[variant_start..brace_pos].trim())
+                            } else {
+                                debug_str
+                            }
+                        } else {
+                            // Unit variant or simple value - use as is
+                            debug_str
+                        }
+                    };
+
                     let __error = ::assert_struct::__macro_support::ErrorContext {
                         field_path: #field_path_str.to_string(),
                         pattern_str: stringify!(#variant_path).to_string(),
-                        actual_value: format!("{:?}", #value_expr),
+                        actual_value: __actual_str,
                         line_number: __line,
                         file_name: __file,
                         error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
@@ -1586,7 +1642,7 @@ fn generate_enum_tuple_assertion_with_path(
             }
         }
     } else {
-        quote! {
+        quote_spanned! {span=>
             match &#value_expr {
                 #match_pattern => {
                     #inner_assertions
@@ -1594,10 +1650,37 @@ fn generate_enum_tuple_assertion_with_path(
                 _ => {
                     let __line = line!();
                     let __file = file!();
+
+                    // Format the actual value more concisely for enum variants
+                    let __actual_str = {
+                        let debug_str = format!("{:?}", &#value_expr);
+                        // Try to extract just the variant name with (..) for better readability
+                        if let Some(paren_pos) = debug_str.find('(') {
+                            if let Some(variant_end) = debug_str[..paren_pos].rfind(|c: char| c.is_alphabetic() || c == '_') {
+                                // Find the start of the variant name (after :: or at beginning)
+                                let variant_start = debug_str[..=variant_end].rfind("::").map(|i| i + 2).unwrap_or(0);
+                                format!("{}(..)", &debug_str[variant_start..paren_pos])
+                            } else {
+                                debug_str
+                            }
+                        } else if let Some(brace_pos) = debug_str.find('{') {
+                            // Struct variant
+                            if let Some(variant_end) = debug_str[..brace_pos].rfind(|c: char| c.is_alphabetic() || c == '_') {
+                                let variant_start = debug_str[..=variant_end].rfind("::").map(|i| i + 2).unwrap_or(0);
+                                format!("{} {{ .. }}", &debug_str[variant_start..brace_pos].trim())
+                            } else {
+                                debug_str
+                            }
+                        } else {
+                            // Unit variant or simple value - use as is
+                            debug_str
+                        }
+                    };
+
                     let __error = ::assert_struct::__macro_support::ErrorContext {
                         field_path: #field_path_str.to_string(),
                         pattern_str: stringify!(#variant_path).to_string(),
-                        actual_value: format!("{:?}", &#value_expr),
+                        actual_value: __actual_str,
                         line_number: __line,
                         file_name: __file,
                         error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,

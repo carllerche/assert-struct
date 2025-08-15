@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/enum_struct_patterns.rs
+expression: message
+---
+assert_struct! failed:
+
+   | Request { ... Query {
+mismatch:
+  --> `request.statement.Query.limit.Some` (line 31)
+   |     Some: > 50,
+   |           ^^^^ actual: 25
+   | } ... }

@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/enum_struct_patterns.rs
+expression: message
+---
+assert_struct! failed:
+
+   | Request { ... Statement :: Execute { ... Query {
+mismatch:
+  --> `request.statement.query.name` (line 36)
+   |     name: "delete_user",
+   |           ^^^^^^^^^^^^^ actual: "update_user"
+   | } ... } ... }

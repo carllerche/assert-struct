@@ -210,6 +210,9 @@ pub(crate) struct ErrorAnnotation {
     /// Type of error
     #[allow(dead_code)] // Used for richer error messages in the future
     pub error_type: ErrorType,
+    /// Optional range within the pattern string to underline (start, end)
+    /// If None, underline the entire pattern
+    pub underline_range: Option<(usize, usize)>,
 }
 
 // ========== PASS 1: STRUCTURE BUILDING ==========
@@ -541,12 +544,11 @@ fn build_error_fragment(
     let is_tuple_element = field_name.chars().all(|c| c.is_ascii_digit());
 
     // Determine if this is a complex pattern that shouldn't show field names
+    // Note: EnumVariant is NOT considered complex here because we want to show
+    // field names like "statement: Statement::Query(...)"
     let is_complex_pattern = matches!(
         node,
-        PatternNode::EnumVariant { .. }
-            | PatternNode::Range { .. }
-            | PatternNode::Regex { .. }
-            | PatternNode::Like { .. }
+        PatternNode::Range { .. } | PatternNode::Regex { .. } | PatternNode::Like { .. }
     );
 
     // Build the appropriate fragment based on node type and context
@@ -607,36 +609,110 @@ fn format_pattern_simple(node: &'static PatternNode) -> String {
 
 /// Build a pattern fragment from a PatternNode
 fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContext>) -> Fragment {
-    let annotation = error.map(|e| ErrorAnnotation {
-        actual_value: e.actual_value.clone(),
-        error_type: e.error_type.clone(),
-    });
-
     match node {
         PatternNode::Simple { value } => Fragment::Annotated {
             pattern: value.to_string(),
-            annotation,
+            annotation: error.map(|e| ErrorAnnotation {
+                actual_value: e.actual_value.clone(),
+                error_type: e.error_type.clone(),
+                underline_range: None, // Underline entire pattern
+            }),
         },
         PatternNode::Comparison { op, value } => Fragment::Annotated {
             pattern: format!("{} {}", op, value),
-            annotation,
+            annotation: error.map(|e| ErrorAnnotation {
+                actual_value: e.actual_value.clone(),
+                error_type: e.error_type.clone(),
+                underline_range: None,
+            }),
         },
         PatternNode::Range { pattern } => Fragment::Annotated {
             pattern: pattern.to_string(),
-            annotation,
+            annotation: error.map(|e| ErrorAnnotation {
+                actual_value: e.actual_value.clone(),
+                error_type: e.error_type.clone(),
+                underline_range: None,
+            }),
         },
         PatternNode::Regex { pattern } => Fragment::Annotated {
             pattern: format!("=~ {}", pattern),
-            annotation,
+            annotation: error.map(|e| ErrorAnnotation {
+                actual_value: e.actual_value.clone(),
+                error_type: e.error_type.clone(),
+                underline_range: None,
+            }),
         },
         PatternNode::Like { expr } => Fragment::Annotated {
             pattern: format!("=~ {}", expr),
-            annotation,
+            annotation: error.map(|e| ErrorAnnotation {
+                actual_value: e.actual_value.clone(),
+                error_type: e.error_type.clone(),
+                underline_range: None,
+            }),
         },
         PatternNode::EnumVariant { path, args } => {
-            if let Some(args) = args {
+            // Special handling for enum variant errors
+            // When the error is an EnumVariant error, we want to only underline the variant name
+            let is_variant_error = error
+                .as_ref()
+                .map(|e| matches!(e.error_type, ErrorType::EnumVariant))
+                .unwrap_or(false);
+
+            if is_variant_error && args.is_some() && !args.as_ref().unwrap().is_empty() {
+                // For enum variant mismatches, we want to underline only the variant name
+                let args = args.unwrap();
+
+                // Check if first arg is a struct pattern
+                if args.len() == 1 {
+                    if let PatternNode::Struct { fields, name, .. } = args[0] {
+                        // It's an enum with a struct pattern like Statement::Query(Query { ... })
+                        let fields_str = fields
+                            .iter()
+                            .map(|(field_name, _)| {
+                                if *field_name == ".." {
+                                    "..".to_string()
+                                } else {
+                                    format!("{}: ...", field_name)
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", ");
+
+                        let full_pattern = format!("{}({} {{ {} }})", path, name, fields_str);
+                        let variant_end = path.len(); // Only underline the variant name
+
+                        return Fragment::Annotated {
+                            pattern: full_pattern,
+                            annotation: error.map(|e| ErrorAnnotation {
+                                actual_value: e.actual_value.clone(),
+                                error_type: e.error_type.clone(),
+                                underline_range: Some((0, variant_end)),
+                            }),
+                        };
+                    }
+                }
+
+                // For other cases with args, underline just the variant name
+                let arg_str = args
+                    .iter()
+                    .map(|arg| format_pattern_simple(arg))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                let full_pattern = format!("{}({})", path, arg_str);
+                let variant_end = path.len();
+
+                Fragment::Annotated {
+                    pattern: full_pattern,
+                    annotation: error.map(|e| ErrorAnnotation {
+                        actual_value: e.actual_value.clone(),
+                        error_type: e.error_type.clone(),
+                        underline_range: Some((0, variant_end)),
+                    }),
+                }
+            } else if let Some(args) = args {
                 if !args.is_empty() {
-                    // Render full enum variant with arguments
+                    // Non-error case or non-variant error: render full enum variant with arguments
                     let arg_str = args
                         .iter()
                         .map(|arg| format_pattern_simple(arg))
@@ -644,27 +720,43 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
                         .join(", ");
                     Fragment::Annotated {
                         pattern: format!("{}({})", path, arg_str),
-                        annotation,
+                        annotation: error.map(|e| ErrorAnnotation {
+                            actual_value: e.actual_value.clone(),
+                            error_type: e.error_type.clone(),
+                            underline_range: None,
+                        }),
                     }
                 } else {
                     // Unit variant
                     Fragment::Annotated {
                         pattern: path.to_string(),
-                        annotation,
+                        annotation: error.map(|e| ErrorAnnotation {
+                            actual_value: e.actual_value.clone(),
+                            error_type: e.error_type.clone(),
+                            underline_range: None,
+                        }),
                     }
                 }
             } else {
                 // Unit variant
                 Fragment::Annotated {
                     pattern: path.to_string(),
-                    annotation,
+                    annotation: error.map(|e| ErrorAnnotation {
+                        actual_value: e.actual_value.clone(),
+                        error_type: e.error_type.clone(),
+                        underline_range: None,
+                    }),
                 }
             }
         }
         PatternNode::Rest => Fragment::Rest,
         _ => Fragment::Annotated {
             pattern: "<complex>".to_string(),
-            annotation,
+            annotation: error.map(|e| ErrorAnnotation {
+                actual_value: e.actual_value.clone(),
+                error_type: e.error_type.clone(),
+                underline_range: None,
+            }),
         },
     }
 }
@@ -1037,11 +1129,20 @@ fn render_fragment<'a>(
             annotation,
         } => {
             // Position is relative to start of line content (after "   | ")
-            let start_pos = output.len() - 5; // Current position after "   | "
+            let pattern_start = output.len() - 5; // Current position after "   | "
             output.push_str(pattern);
-            let end_pos = output.len() - 5;
+            let pattern_end = output.len() - 5;
 
             if let Some(ann) = annotation {
+                // Use the underline_range if specified, otherwise underline the entire pattern
+                let (start_pos, end_pos) =
+                    if let Some((range_start, range_end)) = ann.underline_range {
+                        // Apply the range relative to the pattern start
+                        (pattern_start + range_start, pattern_start + range_end)
+                    } else {
+                        // Underline the entire pattern
+                        (pattern_start, pattern_end)
+                    };
                 annotations.push((start_pos, end_pos, ann));
             }
         }
