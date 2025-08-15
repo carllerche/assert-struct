@@ -1,4 +1,8 @@
+#![allow(dead_code)]
 use assert_struct::assert_struct;
+
+#[macro_use]
+mod util;
 
 // Test Result enum
 #[derive(Debug)]
@@ -370,61 +374,19 @@ fn test_nested_enum_struct_variant() {
 }
 
 // Failure tests
-#[test]
-#[should_panic(expected = "Expected Ok, got Err")]
-fn test_result_expected_ok_got_err() {
-    let data = UserData {
-        login_result: Err("Failed".to_string()),
-        parse_result: Ok(42),
-        complex_result: Ok(User {
-            name: "Test".to_string(),
-            age: 20,
-        }),
-    };
+error_message_test!(
+    "enums_errors/result_expected_ok_got_err.rs",
+    result_expected_ok_got_err
+);
 
-    assert_struct!(
-        data,
-        UserData {
-            login_result: Ok("user123"),
-            parse_result: Ok(42),
-            complex_result: Ok(User {
-                name: "Test",
-                age: 20,
-            }),
-        }
-    );
-}
+error_message_test!(
+    "enums_errors/enum_variant_mismatch.rs",
+    enum_variant_mismatch
+);
 
-#[test]
-#[should_panic(expected = "Expected Status :: Active, got")]
-fn test_enum_variant_mismatch() {
-    let account = Account {
-        id: 5,
-        status: Status::Inactive,
-    };
+error_message_test!(
+    "enums_errors/tuple_enum_field_mismatch.rs",
+    tuple_enum_field_mismatch
+);
 
-    assert_struct!(
-        account,
-        Account {
-            id: 5,
-            status: Status::Active,
-        }
-    );
-}
-
-#[test]
-#[should_panic(expected = "assertion `left == right` failed")]
-fn test_tuple_enum_field_mismatch() {
-    let msg = MessageQueue {
-        current: Message::Complex(42, "wrong".to_string(), true),
-        priority: 3,
-    };
-
-    assert_struct!(
-        msg,
-        MessageQueue {
-            current: Message::Complex(42, "test", true),
-            priority: 3,
-        }
-    );
-}
+error_message_test!("enums_errors/enum_variant.rs", enum_variant);

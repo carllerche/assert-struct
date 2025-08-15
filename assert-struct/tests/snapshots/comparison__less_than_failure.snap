@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/comparison.rs
+expression: message
+---
+assert_struct! failed:
+
+   | Person {
+mismatch:
+  --> `person.height` (line 24)
+   |     height: < 6.0,
+   |             ^^^^^ actual: 6.2
+   | }

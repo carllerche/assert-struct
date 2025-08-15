@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/nested.rs
+expression: message
+---
+assert_struct! failed:
+
+   | Level1 { ... Level2 { ... Level3 {
+mismatch:
+  --> `data.inner.nested.name` (line 39)
+   |     name: "expected",
+   |           ^^^^^^^^^^ actual: "actual"
+   | } ... } ... }

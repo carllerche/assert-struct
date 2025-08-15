@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/basic.rs
+expression: message
+---
+assert_struct! failed:
+
+   | DataHolder {
+mismatch:
+  --> `data.values` (line 19)
+   |     values: &[1, 2, 4],
+   |             ^^^^^^^^^^ actual: [1, 2, 3]
+   | }

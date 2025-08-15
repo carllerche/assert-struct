@@ -1,6 +1,10 @@
+#![allow(dead_code)]
 #![cfg(feature = "regex")]
 
 use assert_struct::assert_struct;
+
+#[macro_use]
+mod util;
 
 #[derive(Debug)]
 struct Message {
@@ -45,7 +49,7 @@ fn test_regex_partial_match() {
 }
 
 #[test]
-#[should_panic(expected = "does not match regex pattern")]
+#[should_panic(expected = "mismatch")]
 fn test_regex_mismatch() {
     let msg = Message {
         id: "invalid".to_string(),
@@ -80,3 +84,9 @@ fn test_mixed_matchers() {
         }
     );
 }
+
+error_message_test!(
+    #[cfg(feature = "regex")]
+    "regex_errors/regex_pattern.rs",
+    regex_pattern
+);

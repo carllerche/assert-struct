@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use assert_struct::assert_struct;
 
 // Helper functions for testing
@@ -346,7 +347,7 @@ fn test_macro_in_expression() {
 
 // Test failure cases
 #[test]
-#[should_panic(expected = "Failed comparison")]
+#[should_panic(expected = "mismatch")]
 fn test_complex_expression_failure() {
     let user = User {
         name: "Mike".to_string(),

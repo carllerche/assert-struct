@@ -36,6 +36,15 @@ Focus on clean design, good architecture, and comprehensive functionality rather
 - **Tuple support**: Multi-field tuples with advanced patterns `(> 10, < 30)`
 - **Pattern composition**: Combine all features (e.g., `Some(> 30)`, `Event::Click(>= 0, < 100)`)
 
+### NEW: Improved Error Messages (Phase 1 Complete)
+- **Fancy error formatting**: Shows pattern context with precise failure location
+- **Pattern underlining**: Exact position of mismatch highlighted with `^^^^^`
+- **Field path tracking**: Full path to failing field (e.g., `user.profile.age`)
+- **Equality vs comparison**: Different formatting for `==` patterns showing expected value
+- **Zero runtime cost**: Pattern strings generated at compile time
+
+See IMPROVED_ERRORS_STATUS.md for implementation details and remaining work.
+
 ### Example Use Case
 ```rust
 // Instead of:
@@ -55,6 +64,16 @@ assert_struct!(response, Response {
     items: [> 0, < 100, > 0],  // Element-wise patterns
     ..
 });
+
+// With improved errors showing:
+assert_struct! failed:
+
+   | Response { ... Profile {
+comparison mismatch:
+  --> `response.user.profile.age` (line 10)
+   |         age: >= 18,
+   |              ^^^^^ actual: 17
+   | } ... }
 ```
 
 ## Development Commands
@@ -95,13 +114,15 @@ RUST_BACKTRACE=1 cargo test  # Debug macro panics
 ```
 assert-struct/
 ├── assert-struct/              # Main crate (provides Like trait, re-exports macro)
-│   ├── src/lib.rs             # Like trait definition and implementations
+│   ├── src/
+│   │   ├── lib.rs             # Like trait definition and implementations
+│   │   └── error.rs           # NEW: Error formatting and fancy display
 │   └── tests/                 # Integration tests
 ├── assert-struct-macros/       # Procedural macro crate
 │   ├── src/
 │   │   ├── lib.rs            # Macro entry point, Pattern enum
 │   │   ├── parse.rs          # Token parsing and syntax validation
-│   │   └── expand.rs         # Code generation
+│   │   └── expand.rs         # Code generation (with pattern formatting)
 │   └── Cargo.toml            # Has assert-struct as dev-dependency for testing
 └── Cargo.toml                 # Workspace root
 ```
@@ -118,9 +139,15 @@ assert-struct/
   - Generates match expressions for enums (not let bindings) for exhaustive matching
   - Handles recursive pattern expansion for nested structures
   - Optimizes string literal regexes at compile time
+  - **NEW**: Generates `__PATTERN` const with formatted pattern string
+  - **NEW**: Includes pattern location tracking for error messages
 - **assert-struct/src/lib.rs**: Runtime support
   - `Like` trait for flexible pattern matching
   - Implementations for String/&str with regex patterns
+- **assert-struct/src/error.rs**: NEW - Error formatting
+  - `ErrorContext` struct with pattern location info
+  - `format_fancy_error()` for rich error display
+  - Pattern underlining and context display
 
 ### Implementation Strategy
 
@@ -135,6 +162,7 @@ assert-struct/
 - **Compile-time validation** where possible
 - **Zero runtime overhead** - expand to direct field access
 - **Progressive enhancement** - start simple, add features incrementally
+- **Static pattern strings** - Generate formatted patterns at compile time for error messages
 
 ## Documentation Standards
 
@@ -162,6 +190,7 @@ assert-struct/
 3. **Generating match expressions** (not let bindings) for enums ensures exhaustive matching
 4. **Recursive pattern handling** makes deeply nested structures straightforward
 5. **Zero runtime overhead** - everything expands to direct field access
+6. **Static pattern generation** - Pattern strings computed at compile time for error messages
 
 ### Critical Implementation Details
 1. **Disambiguation is key**: The `check_for_special_syntax` function elegantly solves the ambiguity between patterns like `Some((true, false))` (simple expression) and `Some(> 30)` (comparison pattern)
@@ -170,6 +199,7 @@ assert-struct/
 4. **Special handling for Option/Result**: Custom logic for `Some`, `None`, `Ok`, `Err` provides better error messages
 5. **Dual-path regex optimization**: String literals compile at macro expansion time (`Pattern::Regex`), while expressions use Like trait at runtime (`Pattern::Like`)
 6. **Workspace circular dependency solution**: assert-struct-macros has assert-struct as a dev-dependency, allowing doc tests to work
+7. **Pattern location tracking**: Runtime search in pattern string to find exact error position
 
 ### Development Best Practices
 1. **Incremental feature development**: Build features progressively (Option → Result → custom enums → tuples)
@@ -221,3 +251,19 @@ When implementing proc macros, prefer generating code that uses Rust's native sy
 - **Custom matcher functions**: `score: |s| s > 90 && s < 100` - only if users request it
 - **HashMap/BTreeMap support**: Key-value matching - wait for use cases
 - **Better error recovery**: More helpful messages for invalid macro syntax - as issues arise
+
+## Current Work Status
+
+### Recently Completed: Improved Error Messages (Phase 1)
+- ✅ Static pattern string generation at compile time
+- ✅ Enhanced ErrorContext with pattern location tracking  
+- ✅ Fancy error formatter with pattern underlining
+- ✅ Different error types (comparison, equality, range, etc.)
+- ✅ Field path tracking through nested structures
+
+### Next Priorities
+See IMPROVED_ERRORS_STATUS.md for detailed list of remaining work:
+1. Multiple failure collection
+2. Slice diff format for literals
+3. More accurate pattern location tracking
+4. Enhanced error details (regex notes, Like trait messages)

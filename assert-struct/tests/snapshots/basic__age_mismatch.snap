@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/basic.rs
+expression: message
+---
+assert_struct! failed:
+
+   | User {
+mismatch:
+  --> `user.age` (line 20)
+   |     age: 25,
+   |          ^^ actual: 30
+   | }

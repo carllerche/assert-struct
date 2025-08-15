@@ -1,8 +1,10 @@
-//! Ergonomic structural assertions for Rust tests.
+//! Ergonomic structural assertions for Rust tests with helpful error messages.
 //!
 //! `assert-struct` is a procedural macro that enables clean, readable assertions for complex
-//! data structures without verbose field-by-field comparisons. It's the testing tool you need
-//! when `assert_eq!` isn't enough and manually comparing fields is too cumbersome.
+//! data structures without verbose field-by-field comparisons. When assertions fail, it provides
+//! clear, actionable error messages showing exactly what went wrong, including field paths and
+//! expected vs actual values. It's the testing tool you need when `assert_eq!` isn't enough
+//! and manually comparing fields is too cumbersome.
 //!
 //! # Quick Example
 //!
@@ -104,6 +106,7 @@
 //!
 //! ## Core Capabilities
 //!
+//! - **Helpful Error Messages** - Clear, actionable errors showing field paths, expected vs actual values
 //! - **Partial Matching** - Use `..` to check only the fields you care about
 //! - **Deep Nesting** - Assert on nested structs without manual field access chains
 //! - **String Literals** - Compare `String` fields directly with `"text"` literals
@@ -118,6 +121,48 @@
 //! - **Range Patterns** - Use `18..=65`, `0.0..100.0`, `0..` for range matching
 //! - **Regex Patterns** - Match string fields with regular expressions using `=~ r"pattern"`
 //! - **Advanced Enum Patterns** - Use comparison operators, ranges, and regex inside `Some()` and other variants
+//!
+//! # Helpful Error Messages
+//!
+//! When assertions fail, `assert-struct` provides detailed error messages that make debugging easy:
+//!
+//! ```rust,should_panic
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct User { name: String, age: u32 }
+//! # let user = User { name: "Alice".to_string(), age: 25 };
+//! assert_struct!(user, User {
+//!     name: "Bob",  // This will fail
+//!     age: 25,
+//! });
+//! // Error output:
+//! // assert_struct! failed:
+//! //
+//! // value mismatch:
+//! //   --> `user.name` (src/lib.rs:120)
+//! //   actual: "Alice"
+//! //   expected: "Bob"
+//! ```
+//!
+//! For complex patterns, the error shows the exact pattern that failed:
+//!
+//! ```rust,should_panic
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct Stats { score: u32, level: u32 }
+//! # let stats = Stats { score: 50, level: 3 };
+//! assert_struct!(stats, Stats {
+//!     score: > 100,  // This will fail
+//!     level: 3,
+//! });
+//! // Error output:
+//! // assert_struct! failed:
+//! //
+//! // comparison mismatch:
+//! //   --> `stats.score` (src/lib.rs:135)
+//! //   actual: 50
+//! //   expected: > 100
+//! ```
 //!
 //! # Usage
 //!
@@ -486,6 +531,16 @@
 // Re-export the procedural macro
 pub use assert_struct_macros::assert_struct;
 
+// Error handling module
+#[doc(hidden)]
+pub mod error;
+
+// Hidden module for macro support functions
+#[doc(hidden)]
+pub mod __macro_support {
+    pub use crate::error::{ErrorContext, ErrorType, PatternNode, format_errors_with_root};
+}
+
 /// A trait for pattern matching, similar to `PartialEq` but for flexible matching.
 ///
 /// The `Like` trait enables custom pattern matching logic beyond simple equality.
@@ -497,11 +552,14 @@ pub use assert_struct_macros::assert_struct;
 /// ## Basic String Pattern Matching
 ///
 /// ```
+/// # #[cfg(feature = "regex")]
+/// # {
 /// use assert_struct::Like;
 ///
 /// // Using Like trait directly
 /// let text = "hello@example.com";
 /// assert!(text.like(&r".*@example\.com"));
+/// # }
 /// ```
 ///
 /// ## Custom Implementation
@@ -531,10 +589,13 @@ pub trait Like<Rhs = Self> {
     /// # Examples
     ///
     /// ```
+    /// # #[cfg(feature = "regex")]
+    /// # {
     /// use assert_struct::Like;
     ///
     /// let s = "test123";
     /// assert!(s.like(&r"\w+\d+"));
+    /// # }
     /// ```
     fn like(&self, other: &Rhs) -> bool;
 }

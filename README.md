@@ -4,10 +4,12 @@
 [![Crates.io](https://img.shields.io/crates/v/assert-struct.svg)](https://crates.io/crates/assert-struct)
 [![Documentation](https://docs.rs/assert-struct/badge.svg)](https://docs.rs/assert-struct)
 
-Ergonomic structural assertions for Rust tests. `assert-struct` is a procedural
-macro that enables clean, readable assertions for complex data structures
-without verbose field-by-field comparisons. It's the testing tool you need when
-`assert_eq!` isn't enough and manually comparing fields is too cumbersome.
+Ergonomic structural assertions for Rust tests with helpful error messages. 
+`assert-struct` is a procedural macro that enables clean, readable assertions 
+for complex data structures without verbose field-by-field comparisons. When 
+assertions fail, it provides clear, actionable error messages showing exactly 
+what went wrong. It's the testing tool you need when `assert_eq!` isn't enough 
+and manually comparing fields is too cumbersome.
 
 ## Quick Example
 
@@ -65,6 +67,7 @@ assert_struct!(response, Response {
 
 ### Core Capabilities
 
+- **Helpful error messages** - Clear, actionable errors showing field paths, expected vs actual values
 - **Partial matching** - Use `..` to check only the fields you care about
 - **Deep nesting** - Assert on nested structs without manual field access chains
 - **String literals** - Compare `String` fields directly with `"text"` literals
@@ -80,6 +83,57 @@ assert_struct!(response, Response {
 - **Regex patterns** - Match string fields with regular expressions using `=~ r"pattern"`
 - **Slice patterns** - Element-wise patterns for `Vec` fields like `[> 0, < 10, == 5]`
 - **Advanced enum patterns** - Use comparison operators and regex inside `Some()` and other variants
+
+## Helpful Error Messages
+
+When assertions fail, `assert-struct` provides clear, detailed error messages that show exactly what went wrong:
+
+### Before (using `assert_eq!`)
+```text
+thread 'test_name' panicked at tests/example.rs:17:5:
+assertion `left == right` failed
+  left: "Alice"
+ right: "Bob"
+```
+
+### After (using `assert-struct`)
+```text
+assert_struct! failed:
+
+value mismatch:
+  --> `user.profile.name` (tests/example.rs:17)
+  actual: "Alice"
+  expected: "Bob"
+```
+
+The error messages include:
+- **Field path** - Shows exactly which field failed (e.g., `user.profile.name`)
+- **Location** - File name and line number where the assertion failed
+- **Actual vs Expected** - Clear comparison of values
+- **Pattern context** - Shows the pattern that didn't match (e.g., `> 30`, `=~ r"@example\.com$"`)
+
+### Complex Example
+
+```rust
+assert_struct!(response, Response {
+    user: User {
+        age: > 30,
+        email: =~ r"@company\.com$",
+        ..
+    },
+    ..
+});
+```
+
+Failure output:
+```text
+assert_struct! failed:
+
+comparison mismatch:
+  --> `response.user.age` (tests/api.rs:45)
+  actual: 25
+  expected: > 30
+```
 
 ## Installation
 

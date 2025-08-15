@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/ranges.rs
+expression: message
+---
+assert_struct! failed:
+
+   | Person {
+mismatch:
+  --> `person.age` (line 13)
+   | 18 ..= 65
+   | ^^^^^^^^^ actual: 75
+   | }

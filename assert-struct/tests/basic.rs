@@ -1,4 +1,8 @@
+#![allow(dead_code)]
 use assert_struct::assert_struct;
+
+#[macro_use]
+mod util;
 
 #[derive(Debug)]
 struct User {
@@ -45,39 +49,10 @@ fn partial_match_with_rest() {
     assert_struct!(user, User { name: "Bob", .. });
 }
 
-#[test]
-#[should_panic]
-fn test_field_mismatch() {
-    let user = User {
-        name: "Alice".to_string(),
-        age: 30,
-    };
+// Error message tests using snapshot testing
+error_message_test!("basic_errors/field_mismatch.rs", field_mismatch);
 
-    assert_struct!(
-        user,
-        User {
-            name: "Bob",
-            age: 30,
-        }
-    );
-}
-
-#[test]
-#[should_panic]
-fn test_age_mismatch() {
-    let user = User {
-        name: "Alice".to_string(),
-        age: 30,
-    };
-
-    assert_struct!(
-        user,
-        User {
-            name: "Alice",
-            age: 25,
-        }
-    );
-}
+error_message_test!("basic_errors/age_mismatch.rs", age_mismatch);
 
 #[test]
 fn test_vec_with_slice_syntax() {
@@ -111,22 +86,7 @@ fn test_vec_partial_match() {
     );
 }
 
-#[test]
-#[should_panic]
-fn test_vec_mismatch() {
-    let data = DataHolder {
-        values: vec![1, 2, 3],
-        name: "test".to_string(),
-    };
-
-    assert_struct!(
-        data,
-        DataHolder {
-            values: &[1, 2, 4], // Wrong last element
-            name: "test",
-        }
-    );
-}
+error_message_test!("basic_errors/vec_mismatch.rs", vec_mismatch);
 
 #[test]
 fn test_tuple_field() {
@@ -163,21 +123,4 @@ fn test_tuple_field_partial() {
     );
 }
 
-#[test]
-#[should_panic]
-fn test_tuple_field_mismatch() {
-    let holder = TupleHolder {
-        id: 1,
-        data: (50, "test".to_string()),
-        active: true,
-    };
-
-    assert_struct!(
-        holder,
-        TupleHolder {
-            id: 1,
-            data: (60, "test"), // Wrong first element
-            active: true,
-        }
-    );
-}
+error_message_test!("basic_errors/tuple_field_mismatch.rs", tuple_field_mismatch);

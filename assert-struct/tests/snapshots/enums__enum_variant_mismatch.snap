@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/enums.rs
+expression: message
+---
+assert_struct! failed:
+
+   | Account {
+mismatch:
+  --> `account.status` (line 24)
+   | Status::Active
+   | ^^^^^^^^^^^^^^ actual: Inactive
+   | }

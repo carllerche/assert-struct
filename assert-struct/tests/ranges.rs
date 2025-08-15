@@ -1,4 +1,8 @@
+#![allow(dead_code)]
 use assert_struct::assert_struct;
+
+#[macro_use]
+mod util;
 
 #[derive(Debug)]
 struct Person {
@@ -179,7 +183,7 @@ fn test_mixed_range_and_operators() {
 
 // Test failure cases
 #[test]
-#[should_panic(expected = "Value not in range")]
+#[should_panic(expected = "mismatch")]
 fn test_range_failure_below() {
     let person = Person {
         name: "Too Young".to_string(),
@@ -199,7 +203,7 @@ fn test_range_failure_below() {
 }
 
 #[test]
-#[should_panic(expected = "Value not in range")]
+#[should_panic(expected = "mismatch")]
 fn test_range_failure_above() {
     let person = Person {
         name: "Too Old".to_string(),
@@ -219,7 +223,7 @@ fn test_range_failure_above() {
 }
 
 #[test]
-#[should_panic(expected = "Value not in range")]
+#[should_panic(expected = "mismatch")]
 fn test_range_exclusive_boundary_failure() {
     let person = Person {
         name: "Boundary".to_string(),
@@ -260,3 +264,5 @@ fn test_char_range() {
         }
     );
 }
+
+error_message_test!("ranges_errors/range_pattern.rs", range_pattern);

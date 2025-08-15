@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // This file tests that certain patterns correctly fail to compile
 
 use assert_struct::assert_struct;

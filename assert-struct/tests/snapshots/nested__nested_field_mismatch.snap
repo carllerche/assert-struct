@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/nested.rs
+expression: message
+---
+assert_struct! failed:
+
+   | Person { ... Address {
+value mismatch:
+  --> `person.address.city` (line 34)
+   |         city: "Wrong City",
+   |               ^^^^^^^^^^^^ actual: "Capital City"
+   | } ... }

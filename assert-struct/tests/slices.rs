@@ -1,4 +1,8 @@
+#![allow(dead_code)]
 use assert_struct::assert_struct;
+
+#[macro_use]
+mod util;
 
 #[derive(Debug)]
 struct Container {
@@ -163,7 +167,7 @@ fn test_empty_slice() {
 }
 
 #[test]
-#[should_panic(expected = "Pattern mismatch")]
+#[should_panic(expected = "mismatch")]
 fn test_slice_length_mismatch() {
     let container = Container {
         items: vec![1, 2, 3],
@@ -181,24 +185,10 @@ fn test_slice_length_mismatch() {
     );
 }
 
-#[test]
-#[should_panic]
-fn test_slice_element_mismatch() {
-    let container = Container {
-        items: vec![1, 2, 3],
-        names: vec!["a".to_string(), "b".to_string()],
-        data: vec![10, 20],
-    };
-
-    assert_struct!(
-        container,
-        Container {
-            items: [1, 2, 4],  // Last element wrong
-            names: ["a", "c"], // Second element wrong
-            data: [10, 20],
-        }
-    );
-}
+error_message_test!(
+    "slices_errors/slice_element_mismatch.rs",
+    slice_element_mismatch
+);
 
 // Advanced: nested structures in slices
 #[derive(Debug, PartialEq)]
@@ -519,26 +509,9 @@ fn test_nested_slices_with_comparisons() {
 // Multiple .. patterns should cause a compilation error
 // This test ensures that our macro correctly rejects multiple .. patterns
 // by generating invalid Rust code that the compiler will catch
-#[test]
-#[should_panic]
-fn test_slice_multiple_rest_patterns_fails() {
-    // This test exists to document that multiple .. patterns are not allowed
-    // The actual test is commented out because it would fail to compile
-    // which is the expected behavior
+error_message_test!(
+    "slices_errors/slice_multiple_rest_patterns_fails.rs",
+    slice_multiple_rest_patterns_fails
+);
 
-    // The following would fail to compile:
-    // let container = Container {
-    //     items: vec![1, 2, 3, 4, 5],
-    //     names: vec!["a".to_string()],
-    //     data: vec![10],
-    // };
-    //
-    // assert_struct!(container, Container {
-    //     items: [1, .., 3, .., 5],  // Multiple .. not allowed
-    //     names: ["a"],
-    //     data: [10],
-    // });
-
-    // For now, we'll just panic to have a test that documents this limitation
-    panic!("Multiple .. patterns in slices are not allowed - this is enforced at compile time");
-}
+error_message_test!("slices_errors/slice_pattern.rs", slice_pattern);

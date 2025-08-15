@@ -21,6 +21,7 @@
 //! See the main `assert-struct` crate for documentation and examples.
 
 use proc_macro::TokenStream;
+use std::fmt;
 use syn::{Expr, Token, punctuated::Punctuated};
 
 mod expand;
@@ -33,34 +34,153 @@ struct AssertStruct {
 }
 
 // Unified pattern type that can represent any pattern
-enum Pattern {
+pub(crate) enum Pattern {
     // Simple value: 42, "hello", true
-    Simple(Expr),
+    Simple {
+        node_id: usize,
+        expr: Expr,
+    },
     // Struct pattern: User { name: "Alice", age: 30, .. }
     Struct {
+        node_id: usize,
         path: syn::Path,
         fields: Punctuated<FieldAssertion, Token![,]>,
         rest: bool,
     },
     // Tuple pattern: (10, 20) or Some(42) or None
     Tuple {
+        node_id: usize,
         path: Option<syn::Path>,
         elements: Vec<Pattern>,
     },
     // Slice pattern: [1, 2, 3] or [1, .., 5]
-    Slice(Vec<Pattern>),
+    Slice {
+        node_id: usize,
+        elements: Vec<Pattern>,
+    },
     // Comparison: > 30, <= 100
-    Comparison(ComparisonOp, Expr),
+    Comparison {
+        node_id: usize,
+        op: ComparisonOp,
+        expr: Expr,
+    },
     // Range: 10..20, 0..=100
-    Range(Expr),
+    Range {
+        node_id: usize,
+        expr: Expr,
+    },
     // Regex: =~ "pattern" - string literal optimized at compile time
     #[cfg(feature = "regex")]
-    Regex(String), // String literal regex pattern (performance optimization)
+    Regex {
+        node_id: usize,
+        pattern: String, // String literal regex pattern (performance optimization)
+        span: proc_macro2::Span, // Store span for accurate error reporting
+    },
     // Like pattern: =~ expr - arbitrary expression using Like trait
     #[cfg(feature = "regex")]
-    Like(Expr),
+    Like {
+        node_id: usize,
+        expr: Expr,
+    },
     // Rest pattern: .. for partial matching
-    Rest,
+    Rest {
+        node_id: usize,
+    },
+}
+
+// Helper function to format syn expressions as strings
+fn expr_to_string(expr: &Expr) -> String {
+    // This is a simplified version - in production we'd want more complete handling
+    match expr {
+        Expr::Lit(lit) => {
+            // Handle literals
+            quote::quote! { #lit }.to_string()
+        }
+        Expr::Path(path) => {
+            // Handle paths
+            quote::quote! { #path }.to_string()
+        }
+        Expr::Range(range) => {
+            // Handle ranges
+            quote::quote! { #range }.to_string()
+        }
+        _ => {
+            // Fallback - use quote for other expressions
+            quote::quote! { #expr }.to_string()
+        }
+    }
+}
+
+fn path_to_string(path: &syn::Path) -> String {
+    quote::quote! { #path }.to_string()
+}
+
+impl fmt::Display for Pattern {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Pattern::Simple { expr, .. } => {
+                write!(f, "{}", expr_to_string(expr))
+            }
+            Pattern::Struct {
+                path, fields, rest, ..
+            } => {
+                write!(f, "{} {{ ", path_to_string(path))?;
+                for (i, field) in fields.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}: {}", field.field_name, field.pattern)?;
+                }
+                if *rest {
+                    if !fields.is_empty() {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "..")?;
+                }
+                write!(f, " }}")
+            }
+            Pattern::Tuple { path, elements, .. } => {
+                if let Some(p) = path {
+                    write!(f, "{}", path_to_string(p))?;
+                }
+                write!(f, "(")?;
+                for (i, elem) in elements.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", elem)?;
+                }
+                write!(f, ")")
+            }
+            Pattern::Slice { elements, .. } => {
+                write!(f, "[")?;
+                for (i, elem) in elements.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", elem)?;
+                }
+                write!(f, "]")
+            }
+            Pattern::Comparison { op, expr, .. } => {
+                write!(f, "{} {}", op, expr_to_string(expr))
+            }
+            Pattern::Range { expr, .. } => {
+                write!(f, "{}", expr_to_string(expr))
+            }
+            #[cfg(feature = "regex")]
+            Pattern::Regex { pattern, .. } => {
+                write!(f, "=~ r\"{}\"", pattern)
+            }
+            #[cfg(feature = "regex")]
+            Pattern::Like { expr, .. } => {
+                write!(f, "=~ {}", expr_to_string(expr))
+            }
+            Pattern::Rest { .. } => {
+                write!(f, "..")
+            }
+        }
+    }
 }
 
 struct Expected {
@@ -75,13 +195,26 @@ struct FieldAssertion {
 }
 
 #[derive(Clone, Copy)]
-enum ComparisonOp {
+pub(crate) enum ComparisonOp {
     Less,
     LessEqual,
     Greater,
     GreaterEqual,
     Equal,
     NotEqual,
+}
+
+impl fmt::Display for ComparisonOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ComparisonOp::Less => write!(f, "<"),
+            ComparisonOp::LessEqual => write!(f, "<="),
+            ComparisonOp::Greater => write!(f, ">"),
+            ComparisonOp::GreaterEqual => write!(f, ">="),
+            ComparisonOp::Equal => write!(f, "=="),
+            ComparisonOp::NotEqual => write!(f, "!="),
+        }
+    }
 }
 
 /// Asserts that a struct matches an expected pattern.
@@ -311,18 +444,45 @@ enum ComparisonOp {
 /// });
 /// ```
 ///
-/// # Panics
+/// # Error Messages
 ///
-/// Panics with a descriptive message when the assertion fails:
+/// When assertions fail, the macro provides detailed error messages showing exactly what went wrong:
 ///
 /// ```should_panic
 /// # use assert_struct::assert_struct;
 /// # #[derive(Debug)]
-/// # struct User { name: String }
-/// # let user = User { name: "Alice".to_string() };
+/// # struct User { name: String, age: u32 }
+/// # let user = User { name: "Alice".to_string(), age: 25 };
 /// assert_struct!(user, User {
-///     name: "Bob",  // Panics: expected "Bob", got "Alice"
+///     name: "Bob",  // This assertion will fail
+///     age: 25,
 /// });
+/// // Error output:
+/// // assert_struct! failed:
+/// //
+/// // value mismatch:
+/// //   --> `user.name` (src/lib.rs:319)
+/// //   actual: "Alice"
+/// //   expected: "Bob"
+/// ```
+///
+/// For comparison patterns, the error clearly shows the failed condition:
+///
+/// ```should_panic
+/// # use assert_struct::assert_struct;
+/// # #[derive(Debug)]
+/// # struct Account { balance: f64 }
+/// # let account = Account { balance: 50.0 };
+/// assert_struct!(account, Account {
+///     balance: > 100.0,  // This will fail
+/// });
+/// // Error output:
+/// // assert_struct! failed:
+/// //
+/// // comparison mismatch:
+/// //   --> `account.balance` (src/lib.rs:334)
+/// //   actual: 50.0
+/// //   expected: > 100.0
 /// ```
 ///
 /// # Compilation Errors

@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/nested.rs
+expression: message
+---
+assert_struct! failed:
+
+   | Report { ... Analysis { ... DataSet {
+mismatch:
+  --> `report.analysis.data.values.[1]` (line 39)
+   |     [1]: 25,
+   |          ^^ actual: 20
+   | } ... } ... }

@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/nested.rs
+expression: message
+---
+assert_struct! failed:
+
+   | GameObject { ... Transform { ... Coordinates {
+mismatch:
+  --> `obj.transform.coords.position` (line 39)
+   |     position: (10.0, 25.0, 30.0),
+   |                      ^^^^ actual: 20.0
+   | } ... } ... }

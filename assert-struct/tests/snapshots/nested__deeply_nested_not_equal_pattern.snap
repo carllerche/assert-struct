@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/nested.rs
+expression: message
+---
+assert_struct! failed:
+
+   | Application { ... Service { ... Config {
+mismatch:
+  --> `app.service.config.timeout` (line 39)
+   |     timeout: != 30,
+   |              ^^^^^ actual: 30
+   | } ... } ... }

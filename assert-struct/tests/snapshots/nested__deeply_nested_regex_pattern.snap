@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/nested.rs
+expression: message
+---
+assert_struct! failed:
+
+   | Customer { ... Contact { ... Validation {
+mismatch:
+  --> `customer.contact.validation.email` (line 39)
+   | =~ r".*@company\.com$"
+   | ^^^^^^^^^^^^^^^^^^^^^^ actual: "john@example.com"
+   | } ... } ... }

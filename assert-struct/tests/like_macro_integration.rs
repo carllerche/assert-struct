@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 #[cfg(feature = "regex")]
 use assert_struct::{Like, assert_struct};
 #[cfg(feature = "regex")]
@@ -127,7 +128,7 @@ fn test_custom_like_implementation() {
 // Test failure cases
 #[cfg(feature = "regex")]
 #[test]
-#[should_panic(expected = "Value does not match pattern")]
+#[should_panic(expected = "mismatch")]
 fn test_like_pattern_mismatch() {
     let data = TestData {
         email: "user@other.com".to_string(),
@@ -145,7 +146,7 @@ fn test_like_pattern_mismatch() {
 
 #[cfg(feature = "regex")]
 #[test]
-#[should_panic(expected = "Value does not match regex pattern")]
+#[should_panic(expected = "mismatch")]
 fn test_backward_compat_failure() {
     let data = TestData {
         email: "not-an-email".to_string(),
