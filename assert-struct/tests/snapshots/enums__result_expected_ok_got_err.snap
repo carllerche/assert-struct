@@ -8,5 +8,5 @@ assert_struct! failed:
 mismatch:
   --> `data.login_result` (line 30)
    |     login_result: Ok("user123"),
-   |                   ^^ actual: Err(..)
+   |                   ^^ actual: Err("Failed")
    | }
