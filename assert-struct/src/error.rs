@@ -528,6 +528,52 @@ fn traverse_pattern_tree(
     }
 }
 
+/// Format actual values with smart abbreviation for enum variants
+fn format_actual_value(actual: &str, error_type: &ErrorType) -> String {
+    // Only apply smart formatting for enum variant errors
+    if matches!(error_type, ErrorType::EnumVariant) {
+        // Check if this is a tuple variant (has parentheses)
+        if let Some(paren_pos) = actual.find('(') {
+            // Try to extract the variant name before the parenthesis
+            let prefix = &actual[..paren_pos];
+            
+            // Check if there's a valid variant name (ends with alphanumeric or underscore)
+            // This handles both long names like "Some" and short ones like "Ok"/"Err"
+            if !prefix.is_empty() && prefix.chars().last().map_or(false, |c| c.is_alphanumeric() || c == '_') {
+                // Find where the variant name starts (after :: or at beginning)
+                let variant_name = if let Some(double_colon) = prefix.rfind("::") {
+                    &prefix[double_colon + 2..]
+                } else {
+                    prefix
+                };
+                
+                // Check if the content after the opening paren contains a nested struct
+                // by looking for '{' which indicates struct syntax
+                let content_start = paren_pos + 1;
+                if let Some(close_paren) = actual.rfind(')') {
+                    let content = &actual[content_start..close_paren];
+                    
+                    // If content contains '{', it has a nested struct, so abbreviate
+                    // Otherwise, show the full content for simple values
+                    if content.contains('{') {
+                        return format!("{}(..)", variant_name);
+                    }
+                }
+            }
+        }
+        // Check for struct variants - always abbreviate these
+        else if let Some(brace_pos) = actual.find('{') {
+            if let Some(variant_end) = actual[..brace_pos].rfind(|c: char| c.is_alphabetic() || c == '_') {
+                let variant_start = actual[..=variant_end].rfind("::").map(|i| i + 2).unwrap_or(0);
+                return format!("{} {{ .. }}", &actual[variant_start..brace_pos].trim());
+            }
+        }
+    }
+    
+    // For all other cases, return the actual value as-is
+    actual.to_string()
+}
+
 /// Build a fragment for an error node
 fn build_error_fragment(
     node: &'static PatternNode,
@@ -617,7 +663,7 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
         PatternNode::Simple { value } => Fragment::Annotated {
             pattern: value.to_string(),
             annotation: error.map(|e| ErrorAnnotation {
-                actual_value: e.actual_value.clone(),
+                actual_value: format_actual_value(&e.actual_value, &e.error_type),
                 error_type: e.error_type.clone(),
                 underline_range: None, // Underline entire pattern
             }),
@@ -625,7 +671,7 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
         PatternNode::Comparison { op, value } => Fragment::Annotated {
             pattern: format!("{} {}", op, value),
             annotation: error.map(|e| ErrorAnnotation {
-                actual_value: e.actual_value.clone(),
+                actual_value: format_actual_value(&e.actual_value, &e.error_type),
                 error_type: e.error_type.clone(),
                 underline_range: None,
             }),
@@ -633,7 +679,7 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
         PatternNode::Range { pattern } => Fragment::Annotated {
             pattern: pattern.to_string(),
             annotation: error.map(|e| ErrorAnnotation {
-                actual_value: e.actual_value.clone(),
+                actual_value: format_actual_value(&e.actual_value, &e.error_type),
                 error_type: e.error_type.clone(),
                 underline_range: None,
             }),
@@ -641,7 +687,7 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
         PatternNode::Regex { pattern } => Fragment::Annotated {
             pattern: format!("=~ {}", pattern),
             annotation: error.map(|e| ErrorAnnotation {
-                actual_value: e.actual_value.clone(),
+                actual_value: format_actual_value(&e.actual_value, &e.error_type),
                 error_type: e.error_type.clone(),
                 underline_range: None,
             }),
@@ -649,7 +695,7 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
         PatternNode::Like { expr } => Fragment::Annotated {
             pattern: format!("=~ {}", expr),
             annotation: error.map(|e| ErrorAnnotation {
-                actual_value: e.actual_value.clone(),
+                actual_value: format_actual_value(&e.actual_value, &e.error_type),
                 error_type: e.error_type.clone(),
                 underline_range: None,
             }),
@@ -688,7 +734,7 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
                         return Fragment::Annotated {
                             pattern: full_pattern,
                             annotation: error.map(|e| ErrorAnnotation {
-                                actual_value: e.actual_value.clone(),
+                                actual_value: format_actual_value(&e.actual_value, &e.error_type),
                                 error_type: e.error_type.clone(),
                                 underline_range: Some((0, variant_end)),
                             }),
@@ -709,7 +755,7 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
                 Fragment::Annotated {
                     pattern: full_pattern,
                     annotation: error.map(|e| ErrorAnnotation {
-                        actual_value: e.actual_value.clone(),
+                        actual_value: format_actual_value(&e.actual_value, &e.error_type),
                         error_type: e.error_type.clone(),
                         underline_range: Some((0, variant_end)),
                     }),
@@ -725,7 +771,7 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
                     Fragment::Annotated {
                         pattern: format!("{}({})", path, arg_str),
                         annotation: error.map(|e| ErrorAnnotation {
-                            actual_value: e.actual_value.clone(),
+                            actual_value: format_actual_value(&e.actual_value, &e.error_type),
                             error_type: e.error_type.clone(),
                             underline_range: None,
                         }),
@@ -735,7 +781,7 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
                     Fragment::Annotated {
                         pattern: path.to_string(),
                         annotation: error.map(|e| ErrorAnnotation {
-                            actual_value: e.actual_value.clone(),
+                            actual_value: format_actual_value(&e.actual_value, &e.error_type),
                             error_type: e.error_type.clone(),
                             underline_range: None,
                         }),
@@ -746,7 +792,7 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
                 Fragment::Annotated {
                     pattern: path.to_string(),
                     annotation: error.map(|e| ErrorAnnotation {
-                        actual_value: e.actual_value.clone(),
+                        actual_value: format_actual_value(&e.actual_value, &e.error_type),
                         error_type: e.error_type.clone(),
                         underline_range: None,
                     }),
@@ -757,7 +803,7 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
         _ => Fragment::Annotated {
             pattern: "<complex>".to_string(),
             annotation: error.map(|e| ErrorAnnotation {
-                actual_value: e.actual_value.clone(),
+                actual_value: format_actual_value(&e.actual_value, &e.error_type),
                 error_type: e.error_type.clone(),
                 underline_range: None,
             }),

@@ -1459,65 +1459,10 @@ fn generate_enum_tuple_assertion_with_collection(
                     let __line = line!();
                     let __file = file!();
 
-                    // Format the actual value more concisely for enum variants
-                    let __actual_str = {
-                        let debug_str = format!("{:?}", #value_expr);
-
-                        // Check if this is a tuple variant (has parentheses)
-                        if let Some(paren_pos) = debug_str.find('(') {
-                            // Try to extract the variant name before the parenthesis
-                            let prefix = &debug_str[..paren_pos];
-
-                            // Check if there's a valid variant name (ends with alphanumeric or underscore)
-                            // This handles both long names like "Some" and short ones like "Ok"/"Err"
-                            if !prefix.is_empty() && prefix.chars().last().map_or(false, |c| c.is_alphanumeric() || c == '_') {
-                                // Find where the variant name starts (after :: or at beginning)
-                                let variant_name = if let Some(double_colon) = prefix.rfind("::") {
-                                    &prefix[double_colon + 2..]
-                                } else {
-                                    prefix
-                                };
-
-                                // Check if the content after the opening paren contains a nested struct
-                                // by looking for '{' which indicates struct syntax
-                                let content_start = paren_pos + 1;
-                                if let Some(close_paren) = debug_str.rfind(')') {
-                                    let content = &debug_str[content_start..close_paren];
-
-                                    // If content contains '{', it has a nested struct, so abbreviate
-                                    // Otherwise, show the full content for simple values
-                                    if content.contains('{') {
-                                        format!("{}(..)", variant_name)
-                                    } else {
-                                        // Keep the full simple content
-                                        debug_str
-                                    }
-                                } else {
-                                    // Malformed, just use debug_str
-                                    debug_str
-                                }
-                            } else {
-                                // No valid variant name found, just use debug_str as is
-                                debug_str
-                            }
-                        } else if let Some(brace_pos) = debug_str.find('{') {
-                            // Struct variant - always abbreviate these
-                            if let Some(variant_end) = debug_str[..brace_pos].rfind(|c: char| c.is_alphabetic() || c == '_') {
-                                let variant_start = debug_str[..=variant_end].rfind("::").map(|i| i + 2).unwrap_or(0);
-                                format!("{} {{ .. }}", &debug_str[variant_start..brace_pos].trim())
-                            } else {
-                                debug_str
-                            }
-                        } else {
-                            // Unit variant or simple value - use as is
-                            debug_str
-                        }
-                    };
-
                     let __error = ::assert_struct::__macro_support::ErrorContext {
                         field_path: #field_path_str.to_string(),
                         pattern_str: stringify!(#variant_path).to_string(),
-                        actual_value: __actual_str,
+                        actual_value: format!("{:?}", #value_expr),
                         line_number: __line,
                         file_name: __file,
                         error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
@@ -1540,66 +1485,10 @@ fn generate_enum_tuple_assertion_with_collection(
                 _ => {
                     let __line = line!();
                     let __file = file!();
-
-                    // Format the actual value more concisely for enum variants
-                    let __actual_str = {
-                        let debug_str = format!("{:?}", &#value_expr);
-
-                        // Check if this is a tuple variant (has parentheses)
-                        if let Some(paren_pos) = debug_str.find('(') {
-                            // Try to extract the variant name before the parenthesis
-                            let prefix = &debug_str[..paren_pos];
-
-                            // Check if there's a valid variant name (ends with alphanumeric or underscore)
-                            // This handles both long names like "Some" and short ones like "Ok"/"Err"
-                            if !prefix.is_empty() && prefix.chars().last().map_or(false, |c| c.is_alphanumeric() || c == '_') {
-                                // Find where the variant name starts (after :: or at beginning)
-                                let variant_name = if let Some(double_colon) = prefix.rfind("::") {
-                                    &prefix[double_colon + 2..]
-                                } else {
-                                    prefix
-                                };
-
-                                // Check if the content after the opening paren contains a nested struct
-                                // by looking for '{' which indicates struct syntax
-                                let content_start = paren_pos + 1;
-                                if let Some(close_paren) = debug_str.rfind(')') {
-                                    let content = &debug_str[content_start..close_paren];
-
-                                    // If content contains '{', it has a nested struct, so abbreviate
-                                    // Otherwise, show the full content for simple values
-                                    if content.contains('{') {
-                                        format!("{}(..)", variant_name)
-                                    } else {
-                                        // Keep the full simple content
-                                        debug_str
-                                    }
-                                } else {
-                                    // Malformed, just use debug_str
-                                    debug_str
-                                }
-                            } else {
-                                // No valid variant name found, just use debug_str as is
-                                debug_str
-                            }
-                        } else if let Some(brace_pos) = debug_str.find('{') {
-                            // Struct variant - always abbreviate these
-                            if let Some(variant_end) = debug_str[..brace_pos].rfind(|c: char| c.is_alphabetic() || c == '_') {
-                                let variant_start = debug_str[..=variant_end].rfind("::").map(|i| i + 2).unwrap_or(0);
-                                format!("{} {{ .. }}", &debug_str[variant_start..brace_pos].trim())
-                            } else {
-                                debug_str
-                            }
-                        } else {
-                            // Unit variant or simple value - use as is
-                            debug_str
-                        }
-                    };
-
                     let __error = ::assert_struct::__macro_support::ErrorContext {
                         field_path: #field_path_str.to_string(),
                         pattern_str: stringify!(#variant_path).to_string(),
-                        actual_value: __actual_str,
+                        actual_value: format!("{:?}", &#value_expr),
                         line_number: __line,
                         file_name: __file,
                         error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
@@ -1684,65 +1573,10 @@ fn generate_enum_tuple_assertion_with_path(
                     let __line = line!();
                     let __file = file!();
 
-                    // Format the actual value more concisely for enum variants
-                    let __actual_str = {
-                        let debug_str = format!("{:?}", #value_expr);
-
-                        // Check if this is a tuple variant (has parentheses)
-                        if let Some(paren_pos) = debug_str.find('(') {
-                            // Try to extract the variant name before the parenthesis
-                            let prefix = &debug_str[..paren_pos];
-
-                            // Check if there's a valid variant name (ends with alphanumeric or underscore)
-                            // This handles both long names like "Some" and short ones like "Ok"/"Err"
-                            if !prefix.is_empty() && prefix.chars().last().map_or(false, |c| c.is_alphanumeric() || c == '_') {
-                                // Find where the variant name starts (after :: or at beginning)
-                                let variant_name = if let Some(double_colon) = prefix.rfind("::") {
-                                    &prefix[double_colon + 2..]
-                                } else {
-                                    prefix
-                                };
-
-                                // Check if the content after the opening paren contains a nested struct
-                                // by looking for '{' which indicates struct syntax
-                                let content_start = paren_pos + 1;
-                                if let Some(close_paren) = debug_str.rfind(')') {
-                                    let content = &debug_str[content_start..close_paren];
-
-                                    // If content contains '{', it has a nested struct, so abbreviate
-                                    // Otherwise, show the full content for simple values
-                                    if content.contains('{') {
-                                        format!("{}(..)", variant_name)
-                                    } else {
-                                        // Keep the full simple content
-                                        debug_str
-                                    }
-                                } else {
-                                    // Malformed, just use debug_str
-                                    debug_str
-                                }
-                            } else {
-                                // No valid variant name found, just use debug_str as is
-                                debug_str
-                            }
-                        } else if let Some(brace_pos) = debug_str.find('{') {
-                            // Struct variant - always abbreviate these
-                            if let Some(variant_end) = debug_str[..brace_pos].rfind(|c: char| c.is_alphabetic() || c == '_') {
-                                let variant_start = debug_str[..=variant_end].rfind("::").map(|i| i + 2).unwrap_or(0);
-                                format!("{} {{ .. }}", &debug_str[variant_start..brace_pos].trim())
-                            } else {
-                                debug_str
-                            }
-                        } else {
-                            // Unit variant or simple value - use as is
-                            debug_str
-                        }
-                    };
-
                     let __error = ::assert_struct::__macro_support::ErrorContext {
                         field_path: #field_path_str.to_string(),
                         pattern_str: stringify!(#variant_path).to_string(),
-                        actual_value: __actual_str,
+                        actual_value: format!("{:?}", #value_expr),
                         line_number: __line,
                         file_name: __file,
                         error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
@@ -1765,66 +1599,10 @@ fn generate_enum_tuple_assertion_with_path(
                 _ => {
                     let __line = line!();
                     let __file = file!();
-
-                    // Format the actual value more concisely for enum variants
-                    let __actual_str = {
-                        let debug_str = format!("{:?}", &#value_expr);
-
-                        // Check if this is a tuple variant (has parentheses)
-                        if let Some(paren_pos) = debug_str.find('(') {
-                            // Try to extract the variant name before the parenthesis
-                            let prefix = &debug_str[..paren_pos];
-
-                            // Check if there's a valid variant name (ends with alphanumeric or underscore)
-                            // This handles both long names like "Some" and short ones like "Ok"/"Err"
-                            if !prefix.is_empty() && prefix.chars().last().map_or(false, |c| c.is_alphanumeric() || c == '_') {
-                                // Find where the variant name starts (after :: or at beginning)
-                                let variant_name = if let Some(double_colon) = prefix.rfind("::") {
-                                    &prefix[double_colon + 2..]
-                                } else {
-                                    prefix
-                                };
-
-                                // Check if the content after the opening paren contains a nested struct
-                                // by looking for '{' which indicates struct syntax
-                                let content_start = paren_pos + 1;
-                                if let Some(close_paren) = debug_str.rfind(')') {
-                                    let content = &debug_str[content_start..close_paren];
-
-                                    // If content contains '{', it has a nested struct, so abbreviate
-                                    // Otherwise, show the full content for simple values
-                                    if content.contains('{') {
-                                        format!("{}(..)", variant_name)
-                                    } else {
-                                        // Keep the full simple content
-                                        debug_str
-                                    }
-                                } else {
-                                    // Malformed, just use debug_str
-                                    debug_str
-                                }
-                            } else {
-                                // No valid variant name found, just use debug_str as is
-                                debug_str
-                            }
-                        } else if let Some(brace_pos) = debug_str.find('{') {
-                            // Struct variant - always abbreviate these
-                            if let Some(variant_end) = debug_str[..brace_pos].rfind(|c: char| c.is_alphabetic() || c == '_') {
-                                let variant_start = debug_str[..=variant_end].rfind("::").map(|i| i + 2).unwrap_or(0);
-                                format!("{} {{ .. }}", &debug_str[variant_start..brace_pos].trim())
-                            } else {
-                                debug_str
-                            }
-                        } else {
-                            // Unit variant or simple value - use as is
-                            debug_str
-                        }
-                    };
-
                     let __error = ::assert_struct::__macro_support::ErrorContext {
                         field_path: #field_path_str.to_string(),
                         pattern_str: stringify!(#variant_path).to_string(),
-                        actual_value: __actual_str,
+                        actual_value: format!("{:?}", &#value_expr),
                         line_number: __line,
                         file_name: __file,
                         error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
