@@ -1,0 +1,15 @@
+---
+source: assert-struct/tests/tuples.rs
+expression: message
+---
+assert_struct! failed: 4 mismatches
+
+   | MessageQueue {
+mismatch:
+  --> `queue.current` (line 24)
+   |     current: Message::Quad(1, 2, 3, 4),
+   |                            ^  ^  ^  ^ actual: 40
+   |                            │  │  └─ actual: 30
+   |                            │  └─ actual: 20
+   |                            └─ actual: 10
+   | }

@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/tuples.rs
+expression: message
+---
+assert_struct! failed:
+
+   | Container {
+mismatch:
+  --> `container.value.Some` (line 19)
+   |     Some: (100, "other".to_string(), true),
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ actual: (75, "test", false)
+   | }

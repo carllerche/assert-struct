@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/tuples.rs
+expression: message
+---
+assert_struct! failed:
+
+   | TupleHolder {
+mismatch:
+  --> `holder.triple` (line 24)
+   |     triple: (1000, "different_but_also_very_long_string_that_needs_truncation", true),
+   |              ^^^^ actual: 999
+   | }

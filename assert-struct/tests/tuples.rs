@@ -1,5 +1,8 @@
 use assert_struct::assert_struct;
 
+#[macro_use]
+mod util;
+
 // Test plain tuples with multiple fields
 #[derive(Debug)]
 struct Coordinates {
@@ -254,3 +257,24 @@ fn test_tuple_comparison_failure() {
         metadata: ("test", 42, true),
     });
 }
+
+// Multiple error tests - using error_message_test! macro
+error_message_test!("tuples_errors/two_errors.rs", tuple_two_errors);
+error_message_test!("tuples_errors/three_errors.rs", tuple_three_errors);
+error_message_test!("tuples_errors/four_errors.rs", tuple_four_errors);
+error_message_test!("tuples_errors/mixed_patterns.rs", tuple_mixed_patterns);
+error_message_test!("tuples_errors/long_values.rs", tuple_long_values);
+error_message_test!("tuples_errors/enum_two_errors.rs", enum_tuple_two_errors);
+error_message_test!(
+    "tuples_errors/enum_three_errors.rs",
+    enum_tuple_three_errors
+);
+error_message_test!("tuples_errors/enum_four_errors.rs", enum_tuple_four_errors);
+error_message_test!(
+    "tuples_errors/option_multiple_errors.rs",
+    option_tuple_multiple_errors
+);
+error_message_test!(
+    "tuples_errors/result_multiple_errors.rs",
+    result_tuple_multiple_errors
+);

@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/tuples.rs
+expression: message
+---
+assert_struct! failed:
+
+   | Response {
+mismatch:
+  --> `response.data.Ok` (line 19)
+   |     Ok: (100, "different".to_string()),
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ actual: (42, "success")
+   | }

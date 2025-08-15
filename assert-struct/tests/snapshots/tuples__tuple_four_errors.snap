@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/tuples.rs
+expression: message
+---
+assert_struct! failed:
+
+   | TupleHolder {
+mismatch:
+  --> `holder.quad` (line 19)
+   |     quad: (1, 2, 3, 4),
+   |            ^ actual: 10
+   | }

@@ -401,10 +401,8 @@ fn traverse_pattern_tree(
 
                 let opening_breadcrumbs = collect_opening_breadcrumbs(state);
 
-                // For now, panic if multiple errors in same tuple (TODO: handle this)
-                if error_count > 1 {
-                    todo!("Multiple errors in same tuple not yet supported");
-                }
+                // Note: Currently the macro only generates one error at a time,
+                // but the rendering code now handles multiple errors gracefully
 
                 // Use the error's field path, but remove the numeric suffix for display
                 let display_path = {
@@ -472,9 +470,8 @@ fn traverse_pattern_tree(
                         build_enum_tuple_fragment_with_errors(node, &tuple_errors, &field_path);
                     let opening_breadcrumbs = collect_opening_breadcrumbs(state);
 
-                    if error_count > 1 {
-                        todo!("Multiple errors in same enum tuple not yet supported");
-                    }
+                    // Note: Currently the macro only generates one error at a time,
+                    // but the rendering code now handles multiple errors gracefully
 
                     // Use the error's field path, but remove the numeric suffix for display
                     let display_path = {
@@ -532,7 +529,7 @@ fn build_error_fragment(
     let field_name = error.field_path.split('.').last().unwrap_or("");
 
     // Check if field_name is all digits to identify tuple element paths
-    // This is checking whether the last part of the field path (e.g., "0" in "user.0") 
+    // This is checking whether the last part of the field path (e.g., "0" in "user.0")
     // consists entirely of digits, which indicates it's a tuple element index rather than
     // a named struct field
     let is_tuple_element = field_name.chars().all(|c| c.is_ascii_digit());
@@ -957,13 +954,67 @@ fn render_section(section: &ErrorSection, output: &mut String, indentation_level
     output.push_str(&pattern_line);
 
     // Render underlines for annotations
-    for (start_pos, end_pos, annotation) in annotations {
+    if annotations.len() == 1 {
+        // Single annotation: use simple format
+        let (start_pos, end_pos, annotation) = annotations[0];
         let spaces = " ".repeat(start_pos);
         let underline = "^".repeat(end_pos - start_pos);
         output.push_str(&format!(
             "   | {}{} actual: {}\n",
             spaces, underline, annotation.actual_value
         ));
+    } else if annotations.len() > 1 {
+        // Multiple annotations: use box-drawing format
+
+        // First line: all underlines with rightmost error
+        output.push_str("   | ");
+        output.push_str(&" ".repeat(base_indent.len()));
+
+        let mut last_pos = base_indent.len();
+        for (start_pos, end_pos, _) in &annotations {
+            if *start_pos > last_pos {
+                output.push_str(&" ".repeat(start_pos - last_pos));
+            }
+            output.push_str(&"^".repeat(end_pos - start_pos));
+            last_pos = *end_pos;
+        }
+
+        // Rightmost error on same line
+        if let Some((_, _, ann)) = annotations.last() {
+            output.push_str(" actual: ");
+            output.push_str(&ann.actual_value);
+        }
+        output.push('\n');
+
+        // Remaining annotations from right to left
+        for i in (0..annotations.len() - 1).rev() {
+            output.push_str("   | ");
+            output.push_str(&" ".repeat(base_indent.len()));
+
+            let mut current_pos = base_indent.len();
+
+            // Walk through annotations 0..=i to place box characters
+            for j in 0..=i {
+                let (start_pos, _, _) = annotations[j];
+
+                // Add spacing to reach annotation j's position
+                if start_pos > current_pos {
+                    output.push_str(&" ".repeat(start_pos - current_pos));
+                }
+
+                if j == i {
+                    // This is our annotation - draw corner
+                    output.push_str("└─ actual: ");
+                    output.push_str(&annotations[i].2.actual_value);
+                    break;
+                } else {
+                    // Draw vertical line for annotations that come before
+                    output.push('│');
+                    current_pos = start_pos + 1;
+                }
+            }
+            output.push('\n');
+        }
     }
 }
 

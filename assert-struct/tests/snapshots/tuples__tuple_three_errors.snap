@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/tuples.rs
+expression: message
+---
+assert_struct! failed:
+
+   | TupleHolder {
+mismatch:
+  --> `holder.triple` (line 19)
+   |     triple: (100, "expected", false),
+   |              ^^^ actual: 42
+   | }

@@ -1,0 +1,14 @@
+---
+source: assert-struct/tests/tuples.rs
+expression: message
+---
+assert_struct! failed: 3 mismatches
+
+   | MessageQueue {
+mismatch:
+  --> `queue.current` (line 24)
+   |     current: Message::Triple(100, "expected", false),
+   |                              ^^^  ^^^^^^^^^^  ^^^^^ actual: true
+   |                              │    └─ actual: "actual"
+   |                              └─ actual: 42
+   | }
