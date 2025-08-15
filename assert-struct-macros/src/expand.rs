@@ -117,10 +117,7 @@ fn generate_pattern_nodes(
 
     let node_def = match pattern {
         Pattern::Simple { expr, .. } => {
-            let value_str = quote! { #expr }
-                .to_string()
-                .replace("& [", "&[")
-                .replace("& mut [", "&mut [");
+            let value_str = quote! { #expr }.to_string();
             quote! {
                 ::assert_struct::__macro_support::PatternNode::Simple {
                     value: #value_str,
@@ -214,7 +211,8 @@ fn generate_pattern_nodes(
         Pattern::Struct {
             path, fields, rest, ..
         } => {
-            let name_str = quote! { #path }.to_string();
+            // Fix: Remove spaces around :: when converting path to string
+            let name_str = quote! { #path }.to_string().replace(" :: ", "::");
 
             let field_entries: Vec<TokenStream> = fields
                 .iter()
@@ -1446,9 +1444,10 @@ fn generate_enum_tuple_assertion_with_collection(
         .collect();
 
     let field_path_str = field_path.join(".");
+    let span = variant_path.span();
 
     if is_ref {
-        quote! {
+        quote_spanned! {span=>
             match #value_expr {
                 #variant_path(#(#element_names),*) => {
                     #(#element_assertions)*
@@ -1456,6 +1455,7 @@ fn generate_enum_tuple_assertion_with_collection(
                 _ => {
                     let __line = line!();
                     let __file = file!();
+
                     let __error = ::assert_struct::__macro_support::ErrorContext {
                         field_path: #field_path_str.to_string(),
                         pattern_str: stringify!(#variant_path).to_string(),
@@ -1474,7 +1474,7 @@ fn generate_enum_tuple_assertion_with_collection(
             }
         }
     } else {
-        quote! {
+        quote_spanned! {span=>
             match &#value_expr {
                 #variant_path(#(#element_names),*) => {
                     #(#element_assertions)*
@@ -1516,6 +1516,7 @@ fn generate_enum_tuple_assertion_with_path(
     // Non-empty = tuple variant (e.g., Some(42), Event::Click(x, y))
 
     let field_path_str = field_path.join(".");
+    let span = variant_path.span();
 
     // Generate match pattern and assertions based on whether we have elements
     let (match_pattern, inner_assertions) = if elements.is_empty() {
@@ -1560,7 +1561,7 @@ fn generate_enum_tuple_assertion_with_path(
     };
 
     if is_ref {
-        quote! {
+        quote_spanned! {span=>
             match #value_expr {
                 #match_pattern => {
                     #inner_assertions
@@ -1568,6 +1569,7 @@ fn generate_enum_tuple_assertion_with_path(
                 _ => {
                     let __line = line!();
                     let __file = file!();
+
                     let __error = ::assert_struct::__macro_support::ErrorContext {
                         field_path: #field_path_str.to_string(),
                         pattern_str: stringify!(#variant_path).to_string(),
@@ -1586,7 +1588,7 @@ fn generate_enum_tuple_assertion_with_path(
             }
         }
     } else {
-        quote! {
+        quote_spanned! {span=>
             match &#value_expr {
                 #match_pattern => {
                     #inner_assertions

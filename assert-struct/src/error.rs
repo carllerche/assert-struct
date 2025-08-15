@@ -210,6 +210,9 @@ pub(crate) struct ErrorAnnotation {
     /// Type of error
     #[allow(dead_code)] // Used for richer error messages in the future
     pub error_type: ErrorType,
+    /// Optional range within the pattern string to underline (start, end)
+    /// If None, underline the entire pattern
+    pub underline_range: Option<(usize, usize)>,
 }
 
 // ========== PASS 1: STRUCTURE BUILDING ==========
@@ -525,6 +528,62 @@ fn traverse_pattern_tree(
     }
 }
 
+/// Format actual values with smart abbreviation for enum variants
+fn format_actual_value(actual: &str, error_type: &ErrorType) -> String {
+    // Only apply smart formatting for enum variant errors
+    if matches!(error_type, ErrorType::EnumVariant) {
+        // Check if this is a tuple variant (has parentheses)
+        if let Some(paren_pos) = actual.find('(') {
+            // Try to extract the variant name before the parenthesis
+            let prefix = &actual[..paren_pos];
+
+            // Check if there's a valid variant name (ends with alphanumeric or underscore)
+            // This handles both long names like "Some" and short ones like "Ok"/"Err"
+            if !prefix.is_empty()
+                && prefix
+                    .chars()
+                    .last()
+                    .is_some_and(|c| c.is_alphanumeric() || c == '_')
+            {
+                // Find where the variant name starts (after :: or at beginning)
+                let variant_name = if let Some(double_colon) = prefix.rfind("::") {
+                    &prefix[double_colon + 2..]
+                } else {
+                    prefix
+                };
+
+                // Check if the content after the opening paren contains a nested struct
+                // by looking for '{' which indicates struct syntax
+                let content_start = paren_pos + 1;
+                if let Some(close_paren) = actual.rfind(')') {
+                    let content = &actual[content_start..close_paren];
+
+                    // If content contains '{', it has a nested struct, so abbreviate
+                    // Otherwise, show the full content for simple values
+                    if content.contains('{') {
+                        return format!("{}(..)", variant_name);
+                    }
+                }
+            }
+        }
+        // Check for struct variants - always abbreviate these
+        else if let Some(brace_pos) = actual.find('{') {
+            if let Some(variant_end) =
+                actual[..brace_pos].rfind(|c: char| c.is_alphabetic() || c == '_')
+            {
+                let variant_start = actual[..=variant_end]
+                    .rfind("::")
+                    .map(|i| i + 2)
+                    .unwrap_or(0);
+                return format!("{} {{ .. }}", &actual[variant_start..brace_pos].trim());
+            }
+        }
+    }
+
+    // For all other cases, return the actual value as-is
+    actual.to_string()
+}
+
 /// Build a fragment for an error node
 fn build_error_fragment(
     node: &'static PatternNode,
@@ -540,24 +599,27 @@ fn build_error_fragment(
     // a named struct field
     let is_tuple_element = field_name.chars().all(|c| c.is_ascii_digit());
 
+    // Check if this is a top-level pattern (field_path contains no dots)
+    // Top-level patterns like assert_struct!(value, None) shouldn't be wrapped in Field
+    let is_top_level = !error.field_path.contains('.');
+
     // Determine if this is a complex pattern that shouldn't show field names
+    // Note: EnumVariant is NOT considered complex here because we want to show
+    // field names like "statement: Statement::Query(...)"
     let is_complex_pattern = matches!(
         node,
-        PatternNode::EnumVariant { .. }
-            | PatternNode::Range { .. }
-            | PatternNode::Regex { .. }
-            | PatternNode::Like { .. }
+        PatternNode::Range { .. } | PatternNode::Regex { .. } | PatternNode::Like { .. }
     );
 
     // Build the appropriate fragment based on node type and context
-    if !is_tuple_element && !field_name.is_empty() && !is_complex_pattern {
+    if !is_tuple_element && !field_name.is_empty() && !is_complex_pattern && !is_top_level {
         // This is a simple struct field
         Fragment::Field {
             name: field_name.to_string(),
             value: Box::new(build_pattern_fragment(node, Some(error))),
         }
     } else {
-        // Direct pattern without field wrapper (complex patterns, tuple elements, etc.)
+        // Direct pattern without field wrapper (complex patterns, tuple elements, top-level patterns, etc.)
         build_pattern_fragment(node, Some(error))
     }
 }
@@ -607,36 +669,110 @@ fn format_pattern_simple(node: &'static PatternNode) -> String {
 
 /// Build a pattern fragment from a PatternNode
 fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContext>) -> Fragment {
-    let annotation = error.map(|e| ErrorAnnotation {
-        actual_value: e.actual_value.clone(),
-        error_type: e.error_type.clone(),
-    });
-
     match node {
         PatternNode::Simple { value } => Fragment::Annotated {
             pattern: value.to_string(),
-            annotation,
+            annotation: error.map(|e| ErrorAnnotation {
+                actual_value: format_actual_value(&e.actual_value, &e.error_type),
+                error_type: e.error_type.clone(),
+                underline_range: None, // Underline entire pattern
+            }),
         },
         PatternNode::Comparison { op, value } => Fragment::Annotated {
             pattern: format!("{} {}", op, value),
-            annotation,
+            annotation: error.map(|e| ErrorAnnotation {
+                actual_value: format_actual_value(&e.actual_value, &e.error_type),
+                error_type: e.error_type.clone(),
+                underline_range: None,
+            }),
         },
         PatternNode::Range { pattern } => Fragment::Annotated {
             pattern: pattern.to_string(),
-            annotation,
+            annotation: error.map(|e| ErrorAnnotation {
+                actual_value: format_actual_value(&e.actual_value, &e.error_type),
+                error_type: e.error_type.clone(),
+                underline_range: None,
+            }),
         },
         PatternNode::Regex { pattern } => Fragment::Annotated {
             pattern: format!("=~ {}", pattern),
-            annotation,
+            annotation: error.map(|e| ErrorAnnotation {
+                actual_value: format_actual_value(&e.actual_value, &e.error_type),
+                error_type: e.error_type.clone(),
+                underline_range: None,
+            }),
         },
         PatternNode::Like { expr } => Fragment::Annotated {
             pattern: format!("=~ {}", expr),
-            annotation,
+            annotation: error.map(|e| ErrorAnnotation {
+                actual_value: format_actual_value(&e.actual_value, &e.error_type),
+                error_type: e.error_type.clone(),
+                underline_range: None,
+            }),
         },
         PatternNode::EnumVariant { path, args } => {
-            if let Some(args) = args {
+            // Special handling for enum variant errors
+            // When the error is an EnumVariant error, we want to only underline the variant name
+            let is_variant_error = error
+                .as_ref()
+                .map(|e| matches!(e.error_type, ErrorType::EnumVariant))
+                .unwrap_or(false);
+
+            if is_variant_error && args.is_some() && !args.as_ref().unwrap().is_empty() {
+                // For enum variant mismatches, we want to underline only the variant name
+                let args = args.unwrap();
+
+                // Check if first arg is a struct pattern
+                if args.len() == 1 {
+                    if let PatternNode::Struct { fields, name, .. } = args[0] {
+                        // It's an enum with a struct pattern like Statement::Query(Query { ... })
+                        let fields_str = fields
+                            .iter()
+                            .map(|(field_name, _)| {
+                                if *field_name == ".." {
+                                    "..".to_string()
+                                } else {
+                                    format!("{}: ...", field_name)
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", ");
+
+                        let full_pattern = format!("{}({} {{ {} }})", path, name, fields_str);
+                        let variant_end = path.len(); // Only underline the variant name
+
+                        return Fragment::Annotated {
+                            pattern: full_pattern,
+                            annotation: error.map(|e| ErrorAnnotation {
+                                actual_value: format_actual_value(&e.actual_value, &e.error_type),
+                                error_type: e.error_type.clone(),
+                                underline_range: Some((0, variant_end)),
+                            }),
+                        };
+                    }
+                }
+
+                // For other cases with args, underline just the variant name
+                let arg_str = args
+                    .iter()
+                    .map(|arg| format_pattern_simple(arg))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                let full_pattern = format!("{}({})", path, arg_str);
+                let variant_end = path.len();
+
+                Fragment::Annotated {
+                    pattern: full_pattern,
+                    annotation: error.map(|e| ErrorAnnotation {
+                        actual_value: format_actual_value(&e.actual_value, &e.error_type),
+                        error_type: e.error_type.clone(),
+                        underline_range: Some((0, variant_end)),
+                    }),
+                }
+            } else if let Some(args) = args {
                 if !args.is_empty() {
-                    // Render full enum variant with arguments
+                    // Non-error case or non-variant error: render full enum variant with arguments
                     let arg_str = args
                         .iter()
                         .map(|arg| format_pattern_simple(arg))
@@ -644,27 +780,43 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
                         .join(", ");
                     Fragment::Annotated {
                         pattern: format!("{}({})", path, arg_str),
-                        annotation,
+                        annotation: error.map(|e| ErrorAnnotation {
+                            actual_value: format_actual_value(&e.actual_value, &e.error_type),
+                            error_type: e.error_type.clone(),
+                            underline_range: None,
+                        }),
                     }
                 } else {
                     // Unit variant
                     Fragment::Annotated {
                         pattern: path.to_string(),
-                        annotation,
+                        annotation: error.map(|e| ErrorAnnotation {
+                            actual_value: format_actual_value(&e.actual_value, &e.error_type),
+                            error_type: e.error_type.clone(),
+                            underline_range: None,
+                        }),
                     }
                 }
             } else {
                 // Unit variant
                 Fragment::Annotated {
                     pattern: path.to_string(),
-                    annotation,
+                    annotation: error.map(|e| ErrorAnnotation {
+                        actual_value: format_actual_value(&e.actual_value, &e.error_type),
+                        error_type: e.error_type.clone(),
+                        underline_range: None,
+                    }),
                 }
             }
         }
         PatternNode::Rest => Fragment::Rest,
         _ => Fragment::Annotated {
             pattern: "<complex>".to_string(),
-            annotation,
+            annotation: error.map(|e| ErrorAnnotation {
+                actual_value: format_actual_value(&e.actual_value, &e.error_type),
+                error_type: e.error_type.clone(),
+                underline_range: None,
+            }),
         },
     }
 }
@@ -1037,11 +1189,21 @@ fn render_fragment<'a>(
             annotation,
         } => {
             // Position is relative to start of line content (after "   | ")
-            let start_pos = output.len() - 5; // Current position after "   | "
-            output.push_str(pattern);
-            let end_pos = output.len() - 5;
+            let pattern_start = output.len() - 5; // Current position after "   | "
+            let formatted_pattern = format_pattern_string(pattern);
+            output.push_str(&formatted_pattern);
+            let pattern_end = output.len() - 5;
 
             if let Some(ann) = annotation {
+                // Use the underline_range if specified, otherwise underline the entire pattern
+                let (start_pos, end_pos) =
+                    if let Some((range_start, range_end)) = ann.underline_range {
+                        // Apply the range relative to the pattern start
+                        (pattern_start + range_start, pattern_start + range_end)
+                    } else {
+                        // Underline the entire pattern
+                        (pattern_start, pattern_end)
+                    };
                 annotations.push((start_pos, end_pos, ann));
             }
         }
@@ -1108,6 +1270,120 @@ fn render_fragment<'a>(
         Fragment::Rest => {
             output.push_str("..");
         }
+    }
+}
+
+// ========== PATTERN FORMATTING ==========
+
+/// Format a pattern string intelligently using syn parsing.
+///
+/// This function takes a pattern string (which may have been generated by quote!)
+/// and reformats it to remove unwanted spacing and improve readability.
+///
+/// Examples:
+/// - `vec ! ["name" , "age"]` becomes `vec!["name", "age"]`
+/// - `& [1 , 2 , 3]` becomes `&[1, 2, 3]`
+/// - `format ! ("hello")` becomes `format!("hello")`
+pub(crate) fn format_pattern_string(pattern: &str) -> String {
+    // Try to parse the pattern string as an expression
+    match syn::parse_str::<syn::Expr>(pattern) {
+        Ok(expr) => format_expr(&expr),
+        Err(_) => pattern.to_string(), // Fallback to original if parsing fails
+    }
+}
+
+/// Format a syn expression intelligently for display
+fn format_expr(expr: &syn::Expr) -> String {
+    use syn::{
+        Expr, ExprArray, ExprCall, ExprLit, ExprMacro, ExprMethodCall, ExprPath, ExprReference,
+        ExprTuple,
+    };
+
+    match expr {
+        // Handle macro expressions (vec!, format!, etc.)
+        Expr::Macro(ExprMacro { mac, .. }) => {
+            let macro_name = mac
+                .path
+                .segments
+                .last()
+                .map(|s| s.ident.to_string())
+                .unwrap_or_default();
+
+            // Format without spaces between macro name and delimiter
+            let tokens_str = mac.tokens.to_string();
+
+            // Clean up internal spacing for better readability
+            let cleaned = tokens_str
+                .replace(" ,", ",") // Remove space before comma
+                .replace(",  ", ", "); // Normalize space after comma
+
+            format!("{}![{}]", macro_name, cleaned)
+        }
+
+        // Handle reference expressions (&[...], &mut [...])
+        Expr::Reference(ExprReference {
+            expr, mutability, ..
+        }) => {
+            let mut_str = if mutability.is_some() { "mut " } else { "" };
+            format!("&{}{}", mut_str, format_expr(expr))
+        }
+
+        // Handle array expressions
+        Expr::Array(ExprArray { elems, .. }) => {
+            let items: Vec<String> = elems.iter().map(format_expr).collect();
+            format!("[{}]", items.join(", "))
+        }
+
+        // Handle path expressions (e.g., Status::Active)
+        Expr::Path(ExprPath { path, .. }) => {
+            // Format path segments properly without extra spaces
+            path.segments
+                .iter()
+                .map(|segment| segment.ident.to_string())
+                .collect::<Vec<_>>()
+                .join("::")
+        }
+
+        // Handle function call expressions (e.g., Ok("value"))
+        Expr::Call(ExprCall { func, args, .. }) => {
+            // Format the function and arguments properly
+            let func_str = format_expr(func);
+            let args_strs: Vec<String> = args.iter().map(format_expr).collect();
+            format!("{}({})", func_str, args_strs.join(", "))
+        }
+
+        // Handle tuple expressions (e.g., (1, 2, 3))
+        Expr::Tuple(ExprTuple { elems, .. }) => {
+            let items: Vec<String> = elems.iter().map(format_expr).collect();
+            format!("({})", items.join(", "))
+        }
+
+        // Handle method call expressions (e.g., "hello".to_string())
+        Expr::MethodCall(ExprMethodCall {
+            receiver,
+            method,
+            args,
+            ..
+        }) => {
+            let receiver_str = format_expr(receiver);
+            let method_name = method.to_string();
+            let args_strs: Vec<String> = args.iter().map(format_expr).collect();
+            if args.is_empty() {
+                format!("{}.{}()", receiver_str, method_name)
+            } else {
+                format!("{}.{}({})", receiver_str, method_name, args_strs.join(", "))
+            }
+        }
+
+        // Handle literal expressions (e.g., "hello", 42, true)
+        Expr::Lit(ExprLit { lit, .. }) => {
+            // Format literals without extra spacing
+            quote::quote!(#lit).to_string()
+        }
+
+        // For other expressions, use quote! without cleanup
+        // If spacing issues occur here, we should add proper handling for those expression types
+        _ => quote::quote!(#expr).to_string(),
     }
 }
 
