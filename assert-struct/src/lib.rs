@@ -113,6 +113,7 @@
 //! - **Collections** - Assert on `Vec` fields with element-wise patterns `[> 0, < 10, == 5]`
 //! - **Tuples** - Full support for multi-field tuples with advanced patterns
 //! - **Enum Support** - Match on `Option`, `Result`, and custom enum variants
+//! - **Multiple Failures** - When multiple fields fail, all errors are collected and shown together
 //!
 //! ## Advanced Matchers
 //!
@@ -138,10 +139,12 @@
 //! // Error output:
 //! // assert_struct! failed:
 //! //
-//! // value mismatch:
-//! //   --> `user.name` (src/lib.rs:120)
-//! //   actual: "Alice"
-//! //   expected: "Bob"
+//! //    | User {
+//! // mismatch:
+//! //   --> `user.name` (line 120)
+//! //    |     name: "Bob",
+//! //    |           ^^^^^ actual: "Alice"
+//! //    | }
 //! ```
 //!
 //! For complex patterns, the error shows the exact pattern that failed:
@@ -158,10 +161,43 @@
 //! // Error output:
 //! // assert_struct! failed:
 //! //
-//! // comparison mismatch:
-//! //   --> `stats.score` (src/lib.rs:135)
-//! //   actual: 50
-//! //   expected: > 100
+//! //    | Stats {
+//! // mismatch:
+//! //   --> `stats.score` (line 135)
+//! //    |     score: > 100,
+//! //    |            ^^^^^ actual: 50
+//! //    | }
+//! ```
+//!
+//! For multiple failures, all errors are collected:
+//!
+//! ```rust,should_panic
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct User { name: String, age: u32, email: String }
+//! # let user = User { name: "Alice".to_string(), age: 17, email: "alice@wrong.com".to_string() };
+//! assert_struct!(user, User {
+//!     name: "Bob",     // This will fail
+//!     age: > 18,       // This will also fail
+//!     email: "alice@example.com",  // This will also fail
+//! });
+//! // Error output:
+//! // assert_struct! failed: 3 mismatches
+//! //
+//! //    | User {
+//! // mismatch:
+//! //   --> `user.name` (line 140)
+//! //    |     name: "Bob",
+//! //    |           ^^^^^ actual: "Alice"
+//! // mismatch:
+//! //   --> `user.age` (line 141)
+//! //    |     age: > 18,
+//! //    |          ^^^^ actual: 17
+//! // mismatch:
+//! //   --> `user.email` (line 142)
+//! //    |     email: "alice@example.com",
+//! //    |            ^^^^^^^^^^^^^^^^^^^ actual: "alice@wrong.com"
+//! //    | }
 //! ```
 //!
 //! # Usage

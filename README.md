@@ -100,10 +100,12 @@ assertion `left == right` failed
 ```text
 assert_struct! failed:
 
-value mismatch:
-  --> `user.profile.name` (tests/example.rs:17)
-  actual: "Alice"
-  expected: "Bob"
+   | User { ... Profile {
+mismatch:
+  --> `user.profile.name` (line 17)
+   |         name: "Bob",
+   |               ^^^^^ actual: "Alice"
+   | } ... }
 ```
 
 The error messages include:
@@ -111,6 +113,7 @@ The error messages include:
 - **Location** - File name and line number where the assertion failed
 - **Actual vs Expected** - Clear comparison of values
 - **Pattern context** - Shows the pattern that didn't match (e.g., `> 30`, `=~ r"@example\.com$"`)
+- **Multiple failures** - When multiple fields fail, all errors are collected and shown together
 
 ### Complex Example
 
@@ -129,10 +132,40 @@ Failure output:
 ```text
 assert_struct! failed:
 
-comparison mismatch:
-  --> `response.user.age` (tests/api.rs:45)
-  actual: 25
-  expected: > 30
+   | Response { ... User {
+mismatch:
+  --> `response.user.age` (line 45)
+   |         age: > 30,
+   |              ^^^^ actual: 25
+   | } ... }
+```
+
+### Multiple Failures
+
+When multiple fields fail simultaneously, all errors are collected and displayed together:
+
+```rust
+assert_struct!(user, User {
+    name: "Bob",
+    age: > 18,
+    email: "alice@example.com",
+});
+```
+
+Failure output:
+```text
+assert_struct! failed: 2 mismatches
+
+   | User {
+mismatch:
+  --> `user.age` (line 23)
+   |     age: > 18,
+   |          ^^^^ actual: 17
+mismatch:
+  --> `user.email` (line 24)
+   |     email: "alice@example.com",
+   |            ^^^^^^^^^^^^^^^^^^^ actual: "alice@wrong.com"
+   | }
 ```
 
 ## Installation
