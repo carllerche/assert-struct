@@ -16,6 +16,6 @@ mismatch:
 
 mismatch:
   --> `account.profile.followers` (line 31)
-   | > 100
-   | ^^^^^ actual: 5
+   |     followers: > 100,
+   |                ^^^^^ actual: 5
    | } ... }

@@ -7,6 +7,6 @@ assert_struct! failed:
    | Config {
 mismatch:
   --> `config.timeout` (line 13)
-   | == expected_timeout
-   | ^^^^^^^^^^^^^^^^^^^ actual: 30
+   |     timeout: == expected_timeout,
+   |              ^^^^^^^^^^^^^^^^^^^ actual: 30
    | }

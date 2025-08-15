@@ -751,11 +751,11 @@ fn render_simple_error(node: &'static PatternNode, state: &mut TraversalState) {
         let field_name = field_path.split('.').last().unwrap_or("");
 
         // Determine if we should show field context and indentation
-        // Only for simple struct fields, not complex patterns (enum variants, comparisons, etc.)
+        // Only for simple struct fields, not complex patterns (enum variants, etc.)
+        // Note: Comparison patterns should show field names when they're direct struct fields
         let is_complex_pattern = matches!(
             node,
             PatternNode::EnumVariant { .. }
-                | PatternNode::Comparison { .. }
                 | PatternNode::Range { .. }
                 | PatternNode::Regex { .. }
                 | PatternNode::Like { .. }

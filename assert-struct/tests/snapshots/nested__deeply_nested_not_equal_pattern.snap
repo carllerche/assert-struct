@@ -7,6 +7,6 @@ assert_struct! failed:
    | Application { ... Service { ... Config {
 mismatch:
   --> `app.service.config.timeout` (line 38)
-   | != 30
-   | ^^^^^ actual: 30
+   |     timeout: != 30,
+   |              ^^^^^ actual: 30
    | } ... } ... }

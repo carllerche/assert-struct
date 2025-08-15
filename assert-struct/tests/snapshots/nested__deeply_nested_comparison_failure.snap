@@ -7,6 +7,6 @@ assert_struct! failed:
    | Company { ... CompanyLocation { ... Office {
 mismatch:
   --> `company.location.office.floor` (line 41)
-   | > 10
-   | ^^^^ actual: 5
+   |     floor: > 10,
+   |            ^^^^ actual: 5
    | } ... } ... }

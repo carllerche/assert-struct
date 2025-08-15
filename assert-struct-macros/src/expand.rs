@@ -177,7 +177,7 @@ fn generate_pattern_nodes(
                 .collect();
 
             if let Some(enum_path) = path {
-                let path_str = quote! { #enum_path }.to_string();
+                let path_str = quote!(#enum_path).to_string().replace(" :: ", "::");
                 quote! {
                     ::assert_struct::error::PatternNode::EnumVariant {
                         path: #path_str,

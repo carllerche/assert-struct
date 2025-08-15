@@ -11,6 +11,6 @@ mismatch:
 
 mismatch:
   --> `settings.font_size.Some` (line 19)
-   | > 12
-   | ^^^^ actual: 10
+   |     Some: > 12,
+   |           ^^^^ actual: 10
    | }
