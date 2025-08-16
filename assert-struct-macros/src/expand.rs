@@ -64,7 +64,8 @@ fn get_pattern_node_ident(pattern: &Pattern) -> Ident {
         | Pattern::Slice { node_id, .. }
         | Pattern::Comparison { node_id, .. }
         | Pattern::Range { node_id, .. }
-        | Pattern::Rest { node_id } => *node_id,
+        | Pattern::Rest { node_id }
+        | Pattern::Wildcard { node_id } => *node_id,
         #[cfg(feature = "regex")]
         Pattern::Regex { node_id, .. } | Pattern::Like { node_id, .. } => *node_id,
     };
@@ -83,7 +84,7 @@ fn get_pattern_span(pattern: &Pattern) -> Option<Span> {
         Pattern::Like { expr, .. } => Some(expr.span()),
         Pattern::Struct { path, .. } => Some(path.span()),
         Pattern::Tuple { path, .. } => path.as_ref().map(|p| p.span()),
-        Pattern::Slice { .. } | Pattern::Rest { .. } => None,
+        Pattern::Slice { .. } | Pattern::Rest { .. } | Pattern::Wildcard { .. } => None,
     }
 }
 
@@ -100,7 +101,8 @@ fn generate_pattern_nodes(
         | Pattern::Slice { node_id, .. }
         | Pattern::Comparison { node_id, .. }
         | Pattern::Range { node_id, .. }
-        | Pattern::Rest { node_id } => *node_id,
+        | Pattern::Rest { node_id }
+        | Pattern::Wildcard { node_id } => *node_id,
         #[cfg(feature = "regex")]
         Pattern::Regex { node_id, .. } | Pattern::Like { node_id, .. } => *node_id,
     };
@@ -170,6 +172,11 @@ fn generate_pattern_nodes(
         Pattern::Rest { .. } => {
             quote! {
                 ::assert_struct::__macro_support::PatternNode::Rest
+            }
+        }
+        Pattern::Wildcard { .. } => {
+            quote! {
+                ::assert_struct::__macro_support::PatternNode::Wildcard
             }
         }
         Pattern::Tuple { path, elements, .. } => {
@@ -678,6 +685,11 @@ fn generate_pattern_assertion(
             // Rest patterns don't generate assertions themselves
             quote! {}
         }
+        Pattern::Wildcard { .. } => {
+            // Wildcard patterns don't generate assertions - they just check existence
+            // The existence is already verified by the match arm or field access
+            quote! {}
+        }
     }
 }
 
@@ -926,24 +938,32 @@ fn generate_enum_tuple_assertion(
     elements: &[Pattern],
     is_ref: bool,
 ) -> TokenStream {
-    // General enum tuple variant (handles all enums including Option::Some)
-    let element_names: Vec<_> = (0..elements.len())
-        .map(|i| quote::format_ident!("__elem_{}", i))
-        .collect();
-
-    let element_assertions: Vec<_> = element_names
-        .iter()
-        .zip(elements)
-        .map(|(name, pattern)| {
-            // Use the with_path version which supports tree-based formatting
-            generate_pattern_assertion_with_path(&quote! { #name }, pattern, true, &[])
-        })
-        .collect();
+    // Generate match patterns and bindings for elements
+    let mut match_patterns = Vec::new();
+    let mut element_assertions = Vec::new();
+    
+    for (i, pattern) in elements.iter().enumerate() {
+        match pattern {
+            Pattern::Wildcard { .. } => {
+                // Wildcard: use _ in match pattern, no assertion needed
+                match_patterns.push(quote! { _ });
+            }
+            _ => {
+                // Regular pattern: create binding and assertion
+                let name = quote::format_ident!("__elem_{}", i);
+                match_patterns.push(quote! { #name });
+                
+                // Generate assertion for this element
+                let assertion = generate_pattern_assertion_with_path(&quote! { #name }, pattern, true, &[]);
+                element_assertions.push(assertion);
+            }
+        }
+    }
 
     if is_ref {
         quote! {
             match #value_expr {
-                #path(#(#element_names),*) => {
+                #path(#(#match_patterns),*) => {
                     #(#element_assertions)*
                 },
                 _ => panic!(
@@ -956,7 +976,7 @@ fn generate_enum_tuple_assertion(
     } else {
         quote! {
             match &#value_expr {
-                #path(#(#element_names),*) => {
+                #path(#(#match_patterns),*) => {
                     #(#element_assertions)*
                 },
                 _ => panic!(
@@ -977,36 +997,43 @@ fn generate_plain_tuple_assertion_with_path(
     field_path: &[String],
     _node_ident: &Ident,
 ) -> TokenStream {
-    // Generate unique names to avoid conflicts
-    let element_names: Vec<_> = (0..elements.len())
-        .map(|i| quote::format_ident!("__tuple_elem_{}", i))
-        .collect();
-
-    let element_assertions: Vec<_> = element_names
-        .iter()
-        .zip(elements)
-        .enumerate()
-        .map(|(i, (name, pattern))| {
-            // Build path for this tuple element
-            let mut elem_path = field_path.to_vec();
-            // Add the index as a separate path component
-            elem_path.push(i.to_string());
-            generate_pattern_assertion_with_path(&quote! { #name }, pattern, true, &elem_path)
-        })
-        .collect();
+    // Generate match patterns and bindings for elements
+    let mut match_patterns = Vec::new();
+    let mut element_assertions = Vec::new();
+    
+    for (i, pattern) in elements.iter().enumerate() {
+        match pattern {
+            Pattern::Wildcard { .. } => {
+                // Wildcard: use _ in destructuring pattern, no assertion needed
+                match_patterns.push(quote! { _ });
+            }
+            _ => {
+                // Regular pattern: create binding and assertion
+                let name = quote::format_ident!("__tuple_elem_{}", i);
+                match_patterns.push(quote! { #name });
+                
+                // Build path for this tuple element
+                let mut elem_path = field_path.to_vec();
+                // Add the index as a separate path component
+                elem_path.push(i.to_string());
+                let assertion = generate_pattern_assertion_with_path(&quote! { #name }, pattern, true, &elem_path);
+                element_assertions.push(assertion);
+            }
+        }
+    }
 
     // Generate the destructuring and assertions
     if is_ref {
         quote! {
             {
-                let (#(#element_names),*) = #value_expr;
+                let (#(#match_patterns),*) = #value_expr;
                 #(#element_assertions)*
             }
         }
     } else {
         quote! {
             {
-                let (#(#element_names),*) = &#value_expr;
+                let (#(#match_patterns),*) = &#value_expr;
                 #(#element_assertions)*
             }
         }
@@ -1028,29 +1055,37 @@ fn generate_plain_tuple_assertion(
     elements: &[Pattern],
     is_ref: bool,
 ) -> TokenStream {
-    // Generate unique names to avoid conflicts
-    let element_names: Vec<_> = (0..elements.len())
-        .map(|i| quote::format_ident!("__tuple_elem_{}", i))
-        .collect();
+    // Generate match patterns and bindings for elements
+    let mut match_patterns = Vec::new();
+    let mut element_assertions = Vec::new();
+    
+    for (i, pattern) in elements.iter().enumerate() {
+        match pattern {
+            Pattern::Wildcard { .. } => {
+                // Wildcard: use _ in destructuring pattern, no assertion needed
+                match_patterns.push(quote! { _ });
+            }
+            _ => {
+                // Regular pattern: create binding and assertion
+                let name = quote::format_ident!("__tuple_elem_{}", i);
+                match_patterns.push(quote! { #name });
+                
+                // Generate assertion for this element
+                let assertion = generate_pattern_assertion_with_path(&quote! { #name }, pattern, true, &[]);
+                element_assertions.push(assertion);
+            }
+        }
+    }
 
     let destructure = if is_ref {
         quote! {
-            let (#(#element_names),*) = #value_expr;
+            let (#(#match_patterns),*) = #value_expr;
         }
     } else {
         quote! {
-            let (#(#element_names),*) = &#value_expr;
+            let (#(#match_patterns),*) = &#value_expr;
         }
     };
-
-    let element_assertions: Vec<_> = element_names
-        .iter()
-        .zip(elements)
-        .map(|(name, pattern)| {
-            // Use the with_path version which supports tree-based formatting
-            generate_pattern_assertion_with_path(&quote! { #name }, pattern, true, &[])
-        })
-        .collect();
 
     quote! {
         {
@@ -1088,6 +1123,10 @@ fn generate_slice_assertion(
             Pattern::Rest { .. } => {
                 // Rest pattern allows variable-length matching
                 pattern_parts.push(quote! { .. });
+            }
+            Pattern::Wildcard { .. } => {
+                // Wildcard pattern matches any single element without binding
+                pattern_parts.push(quote! { _ });
             }
             _ => {
                 let binding = quote::format_ident!("__elem_{}", i);
@@ -1223,6 +1262,7 @@ fn pattern_to_string(pattern: &Pattern) -> String {
         #[cfg(feature = "regex")]
         Pattern::Like { expr, .. } => format!("=~ {}", quote! { #expr }),
         Pattern::Rest { .. } => "..".to_string(),
+        Pattern::Wildcard { .. } => "_".to_string(),
         Pattern::Struct { path, .. } => quote! { #path { .. } }.to_string(),
         Pattern::Tuple { path, elements, .. } => {
             if let Some(p) = path {
@@ -1412,36 +1452,43 @@ fn generate_enum_tuple_assertion_with_collection(
     field_path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
-    // Generic handling for all enum tuple variants with error collection
-    let element_names: Vec<_> = (0..elements.len())
-        .map(|i| quote::format_ident!("__elem_{}", i))
-        .collect();
-
+    // Generate match patterns and bindings for elements
+    let mut match_patterns = Vec::new();
+    let mut element_assertions = Vec::new();
+    
     // Extract variant name from path for better error messages
     let variant_name = if let Some(segment) = variant_path.segments.last() {
         segment.ident.to_string()
     } else {
         "variant".to_string()
     };
-
-    let element_assertions: Vec<_> = element_names
-        .iter()
-        .zip(elements)
-        .enumerate()
-        .map(|(i, (name, pattern))| {
-            // Build path for this tuple element
-            let mut elem_path = field_path.to_vec();
-            // For single-element tuple variants, use the variant name for better error messages
-            // For multi-element variants, use indices
-            if elements.len() == 1 {
-                elem_path.push(variant_name.clone());
-            } else {
-                elem_path.push(i.to_string());
+    
+    for (i, pattern) in elements.iter().enumerate() {
+        match pattern {
+            Pattern::Wildcard { .. } => {
+                // Wildcard: use _ in match pattern, no assertion needed
+                match_patterns.push(quote! { _ });
             }
-            // Use with_collection for error collection
-            generate_pattern_assertion_with_collection(&quote! { #name }, pattern, true, &elem_path)
-        })
-        .collect();
+            _ => {
+                // Regular pattern: create binding and assertion
+                let name = quote::format_ident!("__elem_{}", i);
+                match_patterns.push(quote! { #name });
+                
+                // Build path for this tuple element
+                let mut elem_path = field_path.to_vec();
+                // For single-element tuple variants, use the variant name for better error messages
+                // For multi-element variants, use indices
+                if elements.len() == 1 {
+                    elem_path.push(variant_name.clone());
+                } else {
+                    elem_path.push(i.to_string());
+                }
+                // Use with_collection for error collection
+                let assertion = generate_pattern_assertion_with_collection(&quote! { #name }, pattern, true, &elem_path);
+                element_assertions.push(assertion);
+            }
+        }
+    }
 
     let field_path_str = field_path.join(".");
     let span = variant_path.span();
@@ -1449,7 +1496,7 @@ fn generate_enum_tuple_assertion_with_collection(
     if is_ref {
         quote_spanned! {span=>
             match #value_expr {
-                #variant_path(#(#element_names),*) => {
+                #variant_path(#(#match_patterns),*) => {
                     #(#element_assertions)*
                 },
                 _ => {
@@ -1476,7 +1523,7 @@ fn generate_enum_tuple_assertion_with_collection(
     } else {
         quote_spanned! {span=>
             match &#value_expr {
-                #variant_path(#(#element_names),*) => {
+                #variant_path(#(#match_patterns),*) => {
                     #(#element_assertions)*
                 },
                 _ => {
@@ -1524,38 +1571,45 @@ fn generate_enum_tuple_assertion_with_path(
         (quote! { #variant_path }, quote! {})
     } else {
         // Tuple variant with elements
-        let element_names: Vec<_> = (0..elements.len())
-            .map(|i| quote::format_ident!("__elem_{}", i))
-            .collect();
-
+        let mut match_patterns = Vec::new();
+        let mut element_assertions = Vec::new();
+        
         // Extract variant name from path for better error messages
         let variant_name = if let Some(segment) = variant_path.segments.last() {
             segment.ident.to_string()
         } else {
             "variant".to_string()
         };
-
-        let element_assertions: Vec<_> = element_names
-            .iter()
-            .zip(elements)
-            .enumerate()
-            .map(|(i, (name, pattern))| {
-                // Build path for this tuple element
-                let mut elem_path = field_path.to_vec();
-                // For single-element tuple variants, use the variant name for better error messages
-                // For multi-element variants, use indices
-                if elements.len() == 1 {
-                    elem_path.push(variant_name.clone());
-                } else {
-                    elem_path.push(i.to_string());
+        
+        for (i, pattern) in elements.iter().enumerate() {
+            match pattern {
+                Pattern::Wildcard { .. } => {
+                    // Wildcard: use _ in match pattern, no assertion needed
+                    match_patterns.push(quote! { _ });
                 }
-
-                generate_pattern_assertion_with_path(&quote! { #name }, pattern, true, &elem_path)
-            })
-            .collect();
+                _ => {
+                    // Regular pattern: create binding and assertion
+                    let name = quote::format_ident!("__elem_{}", i);
+                    match_patterns.push(quote! { #name });
+                    
+                    // Build path for this tuple element
+                    let mut elem_path = field_path.to_vec();
+                    // For single-element tuple variants, use the variant name for better error messages
+                    // For multi-element variants, use indices
+                    if elements.len() == 1 {
+                        elem_path.push(variant_name.clone());
+                    } else {
+                        elem_path.push(i.to_string());
+                    }
+                    
+                    let assertion = generate_pattern_assertion_with_path(&quote! { #name }, pattern, true, &elem_path);
+                    element_assertions.push(assertion);
+                }
+            }
+        }
 
         (
-            quote! { #variant_path(#(#element_names),*) },
+            quote! { #variant_path(#(#match_patterns),*) },
             quote! { #(#element_assertions)* },
         )
     };
@@ -1791,6 +1845,10 @@ fn generate_slice_assertion_with_path(
             Pattern::Rest { .. } => {
                 // Rest pattern allows variable-length matching
                 pattern_parts.push(quote! { .. });
+            }
+            Pattern::Wildcard { .. } => {
+                // Wildcard pattern matches any single element without binding
+                pattern_parts.push(quote! { _ });
             }
             _ => {
                 let binding = quote::format_ident!("__elem_{}", i);

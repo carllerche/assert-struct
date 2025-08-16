@@ -86,6 +86,10 @@ pub(crate) enum Pattern {
     Rest {
         node_id: usize,
     },
+    // Wildcard pattern: _ for ignoring a value while asserting it exists
+    Wildcard {
+        node_id: usize,
+    },
 }
 
 // Helper function to format syn expressions as strings
@@ -178,6 +182,9 @@ impl fmt::Display for Pattern {
             }
             Pattern::Rest { .. } => {
                 write!(f, "..")
+            }
+            Pattern::Wildcard { .. } => {
+                write!(f, "_")
             }
         }
     }

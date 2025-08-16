@@ -94,6 +94,15 @@ impl Parse for Expected {
 /// This function handles all pattern types in a specific order to avoid ambiguity.
 /// The order matters because some patterns share prefixes (e.g., `..` vs `..n`).
 fn parse_pattern(input: ParseStream) -> Result<Pattern> {
+    // Wildcard pattern: _ for ignoring a value while asserting it exists
+    // Example: `Some(_)`, `field: _`, `[1, _, 3]`
+    if input.peek(Token![_]) {
+        let _: Token![_] = input.parse()?;
+        return Ok(Pattern::Wildcard {
+            node_id: next_node_id(),
+        });
+    }
+    
     // AMBIGUITY: `..` could be a rest pattern OR start of a range like `..10`
     // Example inputs:
     //   `..`        -> rest pattern (partial matching)
@@ -409,6 +418,11 @@ impl Parse for FieldAssertion {
 /// The fork-and-peek pattern is essential here - we look ahead without
 /// consuming tokens to make the decision.
 fn check_for_special_syntax(content: ParseStream) -> bool {
+    // Wildcard pattern
+    if content.peek(Token![_]) {
+        return true;
+    }
+    
     // Comparison operators indicate pattern syntax
     if content.peek(Token![<]) || content.peek(Token![>]) {
         return true;
