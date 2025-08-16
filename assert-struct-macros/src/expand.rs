@@ -924,7 +924,7 @@ fn generate_struct_match_assertion_with_path(
 }
 
 /// Helper function to process tuple/slice elements and generate match patterns and assertions.
-/// 
+///
 /// This function handles the common pattern of iterating through elements and:
 /// - Creating `_` patterns for wildcards (which need no assertions)
 /// - Creating named bindings for other patterns and generating their assertions
@@ -999,7 +999,7 @@ fn generate_enum_tuple_assertion(
     is_ref: bool,
 ) -> TokenStream {
     // Use helper to process elements
-    let (match_patterns, element_assertions) = 
+    let (match_patterns, element_assertions) =
         process_tuple_elements(elements, "__elem_", true, &[], false);
 
     if is_ref {
@@ -1041,7 +1041,7 @@ fn generate_plain_tuple_assertion_with_path(
     _node_ident: &Ident,
 ) -> TokenStream {
     // Use helper to process elements
-    let (match_patterns, element_assertions) = 
+    let (match_patterns, element_assertions) =
         process_tuple_elements(elements, "__tuple_elem_", true, field_path, false);
 
     // Use match expression for consistency with enum tuples
@@ -1076,7 +1076,7 @@ fn generate_plain_tuple_assertion(
     is_ref: bool,
 ) -> TokenStream {
     // Use helper to process elements
-    let (match_patterns, element_assertions) = 
+    let (match_patterns, element_assertions) =
         process_tuple_elements(elements, "__tuple_elem_", true, &[], false);
 
     // Use match expression for consistency with enum tuples
@@ -1523,7 +1523,7 @@ fn generate_enum_tuple_assertion_with_collection(
         // Build path with variant name for single-element tuples
         let mut base_path = field_path.to_vec();
         let use_variant_name = elements.len() == 1;
-        
+
         // Use helper to process elements with appropriate path
         let (match_patterns, element_assertions) = if use_variant_name {
             base_path.push(variant_name);
@@ -1655,7 +1655,7 @@ fn generate_enum_tuple_assertion_with_path(
         // Build path with variant name for single-element tuples
         let mut base_path = field_path.to_vec();
         let use_variant_name = elements.len() == 1;
-        
+
         // Use helper to process elements with appropriate path
         let (match_patterns, element_assertions) = if use_variant_name {
             base_path.push(variant_name);

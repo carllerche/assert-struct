@@ -22,15 +22,15 @@ Before listing missing features, it's important to note what's already available
 These features are essential for testing parser output and other deeply nested data structures.
 
 ### 1. Vec/Array Index Access Patterns
-**Status:** Not Implemented  
-**Use Case:** Asserting on specific elements in collections by index  
+**Status:** Not Implemented
+**Use Case:** Asserting on specific elements in collections by index
 **Current Workaround:** Multiple separate assertions or manual match statements
 
 ```rust
 // Proposed syntax:
 assert_struct!(func, ItemFn {
     sig: Signature {
-        inputs[0]: FnArg::Typed { 
+        inputs[0]: FnArg::Typed {
             pat: Pat::Ident { ident.name: "x", .. },
             ..
         },
@@ -44,9 +44,9 @@ assert_struct!(func, ItemFn {
 });
 ```
 
-### 2. Method Call Assertions  
-**Status:** Not Implemented  
-**Use Case:** Asserting on method results like `is_some()`, `is_empty()`, `len()`  
+### 2. Method Call Assertions
+**Status:** Not Implemented
+**Use Case:** Asserting on method results like `is_some()`, `is_empty()`, `len()`
 **Current Workaround:** Separate assertions outside of assert_struct
 
 ```rust
@@ -63,8 +63,8 @@ assert_struct!(func, ItemFn {
 ```
 
 ### 3. Wildcard Patterns in Enums and Structs
-**Status:** Not Implemented  
-**Use Case:** Checking enum variant without caring about its contents (e.g., `is_some()` checks)  
+**Status:** Not Implemented
+**Use Case:** Checking enum variant without caring about its contents (e.g., `is_some()` checks)
 **Current Workaround:** Match statements that ignore the inner value or separate assertions
 
 ```rust
@@ -72,10 +72,10 @@ assert_struct!(func, ItemFn {
 assert_struct!(data, MyStruct {
     // Check Option is Some without caring about value
     maybe_value: Some(_),
-    
+
     // Check variant without caring about fields
     fields: Fields::Named(_),
-    
+
     // Check Result is Ok without caring about value
     result: Ok(_),
     ..
@@ -85,14 +85,14 @@ assert_struct!(data, MyStruct {
 **Note:** Currently `_` is not valid in expression position, so this requires special handling in the macro.
 
 ### 4. Box/Deref Pattern Matching
-**Status:** Not Implemented  
-**Use Case:** Matching through Box, Rc, Arc, and other smart pointers  
+**Status:** Not Implemented
+**Use Case:** Matching through Box, Rc, Arc, and other smart pointers
 **Current Workaround:** Dereferencing in match statements
 
 ```rust
 // Proposed syntax:
 assert_struct!(ref_type, RefType {
-    elem: Box<Type::Path { 
+    elem: Box<Type::Path {
         path.segments[0].ident.name: "str",
         ..
     }>,
@@ -105,8 +105,8 @@ assert_struct!(ref_type, RefType {
 These features would significantly improve ergonomics for common test patterns.
 
 ### 5. Length/Count Assertions
-**Status:** Not Implemented  
-**Use Case:** Direct assertions on collection sizes  
+**Status:** Not Implemented
+**Use Case:** Direct assertions on collection sizes
 **Current Workaround:** Separate `assert_eq!` for lengths
 
 ```rust
@@ -126,8 +126,8 @@ assert_struct!(trait_item, ItemTrait {
 ```
 
 ### 6. Empty Collection Assertions
-**Status:** Already Supported ✓  
-**Use Case:** Explicitly asserting collections are empty  
+**Status:** Already Supported ✓
+**Use Case:** Explicitly asserting collections are empty
 
 ```rust
 // Already works:
@@ -142,8 +142,8 @@ assert_struct!(func, ItemFn {
 ```
 
 ### 7. Boolean Negation
-**Status:** Not Implemented  
-**Use Case:** Asserting boolean fields are false  
+**Status:** Not Implemented
+**Use Case:** Asserting boolean fields are false
 **Current Workaround:** Using `assert!(!value)`
 
 ```rust
@@ -160,8 +160,8 @@ assert_struct!(ptr_type, PtrType {
 These features enable more sophisticated assertions for complex scenarios.
 
 ### 8. Partial Vec/Slice Matching with Wildcards
-**Status:** Not Implemented  
-**Use Case:** Match some elements, ignore others  
+**Status:** Not Implemented
+**Use Case:** Match some elements, ignore others
 **Current Workaround:** Individual element checks
 
 ```rust
@@ -179,8 +179,8 @@ assert_struct!(generics, Generics {
 **Note:** This depends on wildcard pattern support being implemented first.
 
 ### 9. Pattern Guards/Conditional Patterns
-**Status:** Not Implemented  
-**Use Case:** Additional conditions on patterns  
+**Status:** Not Implemented
+**Use Case:** Additional conditions on patterns
 **Current Workaround:** Separate conditional assertions
 
 ```rust
@@ -193,8 +193,8 @@ assert_struct!(value, MyStruct {
 ```
 
 ### 10. Custom Matcher Functions
-**Status:** Not Implemented  
-**Use Case:** Arbitrary predicate functions for complex logic  
+**Status:** Not Implemented
+**Use Case:** Arbitrary predicate functions for complex logic
 **Current Workaround:** Multiple assertions or custom validation code
 
 ```rust
@@ -206,8 +206,8 @@ assert_struct!(block, Block {
 ```
 
 ### 11. String Pattern Extensions
-**Status:** Partially Implemented (regex only)  
-**Use Case:** Common string matching beyond regex  
+**Status:** Partially Implemented (regex only)
+**Use Case:** Common string matching beyond regex
 **Current Workaround:** Regex patterns or separate assertions
 
 ```rust
@@ -216,7 +216,7 @@ assert_struct!(ident, Ident {
     name: starts_with("test_"),
     // or
     name: ends_with("_impl"),
-    // or  
+    // or
     name: contains("async"),
     ..
 });
@@ -269,10 +269,10 @@ A successful implementation would allow expressing most AST parser tests as sing
 #[test]
 fn test_parse_function_with_parameters() {
     let func = parse_function("fn add(x: i32, y: i32) {}");
-    
+
     assert_eq!(func.sig.ident.name, "add");
     assert_eq!(func.sig.inputs.len(), 2);
-    
+
     match &func.sig.inputs[0] {
         FnArg::Typed(pat_type) => {
             match &pat_type.pat {
@@ -299,14 +299,14 @@ fn test_parse_function_with_parameters() {
 #[test]
 fn test_parse_function_with_parameters() {
     let func = parse_function("fn add(x: i32, y: i32) {}");
-    
+
     assert_struct!(func, ItemFn {
         sig: Signature {
             ident.name: "add",
             inputs.len(): 2,
             inputs[0]: FnArg::Typed {
                 pat: Pat::Ident { ident.name: "x", .. },
-                ty: Type::Path { 
+                ty: Type::Path {
                     path.segments[0].ident.name: "i32",
                     ..
                 },
