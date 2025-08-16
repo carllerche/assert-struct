@@ -7,6 +7,6 @@ assert_struct! failed:
    | Person { ... Address {
 value mismatch:
   --> `person.address.city` (line 34)
-   |         city: "Wrong City",
-   |               ^^^^^^^^^^^^ actual: "Capital City"
+   |     city: "Wrong City",
+   |           ^^^^^^^^^^^^ actual: "Capital City"
    | } ... }

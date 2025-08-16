@@ -103,8 +103,8 @@ assert_struct! failed:
    | User { ... Profile {
 mismatch:
   --> `user.profile.name` (line 17)
-   |         name: "Bob",
-   |               ^^^^^ actual: "Alice"
+   |     name: "Bob",
+   |           ^^^^^ actual: "Alice"
    | } ... }
 ```
 
@@ -135,8 +135,8 @@ assert_struct! failed:
    | Response { ... User {
 mismatch:
   --> `response.user.age` (line 45)
-   |         age: > 30,
-   |              ^^^^ actual: 25
+   |     age: > 30,
+   |          ^^^^ actual: 25
    | } ... }
 ```
 

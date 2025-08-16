@@ -1090,7 +1090,8 @@ fn render_section(section: &ErrorSection, output: &mut String, indentation_level
     // Check if this is a field fragment (which needs indentation when inside a container)
     let is_field_fragment = matches!(section.fragment, Fragment::Field { .. });
 
-    let base_indent = if *indentation_level > 0 && is_field_fragment {
+    // Always use 4 spaces for field indentation, regardless of nesting depth
+    let base_indent = if is_field_fragment {
         "    "
     } else {
         ""
