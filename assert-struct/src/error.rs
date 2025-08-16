@@ -202,7 +202,7 @@ pub(crate) enum Fragment {
 
     /// Rest pattern ".."
     Rest,
-    
+
     /// Wildcard pattern "_"
     Wildcard,
 }

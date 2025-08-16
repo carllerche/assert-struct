@@ -102,7 +102,7 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             node_id: next_node_id(),
         });
     }
-    
+
     // AMBIGUITY: `..` could be a rest pattern OR start of a range like `..10`
     // Example inputs:
     //   `..`        -> rest pattern (partial matching)
@@ -422,7 +422,7 @@ fn check_for_special_syntax(content: ParseStream) -> bool {
     if content.peek(Token![_]) {
         return true;
     }
-    
+
     // Comparison operators indicate pattern syntax
     if content.peek(Token![<]) || content.peek(Token![>]) {
         return true;

@@ -941,7 +941,7 @@ fn generate_enum_tuple_assertion(
     // Generate match patterns and bindings for elements
     let mut match_patterns = Vec::new();
     let mut element_assertions = Vec::new();
-    
+
     for (i, pattern) in elements.iter().enumerate() {
         match pattern {
             Pattern::Wildcard { .. } => {
@@ -952,9 +952,10 @@ fn generate_enum_tuple_assertion(
                 // Regular pattern: create binding and assertion
                 let name = quote::format_ident!("__elem_{}", i);
                 match_patterns.push(quote! { #name });
-                
+
                 // Generate assertion for this element
-                let assertion = generate_pattern_assertion_with_path(&quote! { #name }, pattern, true, &[]);
+                let assertion =
+                    generate_pattern_assertion_with_path(&quote! { #name }, pattern, true, &[]);
                 element_assertions.push(assertion);
             }
         }
@@ -1000,7 +1001,7 @@ fn generate_plain_tuple_assertion_with_path(
     // Generate match patterns and bindings for elements
     let mut match_patterns = Vec::new();
     let mut element_assertions = Vec::new();
-    
+
     for (i, pattern) in elements.iter().enumerate() {
         match pattern {
             Pattern::Wildcard { .. } => {
@@ -1011,12 +1012,17 @@ fn generate_plain_tuple_assertion_with_path(
                 // Regular pattern: create binding and assertion
                 let name = quote::format_ident!("__tuple_elem_{}", i);
                 match_patterns.push(quote! { #name });
-                
+
                 // Build path for this tuple element
                 let mut elem_path = field_path.to_vec();
                 // Add the index as a separate path component
                 elem_path.push(i.to_string());
-                let assertion = generate_pattern_assertion_with_path(&quote! { #name }, pattern, true, &elem_path);
+                let assertion = generate_pattern_assertion_with_path(
+                    &quote! { #name },
+                    pattern,
+                    true,
+                    &elem_path,
+                );
                 element_assertions.push(assertion);
             }
         }
@@ -1058,7 +1064,7 @@ fn generate_plain_tuple_assertion(
     // Generate match patterns and bindings for elements
     let mut match_patterns = Vec::new();
     let mut element_assertions = Vec::new();
-    
+
     for (i, pattern) in elements.iter().enumerate() {
         match pattern {
             Pattern::Wildcard { .. } => {
@@ -1069,9 +1075,10 @@ fn generate_plain_tuple_assertion(
                 // Regular pattern: create binding and assertion
                 let name = quote::format_ident!("__tuple_elem_{}", i);
                 match_patterns.push(quote! { #name });
-                
+
                 // Generate assertion for this element
-                let assertion = generate_pattern_assertion_with_path(&quote! { #name }, pattern, true, &[]);
+                let assertion =
+                    generate_pattern_assertion_with_path(&quote! { #name }, pattern, true, &[]);
                 element_assertions.push(assertion);
             }
         }
@@ -1455,14 +1462,14 @@ fn generate_enum_tuple_assertion_with_collection(
     // Generate match patterns and bindings for elements
     let mut match_patterns = Vec::new();
     let mut element_assertions = Vec::new();
-    
+
     // Extract variant name from path for better error messages
     let variant_name = if let Some(segment) = variant_path.segments.last() {
         segment.ident.to_string()
     } else {
         "variant".to_string()
     };
-    
+
     for (i, pattern) in elements.iter().enumerate() {
         match pattern {
             Pattern::Wildcard { .. } => {
@@ -1473,7 +1480,7 @@ fn generate_enum_tuple_assertion_with_collection(
                 // Regular pattern: create binding and assertion
                 let name = quote::format_ident!("__elem_{}", i);
                 match_patterns.push(quote! { #name });
-                
+
                 // Build path for this tuple element
                 let mut elem_path = field_path.to_vec();
                 // For single-element tuple variants, use the variant name for better error messages
@@ -1484,7 +1491,12 @@ fn generate_enum_tuple_assertion_with_collection(
                     elem_path.push(i.to_string());
                 }
                 // Use with_collection for error collection
-                let assertion = generate_pattern_assertion_with_collection(&quote! { #name }, pattern, true, &elem_path);
+                let assertion = generate_pattern_assertion_with_collection(
+                    &quote! { #name },
+                    pattern,
+                    true,
+                    &elem_path,
+                );
                 element_assertions.push(assertion);
             }
         }
@@ -1573,14 +1585,14 @@ fn generate_enum_tuple_assertion_with_path(
         // Tuple variant with elements
         let mut match_patterns = Vec::new();
         let mut element_assertions = Vec::new();
-        
+
         // Extract variant name from path for better error messages
         let variant_name = if let Some(segment) = variant_path.segments.last() {
             segment.ident.to_string()
         } else {
             "variant".to_string()
         };
-        
+
         for (i, pattern) in elements.iter().enumerate() {
             match pattern {
                 Pattern::Wildcard { .. } => {
@@ -1591,7 +1603,7 @@ fn generate_enum_tuple_assertion_with_path(
                     // Regular pattern: create binding and assertion
                     let name = quote::format_ident!("__elem_{}", i);
                     match_patterns.push(quote! { #name });
-                    
+
                     // Build path for this tuple element
                     let mut elem_path = field_path.to_vec();
                     // For single-element tuple variants, use the variant name for better error messages
@@ -1601,8 +1613,13 @@ fn generate_enum_tuple_assertion_with_path(
                     } else {
                         elem_path.push(i.to_string());
                     }
-                    
-                    let assertion = generate_pattern_assertion_with_path(&quote! { #name }, pattern, true, &elem_path);
+
+                    let assertion = generate_pattern_assertion_with_path(
+                        &quote! { #name },
+                        pattern,
+                        true,
+                        &elem_path,
+                    );
                     element_assertions.push(assertion);
                 }
             }
