@@ -7,6 +7,6 @@ assert_struct! failed:
    | Deployment { ... Environment { ... Settings {
 mismatch:
   --> `deploy.env.settings.debug.Some` (line 39)
-   |     Some: true,
-   |           ^^^^ actual: false
+   |     debug: Some(true),
+   |                 ^^^^ actual: false
    | } ... } ... }

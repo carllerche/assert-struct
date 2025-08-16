@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/wildcard.rs
+expression: message
+---
+assert_struct! failed:
+
+   | TestStruct {
+mismatch:
+  --> `test.data` (line 22)
+   |     data: Some(_),
+   |           ^^^^ actual: None
+   | }

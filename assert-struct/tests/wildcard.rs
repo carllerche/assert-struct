@@ -1,6 +1,9 @@
 #![allow(dead_code, unused_variables)]
 use assert_struct::assert_struct;
 
+#[macro_use]
+mod util;
+
 #[derive(Debug)]
 struct TestStruct {
     name: String,
@@ -125,26 +128,8 @@ fn test_multiple_wildcards() {
     );
 }
 
-#[test]
-#[should_panic(expected = "mismatch")]
-fn test_wildcard_with_none_fails() {
-    let test = TestStruct {
-        name: "test".to_string(),
-        value: 42,
-        data: None,
-        items: vec![],
-        tuple: (0, "".to_string(), false),
-    };
-
-    // This should fail - Some(_) expects Some, but got None
-    assert_struct!(
-        test,
-        TestStruct {
-            name: "test",
-            value: 42,
-            data: Some(_),
-            items: [],
-            tuple: (0, "", false),
-        }
-    );
-}
+// Snapshot test for error message
+error_message_test!(
+    "wildcard_errors/wildcard_with_none_fails.rs",
+    wildcard_with_none_fails
+);

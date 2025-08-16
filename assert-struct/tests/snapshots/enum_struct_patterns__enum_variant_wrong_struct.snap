@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | Request {
 mismatch:
-  --> `request.statement` (line 34)
+  --> `request.statement` (line 33)
    |     statement: Statement::Query(Query { name: ... }),
    |                ^^^^^^^^^^^^^^^^ actual: Update(..)
    | }
