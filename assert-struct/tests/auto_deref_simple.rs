@@ -13,9 +13,12 @@ fn test_box_option_with_closure() {
     };
 
     // This currently works with closures
-    assert_struct!(test, SimpleBox {
-        boxed_option: |b| matches!(**b, Some(42)),
-    });
+    assert_struct!(
+        test,
+        SimpleBox {
+            boxed_option: |b| matches!(**b, Some(42)),
+        }
+    );
 }
 
 // TODO: Enable once auto-deref is implemented

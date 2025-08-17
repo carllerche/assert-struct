@@ -207,24 +207,28 @@ struct Expected {
 
 /// Represents an operation to be performed on a field before pattern matching
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 enum FieldOperation {
     /// Dereference operation: *field, **field, etc.
     /// The count indicates how many dereferences to perform
     Deref { count: usize },
-    
+
     /// Method call: field.method(), field.len(), etc.
     /// Stores the method name and arguments (if any)
-    Method { name: syn::Ident, args: Vec<syn::Expr> },
-    
+    Method {
+        name: syn::Ident,
+        args: Vec<syn::Expr>,
+    },
+
     /// Nested field access: field.nested, field.inner.value, etc.
     /// Stores the chain of field names to access
     Nested { fields: Vec<syn::Ident> },
-    
+
     /// Combined operation: dereferencing followed by method/nested access
     /// Example: *field.method(), **field.inner, etc.
-    Combined { 
+    Combined {
         deref_count: usize,
-        operation: Box<FieldOperation>
+        operation: Box<FieldOperation>,
     },
 }
 
@@ -243,13 +247,13 @@ enum TupleElement {
     /// Positional element: just a pattern in sequence
     /// Example: "foo", > 10, Some(42)
     Positional { pattern: Pattern },
-    
+
     /// Indexed element: explicit index with optional operations
     /// Example: 0: "foo", *1: "bar", 2.len(): 5
-    Indexed { 
+    Indexed {
         index: usize,
         operations: Option<FieldOperation>,
-        pattern: Pattern 
+        pattern: Pattern,
     },
 }
 impl fmt::Display for TupleElement {
@@ -258,7 +262,11 @@ impl fmt::Display for TupleElement {
             TupleElement::Positional { pattern } => {
                 write!(f, "{}", pattern)
             }
-            TupleElement::Indexed { index, operations, pattern } => {
+            TupleElement::Indexed {
+                index,
+                operations,
+                pattern,
+            } => {
                 if let Some(ops) = operations {
                     // Show operations before the index
                     match ops {
@@ -275,7 +283,10 @@ impl fmt::Display for TupleElement {
                                 write!(f, ".{}", field)?;
                             }
                         }
-                        FieldOperation::Combined { deref_count, operation } => {
+                        FieldOperation::Combined {
+                            deref_count,
+                            operation,
+                        } => {
                             for _ in 0..*deref_count {
                                 write!(f, "*")?;
                             }
@@ -307,7 +318,10 @@ impl fmt::Display for FieldOperation {
                 }
                 Ok(())
             }
-            FieldOperation::Combined { deref_count, operation } => {
+            FieldOperation::Combined {
+                deref_count,
+                operation,
+            } => {
                 for _ in 0..*deref_count {
                     write!(f, "*")?;
                 }

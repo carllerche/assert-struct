@@ -458,7 +458,7 @@ fn generate_struct_match_assertion_with_collection(
             let field_name = &f.field_name;
             let field_pattern = &f.pattern;
             let field_operations = &f.operations;
-            
+
             // Build path for this field - include operations if present
             let mut new_path = field_path.to_vec();
             let field_path_str = if let Some(ops) = field_operations {
@@ -472,10 +472,17 @@ fn generate_struct_match_assertion_with_collection(
                         format!("{}.{}()", field_name, name)
                     }
                     FieldOperation::Nested { fields } => {
-                        let nested = fields.iter().map(|f| f.to_string()).collect::<Vec<_>>().join(".");
+                        let nested = fields
+                            .iter()
+                            .map(|f| f.to_string())
+                            .collect::<Vec<_>>()
+                            .join(".");
                         format!("{}.{}", field_name, nested)
                     }
-                    FieldOperation::Combined { deref_count, operation } => {
+                    FieldOperation::Combined {
+                        deref_count,
+                        operation,
+                    } => {
                         let stars = "*".repeat(*deref_count);
                         format!("{}{}{}", stars, field_name, operation)
                     }
@@ -484,7 +491,7 @@ fn generate_struct_match_assertion_with_collection(
                 field_name.to_string()
             };
             new_path.push(field_path_str);
-            
+
             // Generate the value expression with operations applied
             let (value_expr, is_ref_after_operations) = if let Some(ops) = field_operations {
                 // We're always in a reference context for struct destructuring (match &value)
@@ -499,7 +506,7 @@ fn generate_struct_match_assertion_with_collection(
             } else {
                 (quote! { #field_name }, true)
             };
-            
+
             // Generate assertion with appropriate reference handling
             let assertion = generate_pattern_assertion_with_collection(
                 &value_expr,
@@ -577,12 +584,16 @@ fn generate_struct_match_assertion_with_collection(
 
 /// Apply field operations to a value expression
 /// This generates the appropriate dereferencing, method calls, or nested field access
-/// 
+///
 /// # Parameters
 /// - `base_expr`: The base expression to apply operations to
 /// - `operation`: The field operation to apply
 /// - `in_ref_context`: Whether we're in a reference context (from destructuring `&value`)
-fn apply_field_operations(base_expr: &TokenStream, operation: &FieldOperation, in_ref_context: bool) -> TokenStream {
+fn apply_field_operations(
+    base_expr: &TokenStream,
+    operation: &FieldOperation,
+    in_ref_context: bool,
+) -> TokenStream {
     match operation {
         FieldOperation::Deref { count } => {
             let mut expr = base_expr.clone();
@@ -607,10 +618,17 @@ fn apply_field_operations(base_expr: &TokenStream, operation: &FieldOperation, i
             }
             expr
         }
-        FieldOperation::Combined { deref_count, operation } => {
+        FieldOperation::Combined {
+            deref_count,
+            operation,
+        } => {
             // First apply dereferencing with reference context awareness
             let mut expr = base_expr.clone();
-            let total_count = if in_ref_context { deref_count + 1 } else { *deref_count };
+            let total_count = if in_ref_context {
+                deref_count + 1
+            } else {
+                *deref_count
+            };
             for _ in 0..total_count {
                 expr = quote! { *#expr };
             }
@@ -649,7 +667,11 @@ fn process_tuple_elements(
     for (i, tuple_element) in elements.iter().enumerate() {
         let (pattern, operations) = match tuple_element {
             TupleElement::Positional { pattern } => (pattern, &None),
-            TupleElement::Indexed { pattern, operations, .. } => (pattern, operations),
+            TupleElement::Indexed {
+                pattern,
+                operations,
+                ..
+            } => (pattern, operations),
         };
 
         match pattern {
@@ -677,10 +699,17 @@ fn process_tuple_elements(
                             format!("{}.{}()", i, name)
                         }
                         FieldOperation::Nested { fields } => {
-                            let nested = fields.iter().map(|f| f.to_string()).collect::<Vec<_>>().join(".");
+                            let nested = fields
+                                .iter()
+                                .map(|f| f.to_string())
+                                .collect::<Vec<_>>()
+                                .join(".");
                             format!("{}.{}", i, nested)
                         }
-                        FieldOperation::Combined { deref_count, operation } => {
+                        FieldOperation::Combined {
+                            deref_count,
+                            operation,
+                        } => {
                             let stars = "*".repeat(*deref_count);
                             format!("{}{}{}", stars, i, operation)
                         }

@@ -5,6 +5,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct TestStruct {
     boxed_value: Box<i32>,
     rc_value: Rc<String>,
@@ -23,7 +24,7 @@ fn test_deref_simple() {
         normal_value: 200,
     };
 
-    // Test basic dereferencing  
+    // Test basic dereferencing
     assert_struct!(test, TestStruct {
         normal_value: 200,
         *boxed_value: 42,

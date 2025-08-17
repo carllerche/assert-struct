@@ -9,9 +9,7 @@ struct Simple {
 #[test]
 fn test_simple_expansion() {
     let s = Simple { value: 42 };
-    
+
     // Simple case to see how the macro expands
-    assert_struct!(s, Simple {
-        value: 42,
-    });
+    assert_struct!(s, Simple { value: 42 });
 }

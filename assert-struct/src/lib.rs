@@ -550,7 +550,7 @@ pub mod __macro_support {
     }
 
     /// Trait for automatic dereferencing in pattern matching.
-    /// 
+    ///
     /// This trait allows the macro to automatically dereference smart pointers
     /// when the pattern expects the inner type.
     pub trait AutoDeref<Target> {
@@ -591,7 +591,7 @@ pub mod __macro_support {
 
     /// Generic wrapper function that attempts pattern matching with auto-deref
     #[inline]
-    pub fn match_with_auto_deref<V, T, F>(value: &V, matcher: F) -> bool 
+    pub fn match_with_auto_deref<V, T, F>(value: &V, matcher: F) -> bool
     where
         V: AutoDeref<T>,
         F: FnOnce(&T) -> bool,

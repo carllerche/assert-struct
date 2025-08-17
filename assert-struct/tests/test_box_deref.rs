@@ -22,23 +22,29 @@ fn test_current_box_behavior() {
     };
 
     // This currently works - normal value
-    assert_struct!(test, TestStruct {
-        normal_value: 200,
-        ..
-    });
+    assert_struct!(
+        test,
+        TestStruct {
+            normal_value: 200,
+            ..
+        }
+    );
 
     // This currently requires closures for Box/Rc/Arc
-    assert_struct!(test, TestStruct {
-        boxed_value: |b| matches!(**b, Some(42)),
-        rc_value: |s| s.as_str() == "hello",
-        arc_value: |a| **a == 100,
-        normal_value: 200,
-        ..
-    });
+    assert_struct!(
+        test,
+        TestStruct {
+            boxed_value: |b| matches!(**b, Some(42)),
+            rc_value: |s| s.as_str() == "hello",
+            arc_value: |a| **a == 100,
+            normal_value: 200,
+            ..
+        }
+    );
 }
 
 // TODO: These tests will be enabled once auto-deref is implemented
-// 
+//
 // #[test]
 // fn test_auto_deref_goal() {
 //     let test = TestStruct {
