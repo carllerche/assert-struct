@@ -64,6 +64,7 @@ pub enum PatternNode {
 
     // Special
     Rest,
+    Wildcard,
 }
 
 impl fmt::Display for PatternNode {
@@ -91,6 +92,7 @@ impl fmt::Display for PatternNode {
             PatternNode::Regex { pattern } => write!(f, "=~ {}", pattern),
             PatternNode::Like { expr } => write!(f, "=~ {}", expr),
             PatternNode::Rest => write!(f, ".."),
+            PatternNode::Wildcard => write!(f, "_"),
         }
     }
 }
@@ -200,6 +202,9 @@ pub(crate) enum Fragment {
 
     /// Rest pattern ".."
     Rest,
+
+    /// Wildcard pattern "_"
+    Wildcard,
 }
 
 /// Error annotation information
@@ -664,6 +669,7 @@ fn format_pattern_simple(node: &'static PatternNode) -> String {
         }
         PatternNode::Struct { name, .. } => format!("{} {{ ... }}", name),
         PatternNode::Rest => "..".to_string(),
+        PatternNode::Wildcard => "_".to_string(),
     }
 }
 
@@ -810,6 +816,7 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
             }
         }
         PatternNode::Rest => Fragment::Rest,
+        PatternNode::Wildcard => Fragment::Wildcard,
         _ => Fragment::Annotated {
             pattern: "<complex>".to_string(),
             annotation: error.map(|e| ErrorAnnotation {
@@ -1269,6 +1276,9 @@ fn render_fragment<'a>(
         }
         Fragment::Rest => {
             output.push_str("..");
+        }
+        Fragment::Wildcard => {
+            output.push('_');
         }
     }
 }

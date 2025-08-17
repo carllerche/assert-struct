@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | Container { ... Query {
 mismatch:
-  --> `container.data.Some.Query.limit` (line 31)
+  --> `container.data.Some.0.Query.0.limit` (line 31)
    |     limit: > 100,
    |            ^^^^^ actual: 10
    | } ... }

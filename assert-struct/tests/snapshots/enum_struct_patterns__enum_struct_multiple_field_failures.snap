@@ -4,17 +4,9 @@ expression: message
 ---
 assert_struct! failed: 3 mismatches
 
-   | Request { ... Query {
+   | Request {
 mismatch:
-  --> `request.statement.Query.name` (line 32)
-   |     name: "get_items",
-   |           ^^^^^^^^^^^ actual: "select_users"
-mismatch:
-  --> `request.statement.Query.params` (line 33)
-   |     params: vec!["name", "age"],
-   |             ^^^^^^^^^^^^^^^^^^^ actual: ["id"]
-mismatch:
-  --> `request.statement.Query.limit.Some` (line 34)
-   |     Some: > 50,
-   |           ^^^^ actual: 25
-   | } ... }
+  --> `request.statement.Query.0.limit.Some` (line 34)
+   |     statement: Statement::Query(<complex>),
+   |                                 ^^^^^^^^^ actual: 25
+   | }

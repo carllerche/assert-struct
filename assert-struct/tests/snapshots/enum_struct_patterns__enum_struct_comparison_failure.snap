@@ -4,9 +4,9 @@ expression: message
 ---
 assert_struct! failed:
 
-   | Request { ... Query {
+   | Request {
 mismatch:
-  --> `request.statement.Query.limit.Some` (line 31)
-   |     Some: > 50,
-   |           ^^^^ actual: 25
-   | } ... }
+  --> `request.statement.Query.0.limit.Some` (line 31)
+   |     statement: Statement::Query(<complex>),
+   |                                 ^^^^^^^^^ actual: 25
+   | }
