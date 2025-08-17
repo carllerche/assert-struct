@@ -1039,12 +1039,13 @@ fn generate_enum_tuple_assertion_with_collection(
     node_ident: &Ident,
 ) -> TokenStream {
     let field_path_str = field_path.join(".");
+    let span = variant_path.span();
 
     // Special handling for unit variants (empty elements)
     if elements.is_empty() {
         // Unit variants don't have parentheses
         if is_ref {
-            quote! {
+            quote_spanned! {span=>
                 match #value_expr {
                     #variant_path => {},
                     _ => {
@@ -1066,7 +1067,7 @@ fn generate_enum_tuple_assertion_with_collection(
                 }
             }
         } else {
-            quote! {
+            quote_spanned! {span=>
                 match &#value_expr {
                     #variant_path => {},
                     _ => {
@@ -1110,7 +1111,7 @@ fn generate_enum_tuple_assertion_with_collection(
         };
 
         if is_ref {
-            quote! {
+            quote_spanned! {span=>
                 match #value_expr {
                     #variant_path(#(#match_patterns),*) => {
                         #(#element_assertions)*
@@ -1134,7 +1135,7 @@ fn generate_enum_tuple_assertion_with_collection(
                 }
             }
         } else {
-            quote! {
+            quote_spanned! {span=>
                 match &#value_expr {
                     #variant_path(#(#match_patterns),*) => {
                         #(#element_assertions)*
@@ -1171,12 +1172,13 @@ fn generate_enum_tuple_assertion_with_path(
     node_ident: &Ident,
 ) -> TokenStream {
     let field_path_str = field_path.join(".");
+    let span = variant_path.span();
 
     // Special handling for unit variants (empty elements)
     if elements.is_empty() {
         // Unit variants don't have parentheses
         if is_ref {
-            quote! {
+            quote_spanned! {span=>
                 match #value_expr {
                     #variant_path => {},
                     _ => {
@@ -1198,7 +1200,7 @@ fn generate_enum_tuple_assertion_with_path(
                 }
             }
         } else {
-            quote! {
+            quote_spanned! {span=>
                 match &#value_expr {
                     #variant_path => {},
                     _ => {
@@ -1242,7 +1244,7 @@ fn generate_enum_tuple_assertion_with_path(
         };
 
         if is_ref {
-            quote! {
+            quote_spanned! {span=>
                 match #value_expr {
                     #variant_path(#(#match_patterns),*) => {
                         #(#element_assertions)*
@@ -1266,7 +1268,7 @@ fn generate_enum_tuple_assertion_with_path(
                 }
             }
         } else {
-            quote! {
+            quote_spanned! {span=>
                 match &#value_expr {
                     #variant_path(#(#match_patterns),*) => {
                         #(#element_assertions)*

@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | TestStruct {
 mismatch:
-  --> `test.data` (line 22)
+  --> `test.data` (line 27)
    |     data: Some(_),
    |           ^^^^ actual: None
    | }

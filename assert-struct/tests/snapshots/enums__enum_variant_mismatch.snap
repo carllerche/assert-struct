@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | Account {
 mismatch:
-  --> `account.status` (line 24)
+  --> `account.status` (line 28)
    |     status: Status::Active,
    |             ^^^^^^^^^^^^^^ actual: Inactive
    | }
