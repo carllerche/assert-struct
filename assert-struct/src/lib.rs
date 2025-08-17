@@ -609,7 +609,7 @@ pub mod __macro_support {
         Some(matcher(value))
     }
 
-    /// Auto-deref wrapper for Box<T> pattern matching
+    /// Auto-deref wrapper for `Box<T>` pattern matching
     #[inline]
     pub fn auto_deref_box_match<T, F>(boxed: &std::boxed::Box<T>, matcher: F) -> bool
     where
@@ -618,7 +618,7 @@ pub mod __macro_support {
         matcher(boxed.as_ref())
     }
 
-    /// Auto-deref wrapper for Rc<T> pattern matching
+    /// Auto-deref wrapper for `Rc<T>` pattern matching
     #[inline]
     pub fn auto_deref_rc_match<T, F>(rc: &std::rc::Rc<T>, matcher: F) -> bool
     where
@@ -627,7 +627,7 @@ pub mod __macro_support {
         matcher(rc.as_ref())
     }
 
-    /// Auto-deref wrapper for Arc<T> pattern matching
+    /// Auto-deref wrapper for `Arc<T>` pattern matching
     #[inline]
     pub fn auto_deref_arc_match<T, F>(arc: &std::sync::Arc<T>, matcher: F) -> bool
     where
