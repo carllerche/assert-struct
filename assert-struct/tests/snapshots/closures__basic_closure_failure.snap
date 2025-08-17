@@ -7,6 +7,6 @@ assert_struct! failed:
    | TestData {
 mismatch:
   --> `data.value` (line 37)
-   |     value: | x : & i32 | * x > 40,
-   |            ^^^^^^^^^^^^^^^^^^^^^^ actual: 30
+   |     value: | x | * x > 40,
+   |            ^^^^^^^^^^^^^^ actual: 30
    | }

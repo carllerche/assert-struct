@@ -18,9 +18,9 @@ fn test_basic_closure_success() {
     assert_struct!(
         data,
         TestData {
-            value: |x: &i32| *x > 40,
-            name: |n: &String| n.len() == 4,
-            items: |items: &Vec<i32>| items.len() == 3,
+            value: |x| *x > 40,
+            name: |n| n.len() == 4,
+            items: |items| items.len() == 3,
         }
     );
 }
@@ -37,7 +37,7 @@ fn test_basic_closure_failure() {
         assert_struct!(
             data,
             TestData {
-                value: |x: &i32| *x > 40, // This should fail
+                value: |x| *x > 40, // This should fail
                 ..
             }
         );
@@ -60,9 +60,9 @@ fn test_closure_with_complex_logic() {
     assert_struct!(
         data,
         TestData {
-            value: |x: &i32| *x >= 50 && *x <= 100,
-            name: |n: &String| n.starts_with("h") && n.len() > 3,
-            items: |items: &Vec<i32>| {
+            value: |x| *x >= 50 && *x <= 100,
+            name: |n| n.starts_with("h") && n.len() > 3,
+            items: |items| {
                 items.len() == 3 && items.iter().all(|&x| x > 0) && items.iter().sum::<i32>() == 60
             },
         }
@@ -81,7 +81,7 @@ fn test_move_closure() {
     assert_struct!(
         data,
         TestData {
-            value: move |x: &i32| *x > threshold, // Captures threshold by value
+            value: move |x| *x > threshold, // Captures threshold by value
             ..
         }
     );
