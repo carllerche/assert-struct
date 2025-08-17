@@ -65,7 +65,8 @@ fn get_pattern_node_ident(pattern: &Pattern) -> Ident {
         | Pattern::Comparison { node_id, .. }
         | Pattern::Range { node_id, .. }
         | Pattern::Rest { node_id }
-        | Pattern::Wildcard { node_id } => *node_id,
+        | Pattern::Wildcard { node_id }
+        | Pattern::Closure { node_id, .. } => *node_id,
         #[cfg(feature = "regex")]
         Pattern::Regex { node_id, .. } | Pattern::Like { node_id, .. } => *node_id,
     };
@@ -85,6 +86,7 @@ fn get_pattern_span(pattern: &Pattern) -> Option<Span> {
         Pattern::Struct { path, .. } => Some(path.span()),
         Pattern::Tuple { path, .. } => path.as_ref().map(|p| p.span()),
         Pattern::Slice { .. } | Pattern::Rest { .. } | Pattern::Wildcard { .. } => None,
+        Pattern::Closure { closure, .. } => Some(closure.span()),
     }
 }
 
@@ -102,7 +104,8 @@ fn generate_pattern_nodes(
         | Pattern::Comparison { node_id, .. }
         | Pattern::Range { node_id, .. }
         | Pattern::Rest { node_id }
-        | Pattern::Wildcard { node_id } => *node_id,
+        | Pattern::Wildcard { node_id }
+        | Pattern::Closure { node_id, .. } => *node_id,
         #[cfg(feature = "regex")]
         Pattern::Regex { node_id, .. } | Pattern::Like { node_id, .. } => *node_id,
     };
@@ -177,6 +180,14 @@ fn generate_pattern_nodes(
         Pattern::Wildcard { .. } => {
             quote! {
                 ::assert_struct::__macro_support::PatternNode::Wildcard
+            }
+        }
+        Pattern::Closure { closure, .. } => {
+            let closure_str = quote! { #closure }.to_string();
+            quote! {
+                ::assert_struct::__macro_support::PatternNode::Closure {
+                    closure: #closure_str,
+                }
             }
         }
         Pattern::Tuple { path, elements, .. } => {
@@ -394,6 +405,16 @@ fn generate_pattern_assertion_with_collection(
             generate_like_assertion_with_collection(
                 value_expr,
                 pattern_expr,
+                is_ref,
+                path,
+                &node_ident,
+            )
+        }
+        Pattern::Closure { closure, .. } => {
+            // Generate closure assertion with error collection
+            generate_closure_assertion_with_collection(
+                value_expr,
+                closure,
                 is_ref,
                 path,
                 &node_ident,
@@ -650,6 +671,7 @@ fn pattern_to_string(pattern: &Pattern) -> String {
         Pattern::Like { expr, .. } => format!("=~ {}", quote! { #expr }),
         Pattern::Rest { .. } => "..".to_string(),
         Pattern::Wildcard { .. } => "_".to_string(),
+        Pattern::Closure { closure, .. } => quote! { #closure }.to_string(),
         Pattern::Struct { path, .. } => quote! { #path { .. } }.to_string(),
         Pattern::Tuple { path, elements, .. } => {
             if let Some(p) = path {
@@ -1171,6 +1193,47 @@ fn generate_like_assertion_with_collection(
                     };
                     __errors.push(__error);
                 }
+            }
+        }
+    }
+}
+
+/// Generate closure assertion with error collection
+fn generate_closure_assertion_with_collection(
+    value_expr: &TokenStream,
+    closure: &syn::ExprClosure,
+    is_ref: bool,
+    path: &[String],
+    node_ident: &Ident,
+) -> TokenStream {
+    let field_path_str = path.join(".");
+    let closure_str = quote! { #closure }.to_string();
+
+    // Adjust for reference level - closures receive the actual value
+    let actual_expr = if is_ref {
+        quote! { #value_expr }
+    } else {
+        quote! { &#value_expr }
+    };
+
+    quote! {
+        {
+            let __closure = #closure;
+            let __closure_result = __closure(#actual_expr);
+            if !__closure_result {
+                let __line = line!();
+                let __file = file!();
+                let __error = ::assert_struct::__macro_support::ErrorContext {
+                    field_path: #field_path_str.to_string(),
+                    pattern_str: #closure_str.to_string(),
+                    actual_value: format!("{:?}", #actual_expr),
+                    line_number: __line,
+                    file_name: __file,
+                    error_type: ::assert_struct::__macro_support::ErrorType::Closure,
+                    expected_value: None,
+                    error_node: Some(&#node_ident),
+                };
+                __errors.push(__error);
             }
         }
     }
