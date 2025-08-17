@@ -65,6 +65,9 @@ pub enum PatternNode {
     // Special
     Rest,
     Wildcard,
+    Closure {
+        closure: &'static str,
+    },
 }
 
 impl fmt::Display for PatternNode {
@@ -93,6 +96,7 @@ impl fmt::Display for PatternNode {
             PatternNode::Like { expr } => write!(f, "=~ {}", expr),
             PatternNode::Rest => write!(f, ".."),
             PatternNode::Wildcard => write!(f, "_"),
+            PatternNode::Closure { closure } => write!(f, "{}", closure),
         }
     }
 }
@@ -119,6 +123,7 @@ pub enum ErrorType {
     EnumVariant,
     Slice,
     Equality, // For == patterns where we show both actual and expected
+    Closure,  // For closure patterns that return false
 }
 
 // ========== TWO-PASS ERROR RENDERING SYSTEM ==========
@@ -670,6 +675,7 @@ fn format_pattern_simple(node: &'static PatternNode) -> String {
         PatternNode::Struct { name, .. } => format!("{} {{ ... }}", name),
         PatternNode::Rest => "..".to_string(),
         PatternNode::Wildcard => "_".to_string(),
+        PatternNode::Closure { closure } => closure.to_string(),
     }
 }
 
@@ -817,6 +823,14 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
         }
         PatternNode::Rest => Fragment::Rest,
         PatternNode::Wildcard => Fragment::Wildcard,
+        PatternNode::Closure { closure } => Fragment::Annotated {
+            pattern: closure.to_string(),
+            annotation: error.map(|e| ErrorAnnotation {
+                actual_value: format_actual_value(&e.actual_value, &e.error_type),
+                error_type: e.error_type.clone(),
+                underline_range: None,
+            }),
+        },
         _ => Fragment::Annotated {
             pattern: "<complex>".to_string(),
             annotation: error.map(|e| ErrorAnnotation {

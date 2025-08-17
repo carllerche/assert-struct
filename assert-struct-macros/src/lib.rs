@@ -90,6 +90,11 @@ pub(crate) enum Pattern {
     Wildcard {
         node_id: usize,
     },
+    // Closure pattern: |x| expr for custom validation (escape hatch)
+    Closure {
+        node_id: usize,
+        closure: syn::ExprClosure,
+    },
 }
 
 // Helper function to format syn expressions as strings
@@ -185,6 +190,9 @@ impl fmt::Display for Pattern {
             }
             Pattern::Wildcard { .. } => {
                 write!(f, "_")
+            }
+            Pattern::Closure { closure, .. } => {
+                write!(f, "{}", quote::quote! { #closure })
             }
         }
     }
