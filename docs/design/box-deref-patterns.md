@@ -389,3 +389,84 @@ Automatically follow multiple `Deref` implementations.
 This design provides a natural, type-safe way to pattern match through smart pointers while maintaining `assert_struct!`'s core principles of clarity and performance. The phased implementation approach allows us to start with the most common cases and expand based on user feedback.
 
 The key insight is that we can automatically generate appropriate `*` operators based on type analysis rather than requiring special syntax. This leverages Rust's existing match behavior, works with any `Deref` type, and provides maximum composability with existing features while keeping the implementation simple and performant.
+
+## Implementation Status and Challenges
+
+### Current State
+- **Design**: Complete - comprehensive design document with clear approach
+- **Runtime Support**: Added - `AutoDeref` trait and helper functions in `__macro_support`
+- **Test Infrastructure**: Complete - test files with current closure workarounds
+- **Macro Implementation**: Not yet implemented - significant challenges discovered
+
+### Key Implementation Challenges Discovered
+
+#### 1. Procedural Macro Limitations
+**Problem**: Procedural macros operate at the syntax level without type information.
+- Cannot determine at compile time whether a field is `Box<T>`, `Rc<T>`, or `T`
+- Cannot safely attempt dereferencing without knowing the type supports `Deref`
+- Type analysis requires the full Rust compiler's type checker
+
+**Example Impact**:
+```rust
+// This breaks compilation if `value` is `Option<i32>` (doesn't implement Deref)
+match *value {
+    Some(x) => ...,  // Error: cannot dereference Option<i32>
+}
+```
+
+#### 2. Universal Dereferencing Approach Failed
+**Attempted Solution**: Generate fallback code that tries dereferencing all values
+**Result**: Compile errors for non-`Deref` types like `Option<T>`, `Vec<T>`, etc.
+
+**Learning**: Cannot use a "try dereferencing everything" approach - breaks existing functionality.
+
+#### 3. Compile-Time Type Detection Challenge
+**Core Issue**: Need to differentiate between:
+- `field: Box<Option<i32>>` (needs `*field` to get `Option<i32>`)
+- `field: Option<i32>` (direct pattern matching, no deref)
+- `field: Rc<String>` (needs `*field` to get `String`)
+
+**Macro Limitation**: All we see is the pattern `Some(42)` - we don't know the field type.
+
+### Potential Solutions Under Research
+
+#### 1. Trait-Based Runtime Detection
+Generate code that uses trait bounds to conditionally enable auto-deref:
+```rust
+// Only compiles if T: Deref
+fn try_auto_deref<T: std::ops::Deref>(value: &T) -> &T::Target { 
+    value 
+}
+```
+
+#### 2. Specific Smart Pointer Detection
+Focus on known smart pointer patterns rather than universal approach:
+- Detect `Box<Pattern>` syntax explicitly
+- Generate specific deref code for known types
+- Fail gracefully for unknown types
+
+#### 3. User Annotation Approach
+Add optional syntax for explicit auto-deref requests:
+```rust
+assert_struct!(test, TestStruct {
+    boxed_field: *Some(42),  // Explicit deref request
+    normal_field: Some(42),  // Normal matching
+});
+```
+
+### Current Workaround: Closure Escape Hatch
+The implemented closure feature provides an immediate solution:
+```rust
+assert_struct!(test, TestStruct {
+    boxed_option: |b| matches!(**b, Some(42)),
+    rc_string: |s| s.as_str() == "hello",
+});
+```
+
+### Next Steps
+1. **Research Phase**: Investigate compile-time type detection approaches
+2. **Prototype**: Test trait-based conditional compilation approaches  
+3. **Incremental**: Implement for specific smart pointer types first
+4. **Validation**: Ensure no regression in existing functionality
+
+The auto-deref feature remains a valuable goal, but implementation requires a more sophisticated approach than initially anticipated.
