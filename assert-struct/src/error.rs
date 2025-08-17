@@ -823,6 +823,14 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
         }
         PatternNode::Rest => Fragment::Rest,
         PatternNode::Wildcard => Fragment::Wildcard,
+        PatternNode::Closure { closure } => Fragment::Annotated {
+            pattern: closure.to_string(),
+            annotation: error.map(|e| ErrorAnnotation {
+                actual_value: format_actual_value(&e.actual_value, &e.error_type),
+                error_type: e.error_type.clone(),
+                underline_range: None,
+            }),
+        },
         _ => Fragment::Annotated {
             pattern: "<complex>".to_string(),
             annotation: error.map(|e| ErrorAnnotation {

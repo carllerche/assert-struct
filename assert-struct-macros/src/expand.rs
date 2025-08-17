@@ -1218,9 +1218,7 @@ fn generate_closure_assertion_with_collection(
 
     quote! {
         {
-            let __closure = #closure;
-            let __closure_result = __closure(#actual_expr);
-            if !__closure_result {
+            if !(#closure)(#actual_expr) {
                 let __line = line!();
                 let __file = file!();
                 let __error = ::assert_struct::__macro_support::ErrorContext {

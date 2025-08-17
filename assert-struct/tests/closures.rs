@@ -26,7 +26,6 @@ fn test_basic_closure_success() {
 }
 
 #[test]
-#[should_panic]
 fn test_basic_closure_failure() {
     let data = TestData {
         value: 30,
@@ -34,13 +33,20 @@ fn test_basic_closure_failure() {
         items: vec![1, 2],
     };
 
-    assert_struct!(
-        data,
-        TestData {
-            value: |x: &i32| *x > 40, // This should fail
-            ..
-        }
-    );
+    let message = std::panic::catch_unwind(|| {
+        assert_struct!(
+            data,
+            TestData {
+                value: |x: &i32| *x > 40, // This should fail
+                ..
+            }
+        );
+    })
+    .unwrap_err()
+    .downcast::<String>()
+    .unwrap();
+
+    insta::assert_snapshot!(message);
 }
 
 #[test]
