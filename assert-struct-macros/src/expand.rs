@@ -348,10 +348,48 @@ fn generate_pattern_assertion_with_collection(
             // which is already handled by the struct/tuple destructuring
             quote! {}
         }
-        // For now, use immediate panic for other patterns - can implement collection later
-        _ => {
-            // Note: this doesn't collect errors but ensures compilation
-            generate_pattern_assertion_with_path(value_expr, pattern, is_ref, path)
+        Pattern::Range { expr: range, .. } => {
+            // Generate improved range assertion
+            generate_range_assertion_with_path(
+                value_expr,
+                range,
+                is_ref,
+                path,
+                &pattern_str,
+                &node_ident,
+            )
+        }
+        Pattern::Slice { elements, .. } => {
+            // Generate slice assertion with path tracking
+            generate_slice_assertion_with_path(value_expr, elements, is_ref, path, &node_ident)
+        }
+        #[cfg(feature = "regex")]
+        Pattern::Regex {
+            pattern: regex_str,
+            span,
+            ..
+        } => {
+            // Generate regex assertion with path tracking
+            generate_regex_assertion_with_path(
+                value_expr,
+                regex_str,
+                *span,
+                is_ref,
+                path,
+                &pattern_str,
+                &node_ident,
+            )
+        }
+        #[cfg(feature = "regex")]
+        Pattern::Like {
+            expr: pattern_expr, ..
+        } => {
+            // Generate Like trait assertion with path tracking
+            generate_like_assertion_with_path(value_expr, pattern_expr, is_ref, path, &node_ident)
+        }
+        Pattern::Rest { .. } => {
+            // Rest patterns should only appear inside slices and are handled there
+            panic!("Internal error: Rest pattern used outside of slice context")
         }
     }
 }
@@ -382,8 +420,9 @@ fn generate_pattern_assertion_with_path(
             rest,
             ..
         } => {
-            // Use the path-aware version for structs
-            generate_struct_match_assertion_with_path(
+            // Use collection version for consistency, but it panics on first error
+            // This is called from slice patterns where nested structs need individual assertion
+            generate_struct_match_assertion_with_collection(
                 value_expr,
                 struct_path,
                 fields,
@@ -593,104 +632,6 @@ fn generate_struct_match_assertion_with_collection(
                         error_node: Some(&#node_ident),
                     };
                     __errors.push(__error);
-                }
-            }
-        }
-    }
-}
-
-/// Generate match-based assertion for both structs and enums with fields.
-///
-/// Using match for both eliminates the need for type detection heuristics.
-/// The `#[allow(unreachable_patterns)]` suppresses warnings for struct matches.
-fn generate_struct_match_assertion_with_path(
-    value_expr: &TokenStream,
-    struct_path: &syn::Path,
-    fields: &Punctuated<FieldAssertion, Token![,]>,
-    rest: bool,
-    is_ref: bool,
-    field_path: &[String],
-    node_ident: &Ident,
-) -> TokenStream {
-    let field_names: Vec<_> = fields.iter().map(|f| &f.field_name).collect();
-    let field_path_str = field_path.join(".");
-
-    let rest_pattern = if rest {
-        quote! { , .. }
-    } else {
-        quote! {}
-    };
-
-    let field_assertions: Vec<_> = fields
-        .iter()
-        .map(|f| {
-            let field_name = &f.field_name;
-            let field_pattern = &f.pattern;
-            // Build path for this field
-            let mut new_path = field_path.to_vec();
-            new_path.push(field_name.to_string());
-            // Fields from destructuring are references
-            generate_pattern_assertion_with_path(
-                &quote! { #field_name },
-                field_pattern,
-                true,
-                &new_path,
-            )
-        })
-        .collect();
-
-    let span = struct_path.span();
-    if is_ref {
-        quote_spanned! {span=>
-            #[allow(unreachable_patterns)]
-            match #value_expr {
-                #struct_path { #(#field_names),* #rest_pattern } => {
-                    #(#field_assertions)*
-                },
-                _ => {
-                    let __line = line!();
-                    let __file = file!();
-
-                    let __error = ::assert_struct::__macro_support::ErrorContext {
-                        field_path: #field_path_str.to_string(),
-                        pattern_str: stringify!(#struct_path).to_string(),
-                        actual_value: format!("{:?}", #value_expr),
-                        line_number: __line,
-                        file_name: __file,
-                        error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-
-                        expected_value: None,
-
-                        error_node: Some(&#node_ident),
-                    };
-                    panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, vec![__error]));
-                }
-            }
-        }
-    } else {
-        quote_spanned! {span=>
-            #[allow(unreachable_patterns)]
-            match &#value_expr {
-                #struct_path { #(#field_names),* #rest_pattern } => {
-                    #(#field_assertions)*
-                },
-                _ => {
-                    let __line = line!();
-                    let __file = file!();
-
-                    let __error = ::assert_struct::__macro_support::ErrorContext {
-                        field_path: #field_path_str.to_string(),
-                        pattern_str: stringify!(#struct_path).to_string(),
-                        actual_value: format!("{:?}", &#value_expr),
-                        line_number: __line,
-                        file_name: __file,
-                        error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-
-                        expected_value: None,
-
-                        error_node: Some(&#node_ident),
-                    };
-                    panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, vec![__error]));
                 }
             }
         }
