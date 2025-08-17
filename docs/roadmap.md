@@ -16,28 +16,45 @@ Before listing missing features, it's important to note what's already available
 - ✅ **Slice patterns** with element-wise matching (`[> 0, < 10, == 5]`)
 - ✅ **Tuple patterns** including in enums
 - ✅ **Nested struct matching** with deep field paths
+- ✅ **Wildcard patterns** (`_`) for ignoring values while asserting existence
+- ✅ **Closure escape hatch** (`|x| expr`) for arbitrary validation logic
 
 ## Priority 1: Critical Features for AST Testing
 
 These features are essential for testing parser output and other deeply nested data structures.
 
 ### 1. Vec/Array Index Access Patterns
-**Status:** Not Implemented
+**Status:** ✅ Already Supported via Slice Patterns
 **Use Case:** Asserting on specific elements in collections by index
-**Current Workaround:** Multiple separate assertions or manual match statements
+**Implementation:** Use slice patterns with element-wise matching
 
 ```rust
-// Proposed syntax:
+// Already works with slice patterns:
 assert_struct!(func, ItemFn {
     sig: Signature {
-        inputs[0]: FnArg::Typed {
-            pat: Pat::Ident { ident.name: "x", .. },
-            ..
-        },
-        inputs[1]: FnArg::Typed {
-            pat: Pat::Ident { ident.name: "y", .. },
-            ..
-        },
+        inputs: [
+            FnArg::Typed {
+                pat: Pat::Ident { ident.name: "x", .. },
+                ..
+            },
+            FnArg::Typed {
+                pat: Pat::Ident { ident.name: "y", .. },
+                ..
+            },
+        ],
+        ..
+    },
+    ..
+});
+
+// Also supports partial matching and wildcards:
+assert_struct!(func, ItemFn {
+    sig: Signature {
+        inputs: [
+            FnArg::Typed { .. },  // First arg, don't care about details
+            _,                    // Second arg, any type
+            FnArg::Typed { pat: Pat::Ident { .. }, .. },  // Third arg, must be typed with ident
+        ],
         ..
     },
     ..
@@ -45,30 +62,42 @@ assert_struct!(func, ItemFn {
 ```
 
 ### 2. Method Call Assertions
-**Status:** Not Implemented
+**Status:** ✅ Solved via Closure Escape Hatch (Implemented)
 **Use Case:** Asserting on method results like `is_some()`, `is_empty()`, `len()`
-**Current Workaround:** Separate assertions outside of assert_struct
+**Implementation:** Use closure patterns for arbitrary method calls and logic
 
 ```rust
-// Proposed syntax:
+// Already works with closure escape hatch:
 assert_struct!(func, ItemFn {
     sig: Signature {
-        asyncness.is_some(): true,
-        inputs.is_empty(): false,
-        generics.params.len(): 2,
+        asyncness: |opt| opt.is_some(),
+        inputs: |vec| !vec.is_empty(),
+        generics: |g| g.params.len() == 2,
         ..
+    },
+    ..
+});
+
+// Closures support any complexity:
+assert_struct!(data, MyStruct {
+    field: |x| x.method().chain().result() > 42,
+    complex: |val| {
+        match val.kind {
+            Kind::A => val.check_a(),
+            Kind::B => val.check_b() && val.extra.is_some(),
+        }
     },
     ..
 });
 ```
 
-### 3. Wildcard Patterns in Enums and Structs
-**Status:** Not Implemented
+### 3. Wildcard Patterns in Enums and Structs  
+**Status:** ✅ Implemented (Merged)
 **Use Case:** Checking enum variant without caring about its contents (e.g., `is_some()` checks)
-**Current Workaround:** Match statements that ignore the inner value or separate assertions
+**Implementation:** Use `_` wildcard patterns in any context
 
 ```rust
-// Proposed syntax:
+// Already works with wildcard patterns:
 assert_struct!(data, MyStruct {
     // Check Option is Some without caring about value
     maybe_value: Some(_),
@@ -78,11 +107,13 @@ assert_struct!(data, MyStruct {
 
     // Check Result is Ok without caring about value
     result: Ok(_),
+
+    // Works in any context - structs, tuples, slices
+    point: (_, > 0),  // Don't care about x, y must be positive
+    items: [_, "specific", _],  // Middle item must match, others ignored
     ..
 });
 ```
-
-**Note:** Currently `_` is not valid in expression position, so this requires special handling in the macro.
 
 ### 4. Box/Deref Pattern Matching
 **Status:** Not Implemented
@@ -193,14 +224,21 @@ assert_struct!(value, MyStruct {
 ```
 
 ### 10. Custom Matcher Functions
-**Status:** Not Implemented
+**Status:** ✅ Implemented via Closure Escape Hatch
 **Use Case:** Arbitrary predicate functions for complex logic
-**Current Workaround:** Multiple assertions or custom validation code
+**Implementation:** Use closure patterns for any custom validation
 
 ```rust
-// Proposed syntax:
+// Already works with closure escape hatch:
 assert_struct!(block, Block {
     stmts: |s| s.iter().all(|stmt| matches!(stmt, Stmt::Local(_))),
+    complex_field: |x| x.custom_method() && x.validate(),
+    nested: |n| {
+        match n.variant {
+            Variant::A(val) => val > 10,
+            Variant::B => true,
+        }
+    },
     ..
 });
 ```
@@ -224,11 +262,11 @@ assert_struct!(ident, Ident {
 
 ## Implementation Strategy
 
-### Phase 1: Foundation (Priority 1 Features)
-1. **Vec/Array indexing** - Most critical for AST testing
-2. **Method call assertions** - Enables is_some(), len(), etc.
-3. **Wildcard patterns** - Essential for variant checking and is_some() style assertions
-4. **Box/Deref patterns** - Common in AST structures
+### Phase 1: Foundation (Priority 1 Features) ✅ Mostly Complete
+1. ✅ **Vec/Array indexing** - Solved via slice patterns 
+2. ✅ **Method call assertions** - Solved via closure escape hatch
+3. ✅ **Wildcard patterns** - Implemented and merged
+4. **Box/Deref patterns** - Next priority, common in AST structures
 
 ### Phase 2: Ergonomics (Priority 2 Features)
 5. Length assertions (beyond just empty)
