@@ -2,11 +2,12 @@
 source: assert-struct/tests/tuples.rs
 expression: message
 ---
-assert_struct! failed:
+assert_struct! failed: 2 mismatches
 
    | TupleHolder {
 mismatch:
   --> `holder.pair` (line 20)
    |     pair: (100, "expected"),
-   |            ^^^ actual: 50
+   |            ^^^  ^^^^^^^^^^ actual: "actual"
+   |            └─ actual: 50
    | }

@@ -2,11 +2,13 @@
 source: assert-struct/tests/tuples.rs
 expression: message
 ---
-assert_struct! failed:
+assert_struct! failed: 3 mismatches
 
    | TupleHolder {
 mismatch:
   --> `holder.triple` (line 25)
    |     triple: (1000, "different_but_also_very_long_string_that_needs_truncation", true),
-   |              ^^^^ actual: 999
+   |              ^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^ actual: false
+   |              │     └─ actual: "this_is_a_very_long_string_that_should_be_truncated_in_the_error_output"
+   |              └─ actual: 999
    | }

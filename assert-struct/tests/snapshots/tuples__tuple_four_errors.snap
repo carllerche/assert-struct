@@ -2,11 +2,14 @@
 source: assert-struct/tests/tuples.rs
 expression: message
 ---
-assert_struct! failed:
+assert_struct! failed: 4 mismatches
 
    | TupleHolder {
 mismatch:
   --> `holder.quad` (line 20)
    |     quad: (1, 2, 3, 4),
-   |            ^ actual: 10
+   |            ^  ^  ^  ^ actual: 40
+   |            │  │  └─ actual: 30
+   |            │  └─ actual: 20
+   |            └─ actual: 10
    | }
