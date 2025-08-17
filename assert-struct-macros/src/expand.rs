@@ -748,88 +748,6 @@ fn generate_comparison_assertion_with_collection(
     }
 }
 
-/// Generate comparison assertion with node reference for tree-based error messages
-fn generate_comparison_assertion_with_node(
-    value_expr: &TokenStream,
-    op: &ComparisonOp,
-    expected: &Expr,
-    is_ref: bool,
-    path: &[String],
-    pattern_str: &str,
-    node_ident: &Ident,
-) -> TokenStream {
-    let field_path = path.join(".");
-
-    // Adjust for reference level
-    let actual_expr = if is_ref {
-        quote! { #value_expr }
-    } else {
-        quote! { &#value_expr }
-    };
-
-    let comparison = if is_ref {
-        match op {
-            ComparisonOp::Less => quote! { #value_expr < &(#expected) },
-            ComparisonOp::LessEqual => quote! { #value_expr <= &(#expected) },
-            ComparisonOp::Greater => quote! { #value_expr > &(#expected) },
-            ComparisonOp::GreaterEqual => quote! { #value_expr >= &(#expected) },
-            ComparisonOp::Equal => quote! { #value_expr == &(#expected) },
-            ComparisonOp::NotEqual => quote! { #value_expr != &(#expected) },
-        }
-    } else {
-        match op {
-            ComparisonOp::Less => quote! { &#value_expr < &(#expected) },
-            ComparisonOp::LessEqual => quote! { &#value_expr <= &(#expected) },
-            ComparisonOp::Greater => quote! { &#value_expr > &(#expected) },
-            ComparisonOp::GreaterEqual => quote! { &#value_expr >= &(#expected) },
-            ComparisonOp::Equal => quote! { &#value_expr == &(#expected) },
-            ComparisonOp::NotEqual => quote! { &#value_expr != &(#expected) },
-        }
-    };
-
-    let error_type = if matches!(op, ComparisonOp::Equal) {
-        quote! { ::assert_struct::__macro_support::ErrorType::Equality }
-    } else {
-        quote! { ::assert_struct::__macro_support::ErrorType::Comparison }
-    };
-
-    let expected_value = if matches!(op, ComparisonOp::Equal) {
-        quote! { Some(format!("{:?}", #expected)) }
-    } else {
-        quote! { None }
-    };
-
-    let span = expected.span();
-    quote_spanned! {span=>
-        if !(#comparison) {
-            // Capture line number using proper spanning
-            let __line = line!();
-            let __file = file!();
-
-            // Build error context
-            let mut __error = ::assert_struct::__macro_support::ErrorContext {
-                field_path: #field_path.to_string(),
-                pattern_str: #pattern_str.to_string(),
-                actual_value: format!("{:?}", #actual_expr),
-                line_number: __line,
-                file_name: __file,
-                error_type: #error_type,
-
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
-            };
-
-            // Add expected value for equality patterns
-            if let Some(expected) = #expected_value {
-                __error.expected_value = Some(expected);
-            }
-
-            panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, vec![__error]));
-        }
-    }
-}
-
 /// Generate assertion for enum tuple variants with error collection
 fn generate_enum_tuple_assertion_with_collection(
     value_expr: &TokenStream,
@@ -963,8 +881,6 @@ fn generate_enum_tuple_assertion_with_collection(
     }
 }
 
-/// Generate assertion for enum tuple variants with path tracking
-
 /// Generate range assertion with error collection
 fn generate_range_assertion_with_collection(
     value_expr: &TokenStream,
@@ -1009,8 +925,6 @@ fn generate_range_assertion_with_collection(
         }
     }
 }
-
-/// Generate range assertion with enhanced error message
 
 /// Generate simple assertion with error collection
 fn generate_simple_assertion_with_collection(
@@ -1139,8 +1053,6 @@ fn generate_slice_assertion_with_collection(
     }
 }
 
-/// Generate slice assertion with path tracking
-
 #[cfg(feature = "regex")]
 /// Generate regex assertion with error collection
 fn generate_regex_assertion_with_collection(
@@ -1204,9 +1116,6 @@ fn generate_regex_assertion_with_collection(
         }
     }
 }
-
-#[cfg(feature = "regex")]
-/// Generate regex assertion with path tracking
 
 #[cfg(feature = "regex")]
 /// Generate Like trait assertion with error collection
