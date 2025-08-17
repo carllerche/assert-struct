@@ -34,13 +34,14 @@ struct AssertStruct {
 }
 
 // Unified pattern type that can represent any pattern
+#[derive(Debug, Clone)]
 pub(crate) enum Pattern {
-    // Simple value: 42, "hello", true
+    // Simple value: 42, \"hello\", true
     Simple {
         node_id: usize,
         expr: Expr,
     },
-    // Struct pattern: User { name: "Alice", age: 30, .. }
+    // Struct pattern: User { name: \"Alice\", age: 30, .. }
     Struct {
         node_id: usize,
         path: syn::Path,
@@ -48,10 +49,11 @@ pub(crate) enum Pattern {
         rest: bool,
     },
     // Tuple pattern: (10, 20) or Some(42) or None
+    // Now supports mixed positional and indexed elements
     Tuple {
         node_id: usize,
         path: Option<syn::Path>,
-        elements: Vec<Pattern>,
+        elements: Vec<TupleElement>,
     },
     // Slice pattern: [1, 2, 3] or [1, .., 5]
     Slice {
@@ -179,7 +181,7 @@ impl fmt::Display for Pattern {
             }
             #[cfg(feature = "regex")]
             Pattern::Regex { pattern, .. } => {
-                write!(f, "=~ r\"{}\"", pattern)
+                write!(f, r#"=~ r"{}""#, pattern)
             }
             #[cfg(feature = "regex")]
             Pattern::Like { expr, .. } => {
@@ -203,13 +205,119 @@ struct Expected {
     rest: bool, // true if ".." was present
 }
 
+/// Represents an operation to be performed on a field before pattern matching
+#[derive(Debug, Clone)]
+enum FieldOperation {
+    /// Dereference operation: *field, **field, etc.
+    /// The count indicates how many dereferences to perform
+    Deref { count: usize },
+    
+    /// Method call: field.method(), field.len(), etc.
+    /// Stores the method name and arguments (if any)
+    Method { name: syn::Ident, args: Vec<syn::Expr> },
+    
+    /// Nested field access: field.nested, field.inner.value, etc.
+    /// Stores the chain of field names to access
+    Nested { fields: Vec<syn::Ident> },
+    
+    /// Combined operation: dereferencing followed by method/nested access
+    /// Example: *field.method(), **field.inner, etc.
+    Combined { 
+        deref_count: usize,
+        operation: Box<FieldOperation>
+    },
+}
+
 // Field assertion - a field name paired with its expected pattern
+// Now supports operations like dereferencing, method calls, and nested access
+#[derive(Debug, Clone)]
 struct FieldAssertion {
     field_name: syn::Ident,
+    operations: Option<FieldOperation>,
     pattern: Pattern,
 }
 
-#[derive(Clone, Copy)]
+/// Represents an element in a tuple pattern, supporting both positional and indexed syntax
+#[derive(Debug, Clone)]
+enum TupleElement {
+    /// Positional element: just a pattern in sequence
+    /// Example: "foo", > 10, Some(42)
+    Positional { pattern: Pattern },
+    
+    /// Indexed element: explicit index with optional operations
+    /// Example: 0: "foo", *1: "bar", 2.len(): 5
+    Indexed { 
+        index: usize,
+        operations: Option<FieldOperation>,
+        pattern: Pattern 
+    },
+}
+impl fmt::Display for TupleElement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TupleElement::Positional { pattern } => {
+                write!(f, "{}", pattern)
+            }
+            TupleElement::Indexed { index, operations, pattern } => {
+                if let Some(ops) = operations {
+                    // Show operations before the index
+                    match ops {
+                        FieldOperation::Deref { count } => {
+                            for _ in 0..*count {
+                                write!(f, "*")?;
+                            }
+                        }
+                        FieldOperation::Method { name, .. } => {
+                            write!(f, ".{}()", name)?;
+                        }
+                        FieldOperation::Nested { fields } => {
+                            for field in fields {
+                                write!(f, ".{}", field)?;
+                            }
+                        }
+                        FieldOperation::Combined { deref_count, operation } => {
+                            for _ in 0..*deref_count {
+                                write!(f, "*")?;
+                            }
+                            write!(f, "{}", operation)?;
+                        }
+                    }
+                }
+                write!(f, "{}: {}", index, pattern)
+            }
+        }
+    }
+}
+
+impl fmt::Display for FieldOperation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FieldOperation::Deref { count } => {
+                for _ in 0..*count {
+                    write!(f, "*")?;
+                }
+                Ok(())
+            }
+            FieldOperation::Method { name, .. } => {
+                write!(f, ".{}()", name)
+            }
+            FieldOperation::Nested { fields } => {
+                for field in fields {
+                    write!(f, ".{}", field)?;
+                }
+                Ok(())
+            }
+            FieldOperation::Combined { deref_count, operation } => {
+                for _ in 0..*deref_count {
+                    write!(f, "*")?;
+                }
+                write!(f, "{}", operation)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub(crate) enum ComparisonOp {
     Less,
     LessEqual,
