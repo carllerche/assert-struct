@@ -541,8 +541,9 @@ fn generate_struct_match_assertion_with_collection(
         })
         .collect();
 
+    let span = struct_path.span();
     if is_ref {
-        quote! {
+        quote_spanned! {span=>
             #[allow(unreachable_patterns)]
             match #value_expr {
                 #struct_path { #(#field_names),* #rest_pattern } => {
@@ -569,7 +570,7 @@ fn generate_struct_match_assertion_with_collection(
             }
         }
     } else {
-        quote! {
+        quote_spanned! {span=>
             #[allow(unreachable_patterns)]
             match &#value_expr {
                 #struct_path { #(#field_names),* #rest_pattern } => {
@@ -638,8 +639,9 @@ fn generate_struct_match_assertion_with_path(
         })
         .collect();
 
+    let span = struct_path.span();
     if is_ref {
-        quote! {
+        quote_spanned! {span=>
             #[allow(unreachable_patterns)]
             match #value_expr {
                 #struct_path { #(#field_names),* #rest_pattern } => {
@@ -666,7 +668,7 @@ fn generate_struct_match_assertion_with_path(
             }
         }
     } else {
-        quote! {
+        quote_spanned! {span=>
             #[allow(unreachable_patterns)]
             match &#value_expr {
                 #struct_path { #(#field_names),* #rest_pattern } => {
