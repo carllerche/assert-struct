@@ -539,6 +539,15 @@ pub mod error;
 #[doc(hidden)]
 pub mod __macro_support {
     pub use crate::error::{ErrorContext, ErrorType, PatternNode, format_errors_with_root};
+
+    /// Helper function to enable type inference for closure parameters in assert_struct patterns
+    #[inline]
+    pub fn check_closure_condition<T, F>(value: T, predicate: F) -> bool
+    where
+        F: FnOnce(T) -> bool,
+    {
+        predicate(value)
+    }
 }
 
 /// A trait for pattern matching, similar to `PartialEq` but for flexible matching.

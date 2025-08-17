@@ -1218,13 +1218,7 @@ fn generate_closure_assertion_with_collection(
 
     quote! {
         {
-            // Helper function to enable type inference for closures
-            fn __check_closure_condition<T, F>(value: T, predicate: F) -> bool
-            where F: FnOnce(T) -> bool {
-                predicate(value)
-            }
-
-            if !__check_closure_condition(#actual_expr, #closure) {
+            if !::assert_struct::__macro_support::check_closure_condition(#actual_expr, #closure) {
                 let __line = line!();
                 let __file = file!();
                 let __error = ::assert_struct::__macro_support::ErrorContext {
