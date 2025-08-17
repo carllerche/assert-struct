@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/field_operations.rs
+expression: message
+---
+assert_struct! failed: 2 mismatches
+
+   | TestStruct {
+mismatch:
+  --> `test.tuple_mix` (line 18)
+   |     tuple_mix: ("hello", 200, 30),
+   |                               ^^ actual: 25
+   | }

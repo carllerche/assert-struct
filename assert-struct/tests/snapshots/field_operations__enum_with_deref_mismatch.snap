@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/field_operations.rs
+expression: message
+---
+assert_struct! failed:
+
+   | TestStruct {
+mismatch:
+  --> `test.*boxed_option.Some` (line 15)
+   |     boxed_option: Some("goodbye"),
+   |                        ^^^^^^^^^ actual: "hello"
+   | }

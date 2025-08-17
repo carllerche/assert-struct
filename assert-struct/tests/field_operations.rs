@@ -4,6 +4,9 @@ use assert_struct::assert_struct;
 use std::rc::Rc;
 use std::sync::Arc;
 
+#[macro_use]
+mod util;
+
 #[derive(Debug)]
 #[allow(dead_code)]
 struct TestStruct {
@@ -65,3 +68,13 @@ fn test_mixed_tuple_syntax() {
         ..
     });
 }
+
+// Error message tests using snapshot testing
+error_message_test!("field_operations_errors/deref_field_mismatch.rs", deref_field_mismatch);
+error_message_test!("field_operations_errors/tuple_indexed_deref_mismatch.rs", tuple_indexed_deref_mismatch);
+error_message_test!("field_operations_errors/nested_deref_mismatch.rs", nested_deref_mismatch);
+error_message_test!("field_operations_errors/multiple_deref_mismatch.rs", multiple_deref_mismatch);
+error_message_test!("field_operations_errors/mixed_operations_mismatch.rs", mixed_operations_mismatch);
+error_message_test!("field_operations_errors/deref_with_comparison.rs", deref_with_comparison);
+error_message_test!("field_operations_errors/enum_with_deref_mismatch.rs", enum_with_deref_mismatch);
+error_message_test!("field_operations_errors/slice_with_deref_mismatch.rs", slice_with_deref_mismatch);
