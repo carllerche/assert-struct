@@ -548,6 +548,93 @@ pub mod __macro_support {
     {
         predicate(value)
     }
+
+    /// Trait for automatic dereferencing in pattern matching.
+    /// 
+    /// This trait allows the macro to automatically dereference smart pointers
+    /// when the pattern expects the inner type.
+    pub trait AutoDeref<Target> {
+        fn auto_deref(&self) -> &Target;
+    }
+
+    /// Identity implementation - when no dereferencing is needed
+    impl<T> AutoDeref<T> for T {
+        #[inline]
+        fn auto_deref(&self) -> &T {
+            self
+        }
+    }
+
+    /// Implementation for Box<T> -> T dereferencing
+    impl<T> AutoDeref<T> for std::boxed::Box<T> {
+        #[inline]
+        fn auto_deref(&self) -> &T {
+            self.as_ref()
+        }
+    }
+
+    /// Implementation for Rc<T> -> T dereferencing  
+    impl<T> AutoDeref<T> for std::rc::Rc<T> {
+        #[inline]
+        fn auto_deref(&self) -> &T {
+            self.as_ref()
+        }
+    }
+
+    /// Implementation for Arc<T> -> T dereferencing
+    impl<T> AutoDeref<T> for std::sync::Arc<T> {
+        #[inline]
+        fn auto_deref(&self) -> &T {
+            self.as_ref()
+        }
+    }
+
+    /// Generic wrapper function that attempts pattern matching with auto-deref
+    #[inline]
+    pub fn match_with_auto_deref<V, T, F>(value: &V, matcher: F) -> bool 
+    where
+        V: AutoDeref<T>,
+        F: FnOnce(&T) -> bool,
+    {
+        matcher(value.auto_deref())
+    }
+
+    /// Helper function for auto-deref pattern matching in enum variants
+    /// This tries to match the pattern directly on the dereferenced value
+    #[inline]
+    pub fn try_auto_deref_match<V, F>(value: &V, matcher: F) -> Option<bool>
+    where
+        F: FnOnce(&V) -> bool,
+    {
+        Some(matcher(value))
+    }
+
+    /// Auto-deref wrapper for Box<T> pattern matching
+    #[inline]
+    pub fn auto_deref_box_match<T, F>(boxed: &std::boxed::Box<T>, matcher: F) -> bool
+    where
+        F: FnOnce(&T) -> bool,
+    {
+        matcher(boxed.as_ref())
+    }
+
+    /// Auto-deref wrapper for Rc<T> pattern matching
+    #[inline]
+    pub fn auto_deref_rc_match<T, F>(rc: &std::rc::Rc<T>, matcher: F) -> bool
+    where
+        F: FnOnce(&T) -> bool,
+    {
+        matcher(rc.as_ref())
+    }
+
+    /// Auto-deref wrapper for Arc<T> pattern matching
+    #[inline]
+    pub fn auto_deref_arc_match<T, F>(arc: &std::sync::Arc<T>, matcher: F) -> bool
+    where
+        F: FnOnce(&T) -> bool,
+    {
+        matcher(arc.as_ref())
+    }
 }
 
 /// A trait for pattern matching, similar to `PartialEq` but for flexible matching.
