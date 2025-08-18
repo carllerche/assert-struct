@@ -1,6 +1,6 @@
 # assert-struct
 
-[![CI](https://github.com/carllerche/assert-struct/workflows/CI/badge.svg)](https://github.com/carllerche/assert-struct/actions)
+[![CI](https://github.com/carllerche/assert-struct/workflows/CI/badge.svg?branch=main)](https://github.com/carllerche/assert-struct/actions)
 [![Crates.io](https://img.shields.io/crates/v/assert-struct.svg)](https://crates.io/crates/assert-struct)
 [![Documentation](https://docs.rs/assert-struct/badge.svg)](https://docs.rs/assert-struct)
 
