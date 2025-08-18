@@ -34,6 +34,7 @@ Focus on clean design, good architecture, and comprehensive functionality rather
 - **Slice patterns**: Element-wise patterns for Vec fields `[> 0, < 10, == 5]`
 - **Enum support**: Full support for Option, Result, and custom enums (all variant types)
 - **Tuple support**: Multi-field tuples with advanced patterns `(> 10, < 30)`
+- **Method call patterns**: `field.method(): value` and `(0.method(): value, _)` for tuple elements
 - **Pattern composition**: Combine all features (e.g., `Some(> 30)`, `Event::Click(>= 0, < 100)`)
 
 ### NEW: Improved Error Messages (Phase 1 Complete)
@@ -61,6 +62,7 @@ assert_struct!(response, Response {
         },
         ..
     },
+    items.len(): > 0,        // Method call patterns
     items: [> 0, < 100, > 0],  // Element-wise patterns
     ..
 });

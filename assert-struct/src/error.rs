@@ -101,6 +101,10 @@ impl fmt::Display for PatternNode {
     }
 }
 
+/// Context information for a failed assertion.
+///
+/// Contains all the information needed to generate a helpful error message,
+/// including the field path, expected pattern, actual value, and source location.
 #[derive(Debug, Clone)]
 pub struct ErrorContext {
     pub field_path: String,
@@ -114,6 +118,9 @@ pub struct ErrorContext {
     pub error_node: Option<&'static PatternNode>,
 }
 
+/// The type of error that occurred during assertion.
+///
+/// Used to customize error message formatting for different kinds of failures.
 #[derive(Debug, Clone)]
 pub enum ErrorType {
     Comparison,

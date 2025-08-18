@@ -122,6 +122,7 @@
 //! - **Regex Patterns** - Match string fields with regular expressions using `=~ r"pattern"`
 //! - **Advanced Enum Patterns** - Use comparison operators, ranges, and regex inside `Some()` and other variants
 //! - **Smart Pointer Dereferencing** - Use `*` to dereference `Box<T>`, `Rc<T>`, `Arc<T>` fields directly
+//! - **Method Call Patterns** - Use `field.method(): value` to call methods and assert on results
 //!
 //! # Helpful Error Messages
 //!
@@ -426,6 +427,42 @@
 //!     *shared_config: "production",  // Dereference Arc<String>
 //!     *cached_result: > 40,          // Dereference Box<i32> with comparison
 //!     *reference_count: >= 1,        // Dereference Rc<u32> with comparison
+//! });
+//! ```
+//!
+//! ## Method Call Patterns
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # use std::collections::HashMap;
+//! #[derive(Debug)]
+//! struct DataService {
+//!     content: String,
+//!     items: Vec<i32>,
+//!     metadata: Option<String>,
+//!     cache: HashMap<String, i32>,
+//!     coordinates: (f64, f64),
+//!     text_data: (String, Vec<u8>),
+//! }
+//!
+//! # let mut map = HashMap::new();
+//! # map.insert("key1".to_string(), 42);
+//! # let service = DataService {
+//! #     content: "hello world".to_string(),
+//! #     items: vec![1, 2, 3, 4, 5],
+//! #     metadata: Some("cached".to_string()),
+//! #     cache: map,
+//! #     coordinates: (10.5, 20.3),
+//! #     text_data: ("hello".to_string(), vec![1, 2, 3]),
+//! # };
+//! // Test method calls with various patterns
+//! assert_struct!(service, DataService {
+//!     content.len(): 11,                      // String length
+//!     items.len(): >= 5,                      // Vector size check
+//!     metadata.is_some(): true,               // Option state
+//!     cache.contains_key("key1"): true,       // HashMap lookup
+//!     text_data: (0.len(): 5, 1.len(): 3),    // Tuple element method calls
+//!     ..
 //! });
 //! ```
 //!
