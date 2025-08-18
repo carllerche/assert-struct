@@ -1,4 +1,6 @@
-use crate::{AssertStruct, ComparisonOp, Expected, FieldAssertion, Pattern};
+use crate::{
+    AssertStruct, ComparisonOp, Expected, FieldAssertion, FieldOperation, Pattern, TupleElement,
+};
 use std::cell::Cell;
 use syn::{Result, Token, parse::Parse, parse::ParseStream, punctuated::Punctuated};
 
@@ -278,7 +280,7 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         if has_special {
             // Contains pattern syntax like `>`, `==`, nested patterns
             // Example: `(> 10, < 30)`, `(== 5, != 10)`
-            let elements = parse_pattern_list(&content)?;
+            let elements = parse_tuple_elements(&content)?;
             return Ok(Pattern::Tuple {
                 node_id: next_node_id(),
                 path: None,
@@ -331,7 +333,7 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             if has_special {
                 // Contains pattern syntax like `>`, `==`, nested patterns
                 // Example: `Some(> 30)`, `Event::Click(>= 0, < 100)`
-                let elements = parse_pattern_list(&content)?;
+                let elements = parse_tuple_elements(&content)?;
                 return Ok(Pattern::Tuple {
                     node_id: next_node_id(),
                     path: Some(path),
@@ -345,9 +347,11 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
                 return Ok(Pattern::Tuple {
                     node_id: next_node_id(),
                     path: Some(path),
-                    elements: vec![Pattern::Simple {
-                        node_id: next_node_id(),
-                        expr,
+                    elements: vec![TupleElement::Positional {
+                        pattern: Pattern::Simple {
+                            node_id: next_node_id(),
+                            expr,
+                        },
                     }],
                 });
             }
@@ -404,6 +408,87 @@ fn parse_pattern_list(input: ParseStream) -> Result<Vec<Pattern>> {
     Ok(patterns)
 }
 
+/// Parse operations for tuple elements (currently just dereferencing)
+/// This is simpler than field operations since we only support * for now
+fn parse_element_operations(input: ParseStream) -> Result<Option<FieldOperation>> {
+    let mut deref_count = 0;
+
+    // Count leading * tokens for dereferencing
+    while input.peek(Token![*]) {
+        let _: Token![*] = input.parse()?;
+        deref_count += 1;
+    }
+
+    if deref_count > 0 {
+        Ok(Some(FieldOperation::Deref { count: deref_count }))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Parse a comma-separated list of tuple elements, supporting both positional and indexed syntax.
+/// Used inside tuple patterns to handle mixed syntax like ("foo", *1: "bar", "baz")
+fn parse_tuple_elements(input: ParseStream) -> Result<Vec<TupleElement>> {
+    let mut elements = Vec::new();
+    let mut position = 0;
+
+    while !input.is_empty() {
+        // First, try to parse operations (like * for deref)
+        let operations = parse_element_operations(input)?;
+
+        // Check if this is an indexed element by looking for number followed by colon
+        let fork = input.fork();
+        let is_indexed = if let Ok(_index_lit) = fork.parse::<syn::LitInt>() {
+            fork.peek(Token![:])
+        } else {
+            false
+        };
+
+        if is_indexed {
+            // Parse indexed element: index: pattern or *index: pattern
+            let index_lit: syn::LitInt = input.parse()?;
+            let index: usize = index_lit.base10_parse()?;
+
+            // Validate that index matches current position
+            if index != position {
+                return Err(syn::Error::new_spanned(
+                    index_lit,
+                    format!("Index {} must match position {} in tuple", index, position),
+                ));
+            }
+
+            let _: Token![:] = input.parse()?;
+            let pattern = parse_pattern(input)?;
+
+            elements.push(TupleElement::Indexed {
+                index,
+                operations,
+                pattern,
+            });
+        } else {
+            // If we parsed operations but no index, this is an error
+            if operations.is_some() {
+                return Err(syn::Error::new(
+                    input.span(),
+                    "Operations like * can only be used with indexed elements (e.g., *0:, *1:)",
+                ));
+            }
+
+            // Parse positional element: just a pattern
+            let pattern = parse_pattern(input)?;
+            elements.push(TupleElement::Positional { pattern });
+        }
+
+        position += 1;
+
+        if !input.is_empty() {
+            let _: Token![,] = input.parse()?;
+        }
+    }
+
+    Ok(elements)
+}
+
 impl Parse for FieldAssertion {
     /// Parses a single field assertion within a struct pattern.
     ///
@@ -411,15 +496,37 @@ impl Parse for FieldAssertion {
     /// ```text
     /// name: "Alice"
     /// age: >= 18
+    /// *boxed_value: 42
     /// email: =~ r".*@example\.com"
     /// ```
     fn parse(input: ParseStream) -> Result<Self> {
+        // Check if we have field operations (starting with * for deref)
+        let mut operations = None;
+        let mut deref_count = 0;
+
+        // Count leading * tokens for dereferencing
+        while input.peek(Token![*]) {
+            let _: Token![*] = input.parse()?;
+            deref_count += 1;
+        }
+
+        if deref_count > 0 {
+            operations = Some(FieldOperation::Deref { count: deref_count });
+            // Debug: Add a compile error to verify parsing is working
+            // return Err(syn::Error::new(input.span(), format!("DEBUG: Found {} deref operations", deref_count)));
+        }
+
         let field_name: syn::Ident = input.parse()?;
+
+        // TODO: Handle method calls and nested field access after the field name
+        // This would involve looking for patterns like field.method() or field.nested
+
         let _: Token![:] = input.parse()?;
         let pattern = parse_pattern(input)?;
 
         Ok(FieldAssertion {
             field_name,
+            operations,
             pattern,
         })
     }

@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/field_operations.rs
+expression: message
+---
+assert_struct! failed:
+
+   | TestStruct {
+mismatch:
+  --> `test.tuple_with_box.*1` (line 17)
+   |     *1: 42,
+   |         ^^ actual: 99
+   | }

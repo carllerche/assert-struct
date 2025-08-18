@@ -1,4 +1,4 @@
-use crate::{AssertStruct, ComparisonOp, FieldAssertion, Pattern};
+use crate::{AssertStruct, ComparisonOp, FieldAssertion, FieldOperation, Pattern, TupleElement};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, quote_spanned};
 use syn::{Expr, Token, punctuated::Punctuated, spanned::Spanned};
@@ -193,7 +193,13 @@ fn generate_pattern_nodes(
         Pattern::Tuple { path, elements, .. } => {
             let child_refs: Vec<TokenStream> = elements
                 .iter()
-                .map(|elem| generate_pattern_nodes(elem, node_defs))
+                .map(|elem| {
+                    let pattern = match elem {
+                        TupleElement::Positional { pattern } => pattern,
+                        TupleElement::Indexed { pattern, .. } => pattern,
+                    };
+                    generate_pattern_nodes(pattern, node_defs)
+                })
                 .collect();
 
             if let Some(enum_path) = path {
@@ -451,14 +457,61 @@ fn generate_struct_match_assertion_with_collection(
         .map(|f| {
             let field_name = &f.field_name;
             let field_pattern = &f.pattern;
-            // Build path for this field
+            let field_operations = &f.operations;
+
+            // Build path for this field - include operations if present
             let mut new_path = field_path.to_vec();
-            new_path.push(field_name.to_string());
-            // Fields from destructuring are references
+            let field_path_str = if let Some(ops) = field_operations {
+                // Include operation in path for better error messages
+                match ops {
+                    FieldOperation::Deref { count } => {
+                        let stars = "*".repeat(*count);
+                        format!("{}{}", stars, field_name)
+                    }
+                    FieldOperation::Method { name, .. } => {
+                        format!("{}.{}()", field_name, name)
+                    }
+                    FieldOperation::Nested { fields } => {
+                        let nested = fields
+                            .iter()
+                            .map(|f| f.to_string())
+                            .collect::<Vec<_>>()
+                            .join(".");
+                        format!("{}.{}", field_name, nested)
+                    }
+                    FieldOperation::Combined {
+                        deref_count,
+                        operation,
+                    } => {
+                        let stars = "*".repeat(*deref_count);
+                        format!("{}{}{}", stars, field_name, operation)
+                    }
+                }
+            } else {
+                field_name.to_string()
+            };
+            new_path.push(field_path_str);
+
+            // Generate the value expression with operations applied
+            let (value_expr, is_ref_after_operations) = if let Some(ops) = field_operations {
+                // We're always in a reference context for struct destructuring (match &value)
+                let expr = apply_field_operations(&quote! { #field_name }, ops, true);
+                // Dereferencing operations change the reference level
+                let is_ref = match ops {
+                    FieldOperation::Deref { .. } => false, // Dereferencing removes reference level
+                    FieldOperation::Combined { .. } => false, // Combined with deref also removes reference level
+                    _ => true, // Other operations keep reference level
+                };
+                (expr, is_ref)
+            } else {
+                (quote! { #field_name }, true)
+            };
+
+            // Generate assertion with appropriate reference handling
             let assertion = generate_pattern_assertion_with_collection(
-                &quote! { #field_name },
+                &value_expr,
                 field_pattern,
-                true,
+                is_ref_after_operations,
                 &new_path,
             );
 
@@ -529,25 +582,81 @@ fn generate_struct_match_assertion_with_collection(
     }
 }
 
-/// Helper function to process tuple/slice elements and generate match patterns and assertions.
+/// Apply field operations to a value expression
+/// This generates the appropriate dereferencing, method calls, or nested field access
+///
+/// # Parameters
+/// - `base_expr`: The base expression to apply operations to
+/// - `operation`: The field operation to apply
+/// - `in_ref_context`: Whether we're in a reference context (from destructuring `&value`)
+fn apply_field_operations(
+    base_expr: &TokenStream,
+    operation: &FieldOperation,
+    in_ref_context: bool,
+) -> TokenStream {
+    match operation {
+        FieldOperation::Deref { count } => {
+            let mut expr = base_expr.clone();
+            // In reference context, we need one extra dereference
+            let total_count = if in_ref_context { count + 1 } else { *count };
+            for _ in 0..total_count {
+                expr = quote! { *#expr };
+            }
+            expr
+        }
+        FieldOperation::Method { name, args } => {
+            if args.is_empty() {
+                quote! { #base_expr.#name() }
+            } else {
+                quote! { #base_expr.#name(#(#args),*) }
+            }
+        }
+        FieldOperation::Nested { fields } => {
+            let mut expr = base_expr.clone();
+            for field in fields {
+                expr = quote! { #expr.#field };
+            }
+            expr
+        }
+        FieldOperation::Combined {
+            deref_count,
+            operation,
+        } => {
+            // First apply dereferencing with reference context awareness
+            let mut expr = base_expr.clone();
+            let total_count = if in_ref_context {
+                deref_count + 1
+            } else {
+                *deref_count
+            };
+            for _ in 0..total_count {
+                expr = quote! { *#expr };
+            }
+            // Then apply the nested operation (no longer in ref context after deref)
+            apply_field_operations(&expr, operation, false)
+        }
+    }
+}
+
+/// Helper function to process tuple elements and generate match patterns and assertions.
 ///
 /// This function handles the common pattern of iterating through elements and:
 /// - Creating `_` patterns for wildcards (which need no assertions)
 /// - Creating named bindings for other patterns and generating their assertions
+/// - Handling field operations like dereferencing
 ///
 /// # Parameters
-/// - `elements`: The patterns to process
+/// - `elements`: The tuple elements to process (can be positional or indexed)
 /// - `prefix`: Prefix for generated binding names (e.g., "__elem_", "__tuple_elem_")
 /// - `is_ref`: Whether the bindings are already references
 /// - `field_path`: Path components for error messages
-/// - `use_collection`: Whether to use error collection or immediate panics
 ///
 /// # Returns
 /// A tuple of (match_patterns, assertions) where:
 /// - `match_patterns`: TokenStreams for use in match arms or destructuring
 /// - `assertions`: TokenStreams for the generated assertion code
 fn process_tuple_elements(
-    elements: &[Pattern],
+    elements: &[TupleElement],
     prefix: &str,
     is_ref: bool,
     field_path: &[String],
@@ -555,7 +664,16 @@ fn process_tuple_elements(
     let mut match_patterns = Vec::new();
     let mut assertions = Vec::new();
 
-    for (i, pattern) in elements.iter().enumerate() {
+    for (i, tuple_element) in elements.iter().enumerate() {
+        let (pattern, operations) = match tuple_element {
+            TupleElement::Positional { pattern } => (pattern, &None),
+            TupleElement::Indexed {
+                pattern,
+                operations,
+                ..
+            } => (pattern, operations),
+        };
+
         match pattern {
             Pattern::Wildcard { .. } => {
                 // Wildcard patterns use `_` in the match pattern.
@@ -568,15 +686,63 @@ fn process_tuple_elements(
                 let name = quote::format_ident!("{}{}", prefix, i);
                 match_patterns.push(quote! { #name });
 
-                // Build path for error messages
+                // Build path for error messages - include operations if present
                 let mut elem_path = field_path.to_vec();
-                elem_path.push(i.to_string());
+                let elem_path_str = if let Some(ops) = operations {
+                    // Include operation in path for better error messages
+                    match ops {
+                        FieldOperation::Deref { count } => {
+                            let stars = "*".repeat(*count);
+                            format!("{}{}", stars, i)
+                        }
+                        FieldOperation::Method { name, .. } => {
+                            format!("{}.{}()", i, name)
+                        }
+                        FieldOperation::Nested { fields } => {
+                            let nested = fields
+                                .iter()
+                                .map(|f| f.to_string())
+                                .collect::<Vec<_>>()
+                                .join(".");
+                            format!("{}.{}", i, nested)
+                        }
+                        FieldOperation::Combined {
+                            deref_count,
+                            operation,
+                        } => {
+                            let stars = "*".repeat(*deref_count);
+                            format!("{}{}{}", stars, i, operation)
+                        }
+                    }
+                } else {
+                    i.to_string()
+                };
+                elem_path.push(elem_path_str);
+
+                // Generate the value expression with operations applied
+                let value_expr = if let Some(ops) = operations {
+                    // Tuple elements are in reference context when destructured
+                    apply_field_operations(&quote! { #name }, ops, true)
+                } else {
+                    quote! { #name }
+                };
+
+                // Apply the same reference level logic as for struct fields
+                let is_ref_after_operations = if operations.is_some() {
+                    match operations.as_ref().unwrap() {
+                        FieldOperation::Deref { .. } => false, // Dereferencing removes reference level
+                        FieldOperation::Combined { .. } => false, // Combined with deref also removes reference level
+                        _ => is_ref, // Other operations keep reference level
+                    }
+                } else {
+                    is_ref
+                };
 
                 // Generate assertion with error collection
                 let assertion = generate_pattern_assertion_with_collection(
-                    &quote! { #name },
+                    &value_expr,
                     pattern,
-                    is_ref,
+                    is_ref_after_operations,
                     &elem_path,
                 );
                 assertions.push(assertion);
@@ -591,7 +757,7 @@ fn process_tuple_elements(
 /// Uses match expressions for consistency with enum tuple handling.
 fn generate_plain_tuple_assertion_with_collection(
     value_expr: &TokenStream,
-    elements: &[Pattern],
+    elements: &[TupleElement],
     is_ref: bool,
     field_path: &[String],
     _node_ident: &Ident,
@@ -774,7 +940,7 @@ fn generate_comparison_assertion_with_collection(
 fn generate_enum_tuple_assertion_with_collection(
     value_expr: &TokenStream,
     variant_path: &syn::Path,
-    elements: &[Pattern],
+    elements: &[TupleElement],
     is_ref: bool,
     field_path: &[String],
     node_ident: &Ident,
