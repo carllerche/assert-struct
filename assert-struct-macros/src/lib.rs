@@ -381,13 +381,13 @@ impl fmt::Display for ComparisonOp {
 ///
 /// ```text
 /// assert_struct!(expression, TypePattern);
-/// 
+///
 /// TypePattern ::= TypeName '{' FieldPatternList '}'
-/// FieldPatternList ::= (FieldPattern ',')* ('..')? 
+/// FieldPatternList ::= (FieldPattern ',')* ('..')?
 /// FieldPattern ::= FieldName ':' Pattern
 ///              | FieldName FieldOperation ':' Pattern  
 /// FieldOperation ::= ('*')+ | ('.' Identifier '(' ArgumentList? ')')
-/// Pattern ::= Value | ComparisonPattern | RangePattern | RegexPattern 
+/// Pattern ::= Value | ComparisonPattern | RangePattern | RegexPattern
 ///          | EnumPattern | TuplePattern | SlicePattern | NestedPattern
 /// ```
 ///
@@ -614,7 +614,7 @@ impl fmt::Display for ComparisonOp {
 /// Complex patterns show visual context with failure highlighting:
 /// ```text
 /// assert_struct! failed:
-/// 
+///
 ///    | Response { user: User { profile: Profile {
 /// comparison mismatch:
 ///   --> `response.user.profile.age` (tests/api.rs:45)
