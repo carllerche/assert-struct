@@ -390,3 +390,52 @@ error_message_test!(
 );
 
 error_message_test!("enums_errors/enum_variant.rs", enum_variant);
+
+// Simple value display tests for error messages
+#[derive(Debug)]
+struct SimpleDisplayFoo {
+    #[allow(dead_code)]
+    value: i32,
+}
+
+#[test]
+#[should_panic(expected = "Some(10)")]
+fn test_simple_int_value_display() {
+    let value: Option<i32> = Some(10);
+    assert_struct!(value, None);
+}
+
+#[test]
+#[should_panic(expected = "Some(\"hello\")")]
+fn test_simple_string_value_display() {
+    let value: Option<&str> = Some("hello");
+    assert_struct!(value, None);
+}
+
+#[test]
+#[should_panic(expected = "Ok(42)")]
+fn test_nested_result_simple_display() {
+    let value: Result<i32, String> = Ok(42);
+    assert_struct!(value, Err("error"));
+}
+
+#[test]
+#[should_panic(expected = "Some(Ok(\"success\"))")]
+fn test_nested_option_result_display() {
+    let value: Option<Result<&str, i32>> = Some(Ok("success"));
+    assert_struct!(value, None);
+}
+
+#[test]
+#[should_panic(expected = "Some(..)")]
+fn test_struct_value_abbreviated_display() {
+    let value: Option<SimpleDisplayFoo> = Some(SimpleDisplayFoo { value: 42 });
+    assert_struct!(value, None);
+}
+
+#[test]
+#[should_panic(expected = "Ok(..)")]
+fn test_result_with_struct_abbreviated_display() {
+    let value: Result<SimpleDisplayFoo, String> = Ok(SimpleDisplayFoo { value: 42 });
+    assert_struct!(value, Err("error"));
+}

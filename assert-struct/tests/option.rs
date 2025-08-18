@@ -644,3 +644,17 @@ fn test_expected_some_got_none_nested() {
         }
     );
 }
+
+// Basic None regression tests
+#[test]
+fn test_none_success() {
+    let value: Option<i32> = None;
+    assert_struct!(value, None);
+}
+
+#[test]
+#[should_panic(expected = "assert_struct! failed")]
+fn test_none_error_message() {
+    let value: Option<i32> = Some(42);
+    assert_struct!(value, None);
+}

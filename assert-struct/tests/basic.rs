@@ -124,3 +124,17 @@ fn test_tuple_field_partial() {
 }
 
 error_message_test!("basic_errors/tuple_field_mismatch.rs", tuple_field_mismatch);
+
+// Simple macro expansion test
+#[derive(Debug)]
+struct SimpleExpansion {
+    value: i32,
+}
+
+#[test]
+fn test_simple_macro_expansion() {
+    let s = SimpleExpansion { value: 42 };
+
+    // Simple case to verify basic macro expansion works
+    assert_struct!(s, SimpleExpansion { value: 42 });
+}
