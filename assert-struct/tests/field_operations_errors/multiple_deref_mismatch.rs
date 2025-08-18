@@ -2,6 +2,7 @@
 use assert_struct::assert_struct;
 
 #[derive(Debug)]
+#[allow(clippy::redundant_allocation, clippy::box_collection)]
 struct TestStruct {
     double_box: Box<Box<i32>>,
     single_box: Box<String>,

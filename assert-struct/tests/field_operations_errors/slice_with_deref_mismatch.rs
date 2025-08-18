@@ -2,6 +2,7 @@
 use assert_struct::assert_struct;
 
 #[derive(Debug)]
+#[allow(clippy::box_collection)]
 struct TestStruct {
     boxed_vec: Box<Vec<i32>>,
 }
