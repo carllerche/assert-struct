@@ -84,6 +84,12 @@ assert_struct!(response, Response {
 - **Slice patterns** - Element-wise patterns for `Vec` fields like `[> 0, < 10, == 5]`
 - **Advanced enum patterns** - Use comparison operators and regex inside `Some()` and other variants
 
+### Field Operations
+
+- **Smart pointer dereferencing** - Use `*` to dereference `Box<T>`, `Rc<T>`, `Arc<T>` fields
+- **Multiple dereferencing** - Use `**` for nested smart pointers like `Box<Box<T>>`
+- **Tuple dereferencing** - Use indexed syntax `*1:` to dereference tuple elements
+
 ## Helpful Error Messages
 
 When assertions fail, `assert-struct` provides clear, detailed error messages that show exactly what went wrong:
@@ -256,6 +262,46 @@ assert_struct!(data, Data {
 assert_struct!(data, Data {
     values: [> 0, < 20, == 25],  // Different matcher for each element
     names: ["alice", "bob"],
+});
+
+// Mixed patterns with ranges and regex
+#[derive(Debug)]
+struct Analytics {
+    scores: Vec<f64>,
+    user_agents: Vec<String>,
+    response_codes: Vec<u16>,
+}
+
+let analytics = Analytics {
+    scores: vec![85.5, 92.3, 78.9],
+    user_agents: vec![
+        "Mozilla/5.0 Chrome".to_string(),
+        "Mozilla/5.0 Firefox".to_string(),
+    ],
+    response_codes: vec![200, 201, 404],
+};
+
+assert_struct!(analytics, Analytics {
+    scores: [>= 80.0, > 90.0, 70.0..=80.0],  // Range patterns in slices
+    user_agents: [=~ r".*Chrome.*", =~ r".*Firefox.*"],  // Regex patterns
+    response_codes: [200, 201, >= 400],  // Mixed exact and comparison
+});
+
+// Nested collections with smart pointers
+#[derive(Debug)]
+struct Repository {
+    cached_results: Vec<Box<String>>,
+}
+
+let repo = Repository {
+    cached_results: vec![
+        Box::new("result1".to_string()),
+        Box::new("result2".to_string()),
+    ],
+};
+
+assert_struct!(repo, Repository {
+    cached_results: [*"result1", *"result2"],  // Dereference in slice patterns
 });
 ```
 
@@ -470,6 +516,93 @@ assert_struct!(error_account, Account {
 });
 ```
 
+### Smart Pointer Dereferencing
+
+When working with smart pointers like `Box<T>`, `Rc<T>`, or `Arc<T>`, you can use the `*` operator to dereference them directly in patterns:
+
+```rust
+use assert_struct::assert_struct;
+use std::rc::Rc;
+use std::sync::Arc;
+
+#[derive(Debug)]
+struct Data {
+    boxed_number: Box<i32>,
+    shared_text: Rc<String>,
+    atomic_flag: Arc<bool>,
+    mixed_tuple: (String, Box<i32>),
+}
+
+let data = Data {
+    boxed_number: Box::new(42),
+    shared_text: Rc::new("hello".to_string()),
+    atomic_flag: Arc::new(true),
+    mixed_tuple: ("test".to_string(), Box::new(99)),
+};
+
+// Basic dereferencing
+assert_struct!(data, Data {
+    *boxed_number: 42,           // Dereference Box<i32>
+    *shared_text: "hello",       // Dereference Rc<String>
+    *atomic_flag: true,          // Dereference Arc<bool>
+    ..
+});
+
+// Dereferencing with comparison operators
+assert_struct!(data, Data {
+    *boxed_number: > 40,         // Dereference and compare
+    *shared_text: =~ r"h.*o",    // Dereference and regex match
+    *atomic_flag: == true,       // Explicit equality after deref
+    ..
+});
+
+// Mixed tuple dereferencing with indexed syntax
+assert_struct!(data, Data {
+    mixed_tuple: ("test", *1: 99),  // *1: dereferences the second element
+    ..
+});
+
+// Multiple dereferencing for nested smart pointers
+#[derive(Debug)]
+struct NestedData {
+    nested_box: Box<Box<i32>>,
+}
+
+let nested = NestedData {
+    nested_box: Box::new(Box::new(42)),
+};
+
+assert_struct!(nested, NestedData {
+    **nested_box: 42,  // Double dereference
+});
+```
+
+#### Smart Pointer Error Messages
+
+Field operations are also shown in error messages for clear debugging:
+
+```rust
+// This will fail and show the dereferencing in the error path
+assert_struct!(data, Data {
+    *boxed_number: 100,  // Expected 100, actual 42
+    ..
+});
+```
+
+Error output:
+```text
+assert_struct! failed:
+
+   | Data {
+mismatch:
+  --> `data.*boxed_number` (line 15)
+   |     *boxed_number: 100,
+   |                    ^^^ actual: 42
+   | }
+```
+
+The error clearly shows `data.*boxed_number` indicating the dereferencing operation was applied.
+
 ### Comparison and Equality Operators
 
 Perfect for range checks, threshold validations, and explicit equality tests:
@@ -512,6 +645,204 @@ assert_struct!(metrics, Metrics {
     memory_mb: >= config.min_memory,     // Field access
     response_time_ms: < limits[2],       // Array indexing
     ..
+});
+```
+
+## Cookbook: Common Patterns
+
+### Testing with Smart Pointers
+
+```rust
+use assert_struct::assert_struct;
+use std::rc::Rc;
+use std::sync::Arc;
+
+// Testing cached data structures
+#[derive(Debug)]
+struct Cache {
+    data: Arc<Vec<String>>,
+    metadata: Box<CacheMetadata>,
+}
+
+#[derive(Debug)]
+struct CacheMetadata {
+    hits: u64,
+    misses: u64,
+}
+
+let cache = Cache {
+    data: Arc::new(vec!["item1".to_string(), "item2".to_string()]),
+    metadata: Box::new(CacheMetadata { hits: 10, misses: 2 }),
+};
+
+assert_struct!(cache, Cache {
+    *data: ["item1", "item2"],      // Dereference Arc<Vec<String>>
+    *metadata: CacheMetadata {      // Dereference Box<CacheMetadata>
+        hits: >= 5,
+        misses: < 5,
+    },
+});
+```
+
+### Testing Configuration Objects
+
+```rust
+#[derive(Debug)]
+struct Config {
+    database_url: Option<String>,
+    port: u16,
+    features: Vec<String>,
+    timeouts: (u32, u32, u32),  // connect, read, write
+}
+
+let config = Config {
+    database_url: Some("postgres://localhost:5432/test".to_string()),
+    port: 8080,
+    features: vec!["auth".to_string(), "logging".to_string()],
+    timeouts: (5000, 30000, 10000),
+};
+
+assert_struct!(config, Config {
+    database_url: Some(=~ r"^postgres://.*"),  // Regex in Option
+    port: 8000..=9000,                         // Port in valid range
+    features: [=~ r"auth", =~ r"log.*"],       // Feature validation
+    timeouts: (< 10000, < 60000, < 20000),    // All timeouts reasonable
+});
+```
+
+### Testing Result Chains
+
+```rust
+#[derive(Debug)]
+struct ProcessingResult {
+    step1: Result<String, String>,
+    step2: Result<i32, String>,
+    step3: Result<bool, String>,
+}
+
+let result = ProcessingResult {
+    step1: Ok("processed".to_string()),
+    step2: Ok(42),
+    step3: Err("validation failed".to_string()),
+};
+
+assert_struct!(result, ProcessingResult {
+    step1: Ok(=~ r"process.*"),           // Success with pattern
+    step2: Ok(> 0),                      // Success with comparison
+    step3: Err(=~ r"validation.*"),      // Expected error with pattern
+});
+```
+
+### Testing Event Systems
+
+```rust
+#[derive(Debug, PartialEq)]
+enum Event {
+    Click { x: i32, y: i32 },
+    Scroll { delta: f64 },
+    KeyPress(char),
+    Resize(u32, u32),
+}
+
+#[derive(Debug)]
+struct EventLog {
+    events: Vec<Event>,
+    timestamps: Vec<u64>,
+}
+
+let log = EventLog {
+    events: vec![
+        Event::Click { x: 100, y: 200 },
+        Event::Scroll { delta: -5.0 },
+        Event::Resize(1920, 1080),
+    ],
+    timestamps: vec![1000, 1005, 1010],
+};
+
+assert_struct!(log, EventLog {
+    events: [
+        Event::Click { x: > 50, y: > 100 },     // Click in valid area
+        Event::Scroll { delta: < 0.0 },         // Scroll up
+        Event::Resize(>= 1000, >= 720),         // Minimum resolution
+    ],
+    timestamps: [>= 1000, >= 1000, >= 1000],   // All after start time
+});
+```
+
+### Testing Nested API Structures
+
+```rust
+#[derive(Debug)]
+struct ApiResponse {
+    meta: ResponseMeta,
+    data: UserProfile,
+    errors: Option<Vec<ApiError>>,
+}
+
+#[derive(Debug)]
+struct ResponseMeta {
+    status: u16,
+    request_id: String,
+    cache_hit: bool,
+}
+
+#[derive(Debug)]
+struct UserProfile {
+    id: u64,
+    settings: UserSettings,
+    preferences: Vec<String>,
+}
+
+#[derive(Debug)]
+struct UserSettings {
+    theme: String,
+    notifications: Box<NotificationSettings>,
+}
+
+#[derive(Debug)]
+struct NotificationSettings {
+    email: bool,
+    push: bool,
+}
+
+let response = ApiResponse {
+    meta: ResponseMeta {
+        status: 200,
+        request_id: "req_123456".to_string(),
+        cache_hit: true,
+    },
+    data: UserProfile {
+        id: 42,
+        settings: UserSettings {
+            theme: "dark".to_string(),
+            notifications: Box::new(NotificationSettings {
+                email: true,
+                push: false,
+            }),
+        },
+        preferences: vec!["privacy".to_string(), "performance".to_string()],
+    },
+    errors: None,
+};
+
+assert_struct!(response, ApiResponse {
+    meta: ResponseMeta {
+        status: 200..=299,                    // Success status
+        request_id: =~ r"^req_\w+$",         // Valid request ID format
+        cache_hit: true,
+    },
+    data: UserProfile {
+        id: > 0,                             // Valid user ID
+        settings: UserSettings {
+            theme: =~ r"^(light|dark)$",     // Valid theme
+            *notifications: NotificationSettings {  // Dereference Box
+                email: == true,              // Email notifications enabled
+                ..                           // Don't care about push
+            },
+        },
+        preferences: [=~ r"privacy", =~ r"perf.*"],  // Contains expected prefs
+    },
+    errors: None,                            // No errors
 });
 ```
 
