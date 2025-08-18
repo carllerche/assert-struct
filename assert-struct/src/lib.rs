@@ -121,6 +121,7 @@
 //! - **Range Patterns** - Use `18..=65`, `0.0..100.0`, `0..` for range matching
 //! - **Regex Patterns** - Match string fields with regular expressions using `=~ r"pattern"`
 //! - **Advanced Enum Patterns** - Use comparison operators, ranges, and regex inside `Some()` and other variants
+//! - **Smart Pointer Dereferencing** - Use `*` to dereference `Box<T>`, `Rc<T>`, `Arc<T>` fields directly
 //!
 //! # Helpful Error Messages
 //!
@@ -401,6 +402,32 @@
 //! ```
 //!
 //! # Examples
+//!
+//! ## Smart Pointer Dereferencing
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # use std::rc::Rc;
+//! # use std::sync::Arc;
+//! #[derive(Debug)]
+//! struct CacheData {
+//!     shared_config: Arc<String>,
+//!     cached_result: Box<i32>,
+//!     reference_count: Rc<u32>,
+//! }
+//!
+//! # let cache = CacheData {
+//! #     shared_config: Arc::new("production".to_string()),
+//! #     cached_result: Box::new(42),
+//! #     reference_count: Rc::new(5),
+//! # };
+//! // Test smart pointer contents directly
+//! assert_struct!(cache, CacheData {
+//!     *shared_config: "production",  // Dereference Arc<String>
+//!     *cached_result: > 40,          // Dereference Box<i32> with comparison
+//!     *reference_count: >= 1,        // Dereference Rc<u32> with comparison
+//! });
+//! ```
 //!
 //! ## Testing API Responses
 //!
