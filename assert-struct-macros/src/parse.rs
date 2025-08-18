@@ -426,6 +426,57 @@ fn parse_element_operations(input: ParseStream) -> Result<Option<FieldOperation>
     }
 }
 
+/// Parse method call syntax: .method_name(args...)
+/// Returns a FieldOperation::Method or FieldOperation::Combined if existing operations are present
+fn parse_method_call(
+    input: ParseStream,
+    existing_operations: Option<FieldOperation>,
+) -> Result<FieldOperation> {
+    let _: Token![.] = input.parse()?;
+    let method_name: syn::Ident = input.parse()?;
+
+    // Check for method call parentheses
+    if input.peek(syn::token::Paren) {
+        let args_content;
+        syn::parenthesized!(args_content in input);
+
+        // Parse method arguments
+        let mut args = Vec::new();
+        while !args_content.is_empty() {
+            let arg: syn::Expr = args_content.parse()?;
+            args.push(arg);
+
+            // Break if no comma, otherwise consume it
+            if !args_content.peek(Token![,]) {
+                break;
+            }
+            let _: Token![,] = args_content.parse()?;
+        }
+
+        let method_op = FieldOperation::Method {
+            name: method_name,
+            args,
+        };
+
+        // Combine with existing operations if present
+        if let Some(FieldOperation::Deref { count }) = existing_operations {
+            Ok(FieldOperation::Combined {
+                deref_count: count,
+                operation: Box::new(method_op),
+            })
+        } else {
+            Ok(method_op)
+        }
+    } else {
+        // This would be nested field access: field.nested
+        // For now, we'll treat this as an error since we're focusing on method calls
+        Err(syn::Error::new_spanned(
+            method_name,
+            "Nested field access not yet supported. Use method calls with parentheses: .method()",
+        ))
+    }
+}
+
 /// Parse a comma-separated list of tuple elements, supporting both positional and indexed syntax.
 /// Used inside tuple patterns to handle mixed syntax like ("foo", *1: "bar", "baz")
 fn parse_tuple_elements(input: ParseStream) -> Result<Vec<TupleElement>> {
@@ -459,47 +510,7 @@ fn parse_tuple_elements(input: ParseStream) -> Result<Vec<TupleElement>> {
 
             // Check for method calls after the index: 0.len():
             let final_operations = if input.peek(Token![.]) {
-                let _: Token![.] = input.parse()?;
-                let method_name: syn::Ident = input.parse()?;
-
-                // Check for method call parentheses
-                if input.peek(syn::token::Paren) {
-                    let args_content;
-                    syn::parenthesized!(args_content in input);
-
-                    // Parse method arguments
-                    let mut args = Vec::new();
-                    while !args_content.is_empty() {
-                        let arg: syn::Expr = args_content.parse()?;
-                        args.push(arg);
-
-                        // Break if no comma, otherwise consume it
-                        if !args_content.peek(Token![,]) {
-                            break;
-                        }
-                        let _: Token![,] = args_content.parse()?;
-                    }
-
-                    let method_op = FieldOperation::Method {
-                        name: method_name,
-                        args,
-                    };
-
-                    // Combine with existing deref operations if present
-                    if let Some(FieldOperation::Deref { count }) = operations {
-                        Some(FieldOperation::Combined {
-                            deref_count: count,
-                            operation: Box::new(method_op),
-                        })
-                    } else {
-                        Some(method_op)
-                    }
-                } else {
-                    return Err(syn::Error::new_spanned(
-                        method_name,
-                        "Method calls must include parentheses: .method()",
-                    ));
-                }
+                Some(parse_method_call(input, operations)?)
             } else {
                 operations
             };
@@ -566,49 +577,7 @@ impl Parse for FieldAssertion {
 
         // Check for method calls: field.method()
         if input.peek(Token![.]) {
-            let _: Token![.] = input.parse()?;
-            let method_name: syn::Ident = input.parse()?;
-
-            // Check for method call parentheses
-            if input.peek(syn::token::Paren) {
-                let args_content;
-                syn::parenthesized!(args_content in input);
-
-                // Parse method arguments
-                let mut args = Vec::new();
-                while !args_content.is_empty() {
-                    let arg: syn::Expr = args_content.parse()?;
-                    args.push(arg);
-
-                    // Break if no comma, otherwise consume it
-                    if !args_content.peek(Token![,]) {
-                        break;
-                    }
-                    let _: Token![,] = args_content.parse()?;
-                }
-
-                let method_op = FieldOperation::Method {
-                    name: method_name,
-                    args,
-                };
-
-                // Combine with existing deref operations if present
-                operations = if let Some(FieldOperation::Deref { count }) = operations {
-                    Some(FieldOperation::Combined {
-                        deref_count: count,
-                        operation: Box::new(method_op),
-                    })
-                } else {
-                    Some(method_op)
-                };
-            } else {
-                // This would be nested field access: field.nested
-                // For now, we'll treat this as an error since we're focusing on method calls
-                return Err(syn::Error::new_spanned(
-                    method_name,
-                    "Nested field access not yet supported. Use method calls with parentheses: .method()",
-                ));
-            }
+            operations = Some(parse_method_call(input, operations)?);
         }
 
         let _: Token![:] = input.parse()?;
