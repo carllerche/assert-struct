@@ -496,11 +496,12 @@ fn generate_struct_match_assertion_with_collection(
             let (value_expr, is_ref_after_operations) = if let Some(ops) = field_operations {
                 // We're always in a reference context for struct destructuring (match &value)
                 let expr = apply_field_operations(&quote! { #field_name }, ops, true);
-                // Dereferencing operations change the reference level
+                // Operations change the reference level based on their type
                 let is_ref = match ops {
                     FieldOperation::Deref { .. } => false, // Dereferencing removes reference level
+                    FieldOperation::Method { .. } => false, // Method calls return owned values
                     FieldOperation::Combined { .. } => false, // Combined with deref also removes reference level
-                    _ => true, // Other operations keep reference level
+                    FieldOperation::Nested { .. } => true, // Nested field access keeps reference level
                 };
                 (expr, is_ref)
             } else {
@@ -731,8 +732,9 @@ fn process_tuple_elements(
                 let is_ref_after_operations = if operations.is_some() {
                     match operations.as_ref().unwrap() {
                         FieldOperation::Deref { .. } => false, // Dereferencing removes reference level
+                        FieldOperation::Method { .. } => false, // Method calls return owned values
                         FieldOperation::Combined { .. } => false, // Combined with deref also removes reference level
-                        _ => is_ref, // Other operations keep reference level
+                        FieldOperation::Nested { .. } => is_ref, // Nested field access keeps reference level
                     }
                 } else {
                     is_ref
