@@ -89,6 +89,8 @@ assert_struct!(response, Response {
 - **Smart pointer dereferencing** - Use `*` to dereference `Box<T>`, `Rc<T>`, `Arc<T>` fields
 - **Multiple dereferencing** - Use `**` for nested smart pointers like `Box<Box<T>>`
 - **Tuple dereferencing** - Use indexed syntax `*1:` to dereference tuple elements
+- **Method calls** - Use `field.method(): value` to call methods on fields and assert on the result
+- **Tuple element method calls** - Use `(0.method(): value, 1.method(): value)` to call methods on tuple elements
 
 ## Helpful Error Messages
 
@@ -603,6 +605,122 @@ mismatch:
 
 The error clearly shows `data.*boxed_number` indicating the dereferencing operation was applied.
 
+### Method Call Patterns
+
+Call methods on fields and assert on their results using the `field.method(): value` syntax. This is particularly useful for testing properties like length, emptiness, or content checks:
+
+```rust
+use assert_struct::assert_struct;
+use std::collections::HashMap;
+
+#[derive(Debug)]
+struct Data {
+    text: String,
+    numbers: Vec<i32>,
+    maybe_value: Option<String>,
+    result_value: Result<i32, String>,
+    map: HashMap<String, i32>,
+    tuple_data: (Vec<String>, String, Option<i32>),
+}
+
+let data = Data {
+    text: "hello world".to_string(),
+    numbers: vec![1, 2, 3, 4, 5],
+    maybe_value: Some("test".to_string()),
+    result_value: Ok(42),
+    map: {
+        let mut m = HashMap::new();
+        m.insert("key1".to_string(), 10);
+        m.insert("key2".to_string(), 20);
+        m
+    },
+    tuple_data: (
+        vec!["a".to_string(), "b".to_string()],
+        "middle".to_string(),
+        Some(99),
+    ),
+};
+
+// Basic method calls
+assert_struct!(data, Data {
+    text.len(): 11,                    // String length
+    numbers.len(): 5,                  // Vector length
+    maybe_value.is_some(): true,       // Option state
+    result_value.is_ok(): true,        // Result state
+    map.len(): 2,                      // HashMap size
+    ..
+});
+
+// Method calls with comparison operators
+assert_struct!(data, Data {
+    text.len(): > 10,                  // Length greater than 10
+    numbers.len(): >= 5,               // At least 5 elements
+    map.len(): == 2,                   // Exactly 2 entries
+    ..
+});
+
+// Method calls with arguments
+assert_struct!(data, Data {
+    text.contains("world"): true,      // Contains substring
+    numbers.contains(&3): true,        // Contains element
+    map.contains_key("key1"): true,    // Has key
+    text.starts_with("hello"): true,   // Starts with prefix
+    ..
+});
+```
+
+#### Tuple Element Method Calls
+
+Use indexed syntax to call methods on specific tuple elements:
+
+```rust
+// Method calls on tuple elements
+assert_struct!(data, Data {
+    tuple_data: (
+        0.len(): 2,                    // First element (Vec) length
+        1.len(): 6,                    // Second element (String) length  
+        2.is_some(): true,             // Third element (Option) state
+    ),
+    ..
+});
+
+// With comparison operators
+assert_struct!(data, Data {
+    tuple_data: (
+        0.len(): < 5,                  // Vec has fewer than 5 elements
+        1.len(): > 5,                  // String longer than 5 chars
+        _,                             // Ignore third element
+    ),
+    ..
+});
+```
+
+#### Method Call Error Messages
+
+When method call assertions fail, error messages show the method call in the field path:
+
+```rust
+// This will fail and show method call in error
+assert_struct!(data, Data {
+    text.len(): 20,  // Expected 20, actual 11
+    ..
+});
+```
+
+Error output:
+```text
+assert_struct! failed:
+
+   | Data {
+comparison mismatch:
+  --> `data.text.len()` (line 15)
+   |     text.len(): 20,
+   |                 ^^ actual: 11
+   | }
+```
+
+The error clearly shows `data.text.len()` indicating the method call was applied to the field.
+
 ### Comparison and Equality Operators
 
 Perfect for range checks, threshold validations, and explicit equality tests:
@@ -706,6 +824,7 @@ assert_struct!(config, Config {
     database_url: Some(=~ r"^postgres://.*"),  // Regex in Option
     port: 8000..=9000,                         // Port in valid range
     features: [=~ r"auth", =~ r"log.*"],       // Feature validation
+    features.len(): >= 2,                      // Has at least 2 features
     timeouts: (< 10000, < 60000, < 20000),    // All timeouts reasonable
 });
 ```
