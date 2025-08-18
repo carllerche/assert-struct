@@ -436,16 +436,16 @@ fn parse_tuple_elements(input: ParseStream) -> Result<Vec<TupleElement>> {
         // First, try to parse operations (like * for deref)
         let operations = parse_element_operations(input)?;
 
-        // Check if this is an indexed element by looking for number followed by colon
+        // Check if this is an indexed element by looking for number followed by colon or method call
         let fork = input.fork();
         let is_indexed = if let Ok(_index_lit) = fork.parse::<syn::LitInt>() {
-            fork.peek(Token![:])
+            fork.peek(Token![:]) || fork.peek(Token![.])
         } else {
             false
         };
 
         if is_indexed {
-            // Parse indexed element: index: pattern or *index: pattern
+            // Parse indexed element: index: pattern, *index: pattern, or index.method(): pattern
             let index_lit: syn::LitInt = input.parse()?;
             let index: usize = index_lit.base10_parse()?;
 
@@ -457,12 +457,59 @@ fn parse_tuple_elements(input: ParseStream) -> Result<Vec<TupleElement>> {
                 ));
             }
 
+            // Check for method calls after the index: 0.len():
+            let final_operations = if input.peek(Token![.]) {
+                let _: Token![.] = input.parse()?;
+                let method_name: syn::Ident = input.parse()?;
+
+                // Check for method call parentheses
+                if input.peek(syn::token::Paren) {
+                    let args_content;
+                    syn::parenthesized!(args_content in input);
+
+                    // Parse method arguments
+                    let mut args = Vec::new();
+                    while !args_content.is_empty() {
+                        let arg: syn::Expr = args_content.parse()?;
+                        args.push(arg);
+
+                        // Break if no comma, otherwise consume it
+                        if !args_content.peek(Token![,]) {
+                            break;
+                        }
+                        let _: Token![,] = args_content.parse()?;
+                    }
+
+                    let method_op = FieldOperation::Method {
+                        name: method_name,
+                        args,
+                    };
+
+                    // Combine with existing deref operations if present
+                    if let Some(FieldOperation::Deref { count }) = operations {
+                        Some(FieldOperation::Combined {
+                            deref_count: count,
+                            operation: Box::new(method_op),
+                        })
+                    } else {
+                        Some(method_op)
+                    }
+                } else {
+                    return Err(syn::Error::new_spanned(
+                        method_name,
+                        "Method calls must include parentheses: .method()",
+                    ));
+                }
+            } else {
+                operations
+            };
+
             let _: Token![:] = input.parse()?;
             let pattern = parse_pattern(input)?;
 
             elements.push(TupleElement::Indexed {
                 index,
-                operations,
+                operations: final_operations,
                 pattern,
             });
         } else {
@@ -512,14 +559,57 @@ impl Parse for FieldAssertion {
 
         if deref_count > 0 {
             operations = Some(FieldOperation::Deref { count: deref_count });
-            // Debug: Add a compile error to verify parsing is working
-            // return Err(syn::Error::new(input.span(), format!("DEBUG: Found {} deref operations", deref_count)));
         }
 
+        // Parse field name and potential method calls manually using tokens
         let field_name: syn::Ident = input.parse()?;
 
-        // TODO: Handle method calls and nested field access after the field name
-        // This would involve looking for patterns like field.method() or field.nested
+        // Check for method calls: field.method()
+        if input.peek(Token![.]) {
+            let _: Token![.] = input.parse()?;
+            let method_name: syn::Ident = input.parse()?;
+
+            // Check for method call parentheses
+            if input.peek(syn::token::Paren) {
+                let args_content;
+                syn::parenthesized!(args_content in input);
+
+                // Parse method arguments
+                let mut args = Vec::new();
+                while !args_content.is_empty() {
+                    let arg: syn::Expr = args_content.parse()?;
+                    args.push(arg);
+
+                    // Break if no comma, otherwise consume it
+                    if !args_content.peek(Token![,]) {
+                        break;
+                    }
+                    let _: Token![,] = args_content.parse()?;
+                }
+
+                let method_op = FieldOperation::Method {
+                    name: method_name,
+                    args,
+                };
+
+                // Combine with existing deref operations if present
+                operations = if let Some(FieldOperation::Deref { count }) = operations {
+                    Some(FieldOperation::Combined {
+                        deref_count: count,
+                        operation: Box::new(method_op),
+                    })
+                } else {
+                    Some(method_op)
+                };
+            } else {
+                // This would be nested field access: field.nested
+                // For now, we'll treat this as an error since we're focusing on method calls
+                return Err(syn::Error::new_spanned(
+                    method_name,
+                    "Nested field access not yet supported. Use method calls with parentheses: .method()",
+                ));
+            }
+        }
 
         let _: Token![:] = input.parse()?;
         let pattern = parse_pattern(input)?;
@@ -573,6 +663,14 @@ fn check_for_special_syntax(content: ParseStream) -> bool {
     // Nested slice patterns like `Some([1, 2, 3])`
     if content.peek(syn::token::Bracket) {
         return true;
+    }
+
+    // Check for indexed elements and method calls: `0:`, `1.method():`
+    let fork = content.fork();
+    if let Ok(_index_lit) = fork.parse::<syn::LitInt>() {
+        if fork.peek(Token![:]) || fork.peek(Token![.]) {
+            return true;
+        }
     }
 
     // Nested struct/enum patterns like `Some(User { ... })`

@@ -268,33 +268,47 @@ impl fmt::Display for TupleElement {
                 pattern,
             } => {
                 if let Some(ops) = operations {
-                    // Show operations before the index
                     match ops {
                         FieldOperation::Deref { count } => {
+                            // Show deref operations before the index: *0:
                             for _ in 0..*count {
                                 write!(f, "*")?;
                             }
+                            write!(f, "{}: {}", index, pattern)
                         }
                         FieldOperation::Method { name, .. } => {
-                            write!(f, ".{}()", name)?;
+                            // Show method calls after the index: 0.len():
+                            write!(f, "{}.{}(): {}", index, name, pattern)
                         }
                         FieldOperation::Nested { fields } => {
+                            // Show nested access after the index: 0.field:
+                            write!(f, "{}", index)?;
                             for field in fields {
                                 write!(f, ".{}", field)?;
                             }
+                            write!(f, ": {}", pattern)
                         }
                         FieldOperation::Combined {
                             deref_count,
                             operation,
                         } => {
+                            // Show combined operations: *0.len():
                             for _ in 0..*deref_count {
                                 write!(f, "*")?;
                             }
-                            write!(f, "{}", operation)?;
+                            match operation.as_ref() {
+                                FieldOperation::Method { name, .. } => {
+                                    write!(f, "{}.{}(): {}", index, name, pattern)
+                                }
+                                _ => {
+                                    write!(f, "{}{}: {}", index, operation, pattern)
+                                }
+                            }
                         }
                     }
+                } else {
+                    write!(f, "{}: {}", index, pattern)
                 }
-                write!(f, "{}: {}", index, pattern)
             }
         }
     }
