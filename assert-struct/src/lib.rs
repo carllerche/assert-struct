@@ -1,12 +1,45 @@
-//! Ergonomic structural assertions for Rust tests with helpful error messages.
+//! # assert-struct: Ergonomic Structural Assertions
 //!
 //! `assert-struct` is a procedural macro that enables clean, readable assertions for complex
 //! data structures without verbose field-by-field comparisons. When assertions fail, it provides
 //! clear, actionable error messages showing exactly what went wrong, including field paths and
-//! expected vs actual values. It's the testing tool you need when `assert_eq!` isn't enough
-//! and manually comparing fields is too cumbersome.
+//! expected vs actual values.
 //!
-//! # Quick Example
+//! This comprehensive guide teaches you how to use `assert-struct` effectively in your tests.
+//! After reading this documentation, you'll be familiar with all capabilities and able to
+//! leverage the full power of structural assertions.
+//!
+//! # Table of Contents
+//!
+//! - [Quick Start](#quick-start)
+//! - [Core Concepts](#core-concepts)
+//!   - [Basic Assertions](#basic-assertions)
+//!   - [Partial Matching](#partial-matching)
+//!   - [Nested Structures](#nested-structures)
+//! - [Pattern Types](#pattern-types)
+//!   - [Comparison Operators](#comparison-operators)
+//!   - [Equality Operators](#equality-operators)
+//!   - [Range Patterns](#range-patterns)
+//!   - [Regex Patterns](#regex-patterns)
+//!   - [Method Call Patterns](#method-call-patterns)
+//! - [Data Types](#data-types)
+//!   - [Collections (Vec/Slice)](#collections-vecslice)
+//!   - [Tuples](#tuples)
+//!   - [Enums (Option/Result/Custom)](#enums-optionresultcustom)
+//!   - [Smart Pointers](#smart-pointers)
+//! - [Error Messages](#error-messages)
+//! - [Advanced Usage](#advanced-usage)
+//!
+//! # Quick Start
+//!
+//! Add to your `Cargo.toml`:
+//!
+//! ```toml
+//! [dev-dependencies]
+//! assert-struct = "0.1"
+//! ```
+//!
+//! Basic example:
 //!
 //! ```rust
 //! use assert_struct::assert_struct;
@@ -16,157 +49,23 @@
 //!     name: String,
 //!     age: u32,
 //!     email: String,
-//!     role: String,
 //! }
 //!
 //! let user = User {
 //!     name: "Alice".to_string(),
 //!     age: 30,
 //!     email: "alice@example.com".to_string(),
-//!     role: "admin".to_string(),
 //! };
 //!
 //! // Only check the fields you care about
 //! assert_struct!(user, User {
 //!     name: "Alice",
 //!     age: 30,
-//!     ..  // Ignore email and role
+//!     ..  // Ignore email
 //! });
 //! ```
 //!
-//! # Why assert-struct?
-//!
-//! Testing complex data structures in Rust often involves tedious boilerplate:
-//!
-//! ```rust
-//! # struct Response { user: User, status: Status }
-//! # struct User { id: String, profile: Profile }
-//! # struct Profile { age: u32, verified: bool }
-//! # struct Status { code: i32 }
-//! # let response = Response {
-//! #     user: User {
-//! #         id: "123".to_string(),
-//! #         profile: Profile { age: 25, verified: true }
-//! #     },
-//! #     status: Status { code: 200 }
-//! # };
-//! // Without assert-struct: verbose and hard to read
-//! assert_eq!(response.user.profile.age, 25);
-//! assert!(response.user.profile.verified);
-//! assert_eq!(response.status.code, 200);
-//! ```
-//!
-//! With `assert-struct`, the same test becomes clear and maintainable:
-//!
-//! ```rust
-//! # use assert_struct::assert_struct;
-//! # #[derive(Debug)]
-//! # struct Response { user: User, status: Status }
-//! # #[derive(Debug)]
-//! # struct User { id: String, profile: Profile }
-//! # #[derive(Debug)]
-//! # struct Profile { age: u32, verified: bool }
-//! # #[derive(Debug)]
-//! # struct Status { code: i32 }
-//! # let response = Response {
-//! #     user: User {
-//! #         id: "123".to_string(),
-//! #         profile: Profile { age: 25, verified: true }
-//! #     },
-//! #     status: Status { code: 200 }
-//! # };
-//! // With assert-struct: clean and intuitive
-//! assert_struct!(response, Response {
-//!     user: User {
-//!         profile: Profile {
-//!             age: 25,
-//!             verified: true,
-//!             ..
-//!         },
-//!         ..
-//!     },
-//!     status: Status { code: 200 },
-//! });
-//! ```
-//!
-//! # Overview
-//!
-//! `assert-struct` provides a single macro that transforms structural patterns into assertions.
-//! It excels at testing:
-//!
-//! - **API responses** - Verify JSON deserialization results
-//! - **Database queries** - Check returned records match expectations
-//! - **Complex state** - Assert on deeply nested application state
-//! - **Partial data** - Focus on relevant fields, ignore the rest
-//!
-//! The macro uses Rust's pattern matching syntax, making it feel natural and familiar. It generates
-//! efficient code that provides clear error messages when assertions fail.
-//!
-//! # Features
-//!
-//! ## Core Capabilities
-//!
-//! - **Helpful Error Messages** - Clear, actionable errors showing field paths, expected vs actual values
-//! - **Partial Matching** - Use `..` to check only the fields you care about
-//! - **Deep Nesting** - Assert on nested structs without manual field access chains
-//! - **String Literals** - Compare `String` fields directly with `"text"` literals
-//! - **Collections** - Assert on `Vec` fields with element-wise patterns `[> 0, < 10, == 5]`
-//! - **Tuples** - Full support for multi-field tuples with advanced patterns
-//! - **Enum Support** - Match on `Option`, `Result`, and custom enum variants
-//!
-//! ## Advanced Matchers
-//!
-//! - **Comparison Operators** - Use `<`, `<=`, `>`, `>=` for numeric field assertions
-//! - **Equality Operators** - Use `==` and `!=` for explicit equality/inequality checks
-//! - **Range Patterns** - Use `18..=65`, `0.0..100.0`, `0..` for range matching
-//! - **Regex Patterns** - Match string fields with regular expressions using `=~ r"pattern"`
-//! - **Advanced Enum Patterns** - Use comparison operators, ranges, and regex inside `Some()` and other variants
-//! - **Smart Pointer Dereferencing** - Use `*` to dereference `Box<T>`, `Rc<T>`, `Arc<T>` fields directly
-//! - **Method Call Patterns** - Use `field.method(): value` to call methods and assert on results
-//!
-//! # Helpful Error Messages
-//!
-//! When assertions fail, `assert-struct` provides detailed error messages that make debugging easy:
-//!
-//! ```rust,should_panic
-//! # use assert_struct::assert_struct;
-//! # #[derive(Debug)]
-//! # struct User { name: String, age: u32 }
-//! # let user = User { name: "Alice".to_string(), age: 25 };
-//! assert_struct!(user, User {
-//!     name: "Bob",  // This will fail
-//!     age: 25,
-//! });
-//! // Error output:
-//! // assert_struct! failed:
-//! //
-//! // value mismatch:
-//! //   --> `user.name` (src/lib.rs:120)
-//! //   actual: "Alice"
-//! //   expected: "Bob"
-//! ```
-//!
-//! For complex patterns, the error shows the exact pattern that failed:
-//!
-//! ```rust,should_panic
-//! # use assert_struct::assert_struct;
-//! # #[derive(Debug)]
-//! # struct Stats { score: u32, level: u32 }
-//! # let stats = Stats { score: 50, level: 3 };
-//! assert_struct!(stats, Stats {
-//!     score: > 100,  // This will fail
-//!     level: 3,
-//! });
-//! // Error output:
-//! // assert_struct! failed:
-//! //
-//! // comparison mismatch:
-//! //   --> `stats.score` (src/lib.rs:135)
-//! //   actual: 50
-//! //   expected: > 100
-//! ```
-//!
-//! # Usage
+//! # Core Concepts
 //!
 //! ## Basic Assertions
 //!
@@ -181,6 +80,23 @@
 //! assert_struct!(point, Point {
 //!     x: 10,
 //!     y: 20,
+//! });
+//! ```
+//!
+//! String fields work naturally with string literals:
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct Message { text: String, urgent: bool }
+//! let msg = Message {
+//!     text: "Hello world".to_string(),
+//!     urgent: false,
+//! };
+//!
+//! assert_struct!(msg, Message {
+//!     text: "Hello world",  // No .to_string() needed!
+//!     urgent: false,
 //! });
 //! ```
 //!
@@ -213,94 +129,170 @@
 //! ```rust
 //! # use assert_struct::assert_struct;
 //! # #[derive(Debug)]
-//! # struct Order { id: u64, customer: Customer, items: Vec<String> }
+//! # struct Order { customer: Customer, total: f64 }
 //! # #[derive(Debug)]
 //! # struct Customer { name: String, address: Address }
 //! # #[derive(Debug)]
 //! # struct Address { city: String, country: String }
 //! # let order = Order {
-//! #     id: 1001,
 //! #     customer: Customer {
 //! #         name: "Bob".to_string(),
-//! #         address: Address {
-//! #             city: "Paris".to_string(),
-//! #             country: "France".to_string(),
-//! #         }
+//! #         address: Address { city: "Paris".to_string(), country: "France".to_string() }
 //! #     },
-//! #     items: vec!["Book".to_string(), "Pen".to_string()],
+//! #     total: 99.99
 //! # };
 //! assert_struct!(order, Order {
 //!     customer: Customer {
+//!         name: "Bob",
 //!         address: Address {
 //!             city: "Paris",
 //!             country: "France",
 //!         },
+//!     },
+//!     total: 99.99,
+//! });
+//!
+//! // Or with partial matching
+//! assert_struct!(order, Order {
+//!     customer: Customer {
+//!         name: "Bob",
+//!         address: Address { city: "Paris", .. },
 //!         ..
 //!     },
 //!     ..
 //! });
 //! ```
 //!
-//! ## Option and Result Types
+//! # Pattern Types
 //!
-//! Native support for Rust's standard `Option` and `Result` types:
+//! ## Comparison Operators
+//!
+//! Use comparison operators for numeric assertions:
 //!
 //! ```rust
 //! # use assert_struct::assert_struct;
 //! # #[derive(Debug)]
-//! # struct UserProfile { name: String, age: Option<u32>, verified: Result<bool, String> }
-//! # let profile = UserProfile {
-//! #     name: "Alice".to_string(),
-//! #     age: Some(30),
-//! #     verified: Ok(true),
-//! # };
-//! assert_struct!(profile, UserProfile {
-//!     name: "Alice",
-//!     age: Some(30),
-//!     verified: Ok(true),
-//! });
-//!
-//! // Advanced patterns with Option
-//! assert_struct!(profile, UserProfile {
-//!     name: "Alice",
-//!     age: Some(>= 18),  // Adult check inside Some
-//!     verified: Ok(true),
+//! # struct Metrics { cpu: f64, memory: u64, requests: u32 }
+//! # let metrics = Metrics { cpu: 75.5, memory: 1024, requests: 150 };
+//! assert_struct!(metrics, Metrics {
+//!     cpu: < 80.0,          // Less than 80%
+//!     memory: <= 2048,      // At most 2GB
+//!     requests: > 100,      // More than 100
 //! });
 //! ```
 //!
-//! ## Custom Enums
+//! All comparison operators work: `<`, `<=`, `>`, `>=`
 //!
-//! Full support for custom enum types with all variant types:
+//! ## Equality Operators
+//!
+//! Use explicit equality for clarity:
 //!
 //! ```rust
 //! # use assert_struct::assert_struct;
-//! # #[derive(Debug, PartialEq)]
-//! # enum Status { Active, Pending { since: String } }
 //! # #[derive(Debug)]
-//! # struct Account { id: u32, status: Status }
+//! # struct Status { code: i32, active: bool }
+//! # let status = Status { code: 200, active: true };
+//! assert_struct!(status, Status {
+//!     code: == 200,         // Explicit equality
+//!     active: != false,     // Not equal to false
+//! });
+//! ```
+//!
+//! ## Range Patterns
+//!
+//! Use ranges for boundary checks:
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct Person { age: u32, score: f64 }
+//! # let person = Person { age: 25, score: 87.5 };
+//! assert_struct!(person, Person {
+//!     age: 18..=65,         // Working age range
+//!     score: 0.0..100.0,    // Valid score range
+//! });
+//! ```
+//!
+//! ## Regex Patterns
+//!
+//! Match string patterns with regular expressions (requires `regex` feature, enabled by default):
+//!
+//! ```rust
+//! # #[cfg(feature = "regex")]
+//! # {
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct Account { username: String, email: String }
 //! # let account = Account {
-//! #     id: 1,
-//! #     status: Status::Pending { since: "2024-01-01".to_string() },
+//! #     username: "alice_doe".to_string(),
+//! #     email: "alice@company.com".to_string(),
 //! # };
 //! assert_struct!(account, Account {
-//!     id: 1,
-//!     status: Status::Pending {
-//!         since: "2024-01-01",
-//!     },
+//!     username: =~ r"^[a-z_]+$",        // Lowercase and underscores
+//!     email: =~ r"@company\.com$",      // Company email domain
+//! });
+//! # }
+//! ```
+//!
+//! ## Method Call Patterns
+//!
+//! Call methods on fields and assert on their results:
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # use std::collections::HashMap;
+//! # #[derive(Debug)]
+//! # struct Data {
+//! #     content: String,
+//! #     items: Vec<i32>,
+//! #     metadata: Option<String>,
+//! #     cache: HashMap<String, i32>,
+//! # }
+//! # let mut map = HashMap::new();
+//! # map.insert("key1".to_string(), 42);
+//! # let data = Data {
+//! #     content: "hello world".to_string(),
+//! #     items: vec![1, 2, 3, 4, 5],
+//! #     metadata: Some("cached".to_string()),
+//! #     cache: map,
+//! # };
+//! assert_struct!(data, Data {
+//!     content.len(): 11,                    // String length
+//!     items.len(): >= 5,                    // Vector size check
+//!     metadata.is_some(): true,             // Option state
+//!     cache.contains_key("key1"): true,     // HashMap lookup
+//!     ..
 //! });
 //! ```
 //!
-//! ## Slices and Vectors
-//!
-//! Element-wise pattern matching for `Vec` fields:
+//! Method calls work with arguments too:
 //!
 //! ```rust
 //! # use assert_struct::assert_struct;
 //! # #[derive(Debug)]
-//! # struct Data {
-//! #     values: Vec<i32>,
-//! #     names: Vec<String>,
-//! # }
+//! # struct Text { content: String, other: String }
+//! # let text = Text { content: "hello world".to_string(), other: "test".to_string() };
+//! assert_struct!(text, Text {
+//!     content.starts_with("hello"): true,
+//!     ..
+//! });
+//!
+//! assert_struct!(text, Text {
+//!     content.contains("world"): true,
+//!     ..
+//! });
+//! ```
+//!
+//! # Data Types
+//!
+//! ## Collections (Vec/Slice)
+//!
+//! Element-wise pattern matching for vectors:
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct Data { values: Vec<i32>, names: Vec<String> }
 //! # let data = Data {
 //! #     values: vec![5, 15, 25],
 //! #     names: vec!["alice".to_string(), "bob".to_string()],
@@ -308,27 +300,44 @@
 //! // Exact matching
 //! assert_struct!(data, Data {
 //!     values: [5, 15, 25],
-//!     names: ["alice", "bob"],
+//!     names: ["alice", "bob"],  // String literals work in slices too!
 //! });
 //!
-//! // Comparison patterns for each element
+//! // Pattern matching for each element
 //! assert_struct!(data, Data {
-//!     values: [> 0, < 20, == 25],  // Different matcher for each element
+//!     values: [> 0, < 20, >= 25],    // Different pattern per element
 //!     names: ["alice", "bob"],
+//! });
+//! ```
+//!
+//! Partial slice matching:
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct Data { items: Vec<i32> }
+//! # let data = Data { items: vec![1, 2, 3, 4, 5] };
+//! assert_struct!(data, Data {
+//!     items: [1, 2, ..],      // First two elements, ignore rest
+//! });
+//!
+//! assert_struct!(data, Data {
+//!     items: [.., 4, 5],      // Last two elements
+//! });
+//!
+//! assert_struct!(data, Data {
+//!     items: [1, .., 5],      // First and last elements
 //! });
 //! ```
 //!
 //! ## Tuples
 //!
-//! Full support for multi-field tuples with advanced pattern matching:
+//! Full support for multi-field tuples:
 //!
 //! ```rust
 //! # use assert_struct::assert_struct;
 //! # #[derive(Debug)]
-//! # struct Data {
-//! #     point: (i32, i32),
-//! #     metadata: (String, u32, bool),
-//! # }
+//! # struct Data { point: (i32, i32), metadata: (String, u32, bool) }
 //! # let data = Data {
 //! #     point: (15, 25),
 //! #     metadata: ("info".to_string(), 100, true),
@@ -336,261 +345,212 @@
 //! // Basic tuple matching
 //! assert_struct!(data, Data {
 //!     point: (15, 25),
-//!     metadata: ("info", 100, true),  // String literals work!
+//!     metadata: ("info", 100, true),  // String literals work in tuples!
 //! });
 //!
-//! // Advanced patterns with comparisons
+//! // Advanced patterns
 //! assert_struct!(data, Data {
-//!     point: (> 10, < 30),  // Comparison operators in tuples
+//!     point: (> 10, < 30),           // Comparison operators
 //!     metadata: ("info", >= 50, true),
 //! });
 //! ```
 //!
-//! Tuples can also appear in enum variants:
+//! Tuple method calls:
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct Data { coords: (String, Vec<i32>) }
+//! # let data = Data {
+//! #     coords: ("location".to_string(), vec![1, 2, 3]),
+//! # };
+//! assert_struct!(data, Data {
+//!     coords: (0.len(): 8, 1.len(): 3),  // Method calls on tuple elements
+//! });
+//! ```
+//!
+//! ## Enums (Option/Result/Custom)
+//!
+//! ### Option Types
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct User { name: Option<String>, age: Option<u32> }
+//! # let user = User { name: Some("Alice".to_string()), age: Some(30) };
+//! assert_struct!(user, User {
+//!     name: Some("Alice"),
+//!     age: Some(30),
+//! });
+//!
+//! // Advanced patterns inside Option
+//! assert_struct!(user, User {
+//!     name: Some("Alice"),
+//!     age: Some(>= 18),      // Adult check inside Some
+//! });
+//! ```
+//!
+//! ### Result Types
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct Response { result: Result<String, String> }
+//! # let response = Response { result: Ok("success".to_string()) };
+//! assert_struct!(response, Response {
+//!     result: Ok("success"),
+//! });
+//!
+//! // Pattern matching inside Result
+//! # let response = Response { result: Ok("user123".to_string()) };
+//! assert_struct!(response, Response {
+//!     result: Ok(=~ r"^user\d+$"),  // Regex inside Ok
+//! });
+//! ```
+//!
+//! ### Custom Enums
 //!
 //! ```rust
 //! # use assert_struct::assert_struct;
 //! # #[derive(Debug, PartialEq)]
-//! # enum Event {
-//! #     Click(i32, i32),
-//! #     Drag(i32, i32, i32, i32),
-//! # }
+//! # enum Status { Active, Pending { since: String } }
 //! # #[derive(Debug)]
-//! # struct Log { event: Event }
-//! # let log = Log { event: Event::Drag(10, 20, 110, 120) };
-//! assert_struct!(log, Log {
-//!     event: Event::Drag(>= 0, >= 0, < 200, < 200),  // Comparisons in enum tuples
+//! # struct Account { status: Status }
+//! # let account = Account { status: Status::Pending { since: "2024-01-01".to_string() } };
+//! // Unit variants
+//! let active_account = Account { status: Status::Active };
+//! assert_struct!(active_account, Account {
+//!     status: Status::Active,
 //! });
-//! ```
 //!
-//! ## Comparison Operators
-//!
-//! Perfect for range checks and threshold validations:
-//!
-//! ```rust
-//! # use assert_struct::assert_struct;
-//! # #[derive(Debug)]
-//! # struct Metrics { cpu_usage: f64, memory_mb: u32, response_time_ms: u32 }
-//! # let metrics = Metrics { cpu_usage: 75.5, memory_mb: 1024, response_time_ms: 150 };
-//! assert_struct!(metrics, Metrics {
-//!     cpu_usage: < 80.0,        // Less than 80%
-//!     memory_mb: <= 2048,        // At most 2GB
-//!     response_time_ms: < 200,   // Under 200ms
-//! });
-//! ```
-//!
-//! ## Regex Patterns
-//!
-//! Validate string formats and patterns:
-//!
-//! ```rust
-//! # #[cfg(feature = "regex")]
-//! # {
-//! # use assert_struct::assert_struct;
-//! # #[derive(Debug)]
-//! # struct Account { username: String, user_id: String, email: String }
-//! # let account = Account {
-//! #     username: "alice_doe".to_string(),
-//! #     user_id: "usr_123456".to_string(),
-//! #     email: "alice@company.com".to_string(),
-//! # };
+//! // Struct variants with partial matching
 //! assert_struct!(account, Account {
-//!     username: =~ r"^[a-z_]+$",           // Lowercase letters and underscores
-//!     user_id: =~ r"^usr_\d{6}$",          // Specific ID format
-//!     email: =~ r"@company\.com$",         // Company email domain
+//!     status: Status::Pending { since: "2024-01-01" },
 //! });
-//! # }
 //! ```
 //!
-//! # Examples
+//! ## Smart Pointers
 //!
-//! ## Smart Pointer Dereferencing
+//! Dereference smart pointers directly in patterns:
 //!
 //! ```rust
 //! # use assert_struct::assert_struct;
 //! # use std::rc::Rc;
 //! # use std::sync::Arc;
-//! #[derive(Debug)]
-//! struct CacheData {
-//!     shared_config: Arc<String>,
-//!     cached_result: Box<i32>,
-//!     reference_count: Rc<u32>,
-//! }
-//!
-//! # let cache = CacheData {
-//! #     shared_config: Arc::new("production".to_string()),
-//! #     cached_result: Box::new(42),
-//! #     reference_count: Rc::new(5),
+//! # #[derive(Debug)]
+//! # struct Cache {
+//! #     data: Arc<String>,
+//! #     count: Box<i32>,
+//! #     shared: Rc<bool>,
+//! # }
+//! # let cache = Cache {
+//! #     data: Arc::new("cached".to_string()),
+//! #     count: Box::new(42),
+//! #     shared: Rc::new(true),
 //! # };
-//! // Test smart pointer contents directly
-//! assert_struct!(cache, CacheData {
-//!     *shared_config: "production",  // Dereference Arc<String>
-//!     *cached_result: > 40,          // Dereference Box<i32> with comparison
-//!     *reference_count: >= 1,        // Dereference Rc<u32> with comparison
+//! assert_struct!(cache, Cache {
+//!     *data: "cached",       // Dereference Arc<String>
+//!     *count: > 40,          // Dereference Box<i32> with comparison
+//!     *shared: true,         // Dereference Rc<bool>
 //! });
 //! ```
 //!
-//! ## Method Call Patterns
+//! Multiple dereferencing for nested pointers:
 //!
 //! ```rust
 //! # use assert_struct::assert_struct;
-//! # use std::collections::HashMap;
-//! #[derive(Debug)]
-//! struct DataService {
-//!     content: String,
-//!     items: Vec<i32>,
-//!     metadata: Option<String>,
-//!     cache: HashMap<String, i32>,
-//!     coordinates: (f64, f64),
-//!     text_data: (String, Vec<u8>),
-//! }
+//! # #[derive(Debug)]
+//! # struct Nested { value: Box<Box<i32>> }
+//! # let nested = Nested { value: Box::new(Box::new(42)) };
+//! assert_struct!(nested, Nested {
+//!     **value: 42,           // Double dereference
+//! });
+//! ```
 //!
-//! # let mut map = HashMap::new();
-//! # map.insert("key1".to_string(), 42);
-//! # let service = DataService {
-//! #     content: "hello world".to_string(),
-//! #     items: vec![1, 2, 3, 4, 5],
-//! #     metadata: Some("cached".to_string()),
-//! #     cache: map,
-//! #     coordinates: (10.5, 20.3),
-//! #     text_data: ("hello".to_string(), vec![1, 2, 3]),
+//! # Error Messages
+//!
+//! When assertions fail, `assert-struct` provides detailed, actionable error messages:
+//!
+//! ## Basic Mismatch
+//!
+//! ```rust,should_panic
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct User { name: String, age: u32 }
+//! # let user = User { name: "Alice".to_string(), age: 25 };
+//! assert_struct!(user, User {
+//!     name: "Bob",  // This will fail
+//!     age: 25,
+//! });
+//! // Error output:
+//! // assert_struct! failed:
+//! //
+//! // value mismatch:
+//! //   --> `user.name` (src/lib.rs:456)
+//! //   actual: "Alice"
+//! //   expected: "Bob"
+//! ```
+//!
+//! ## Comparison Failure
+//!
+//! ```rust,should_panic
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct Stats { score: u32 }
+//! # let stats = Stats { score: 50 };
+//! assert_struct!(stats, Stats {
+//!     score: > 100,  // This will fail
+//! });
+//! // Error output:
+//! // assert_struct! failed:
+//! //
+//! // comparison mismatch:
+//! //   --> `stats.score` (src/lib.rs:469)
+//! //   actual: 50
+//! //   expected: > 100
+//! ```
+//!
+//! ## Nested Field Errors
+//!
+//! Error messages show the exact path to the failing field, even in deeply nested structures.
+//! Method calls are also shown in the field path for clear debugging.
+//!
+//! # Advanced Usage
+//!
+//! ## Pattern Composition
+//!
+//! Combine multiple patterns for comprehensive assertions:
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct Complex {
+//! #     data: Option<Vec<i32>>,
+//! #     metadata: (String, u32),
+//! # }
+//! # let complex = Complex {
+//! #     data: Some(vec![1, 2, 3]),
+//! #     metadata: ("info".to_string(), 42),
 //! # };
-//! // Test method calls with various patterns
-//! assert_struct!(service, DataService {
-//!     content.len(): 11,                      // String length
-//!     items.len(): >= 5,                      // Vector size check
-//!     metadata.is_some(): true,               // Option state
-//!     cache.contains_key("key1"): true,       // HashMap lookup
-//!     text_data: (0.len(): 5, 1.len(): 3),    // Tuple element method calls
+//! assert_struct!(complex, Complex {
+//!     data: Some([> 0, > 1, > 2]),              // Option + Vec + comparisons
+//!     metadata: ("info", > 40),                 // Tuple + string + comparison
 //!     ..
 //! });
+//!
+//! // Verify data length separately
+//! assert_eq!(complex.data.as_ref().unwrap().len(), 3);
 //! ```
 //!
-//! ## Testing API Responses
+//! ## Real-World Testing Patterns
 //!
-//! ```rust
-//! # use assert_struct::assert_struct;
-//! #[derive(Debug)]
-//! struct ApiResponse {
-//!     status: String,
-//!     data: UserData,
-//!     timestamp: i64,
-//! }
+//! See the [examples directory](../../examples/) for comprehensive real-world examples including:
+//! - API response validation
+//! - Database record testing
+//! - Configuration validation
+//! - Event system testing
 //!
-//! #[derive(Debug)]
-//! struct UserData {
-//!     id: u64,
-//!     username: String,
-//!     permissions: Vec<String>,
-//! }
-//!
-//! # let response = ApiResponse {
-//! #     status: "success".to_string(),
-//! #     data: UserData {
-//! #         id: 42,
-//! #         username: "testuser".to_string(),
-//! #         permissions: vec!["read".to_string(), "write".to_string()],
-//! #     },
-//! #     timestamp: 1234567890,
-//! # };
-//! // After deserializing JSON response
-//! assert_struct!(response, ApiResponse {
-//!     status: "success",
-//!     data: UserData {
-//!         username: "testuser",
-//!         permissions: vec!["read".to_string(), "write".to_string()],
-//!         ..  // Don't check the generated ID
-//!     },
-//!     ..  // Don't check timestamp
-//! });
-//! ```
-//!
-//! ## Testing Database Records
-//!
-//! ```rust
-//! # use assert_struct::assert_struct;
-//! # #[derive(Debug)]
-//! # struct Product {
-//! #     id: u64,
-//! #     name: String,
-//! #     price: f64,
-//! #     stock: u32,
-//! #     category: String,
-//! # }
-//! # let product = Product {
-//! #     id: 1,
-//! #     name: "Laptop".to_string(),
-//! #     price: 999.99,
-//! #     stock: 15,
-//! #     category: "Electronics".to_string(),
-//! # };
-//! // After fetching from database
-//! assert_struct!(product, Product {
-//!     name: "Laptop",
-//!     price: > 500.0,      // Price above minimum
-//!     stock: > 0,          // In stock
-//!     category: "Electronics",
-//!     ..  // Ignore auto-generated ID
-//! });
-//! ```
-//!
-//! ## Testing State Changes
-//!
-//! ```rust
-//! # use assert_struct::assert_struct;
-//! # #[derive(Debug)]
-//! # struct GameState {
-//! #     score: u32,
-//! #     level: u32,
-//! #     player: Player,
-//! # }
-//! # #[derive(Debug)]
-//! # struct Player {
-//! #     health: u32,
-//! #     position: (i32, i32),
-//! #     inventory: Vec<String>,
-//! # }
-//! # let state = GameState {
-//! #     score: 1500,
-//! #     level: 3,
-//! #     player: Player {
-//! #         health: 75,
-//! #         position: (10, 20),
-//! #         inventory: vec!["sword".to_string(), "shield".to_string()],
-//! #     },
-//! # };
-//! // After game action
-//! assert_struct!(state, GameState {
-//!     score: >= 1000,      // Minimum score achieved
-//!     level: 3,            // Reached level 3
-//!     player: Player {
-//!         health: > 0,     // Still alive
-//!         inventory: vec!["sword".to_string(), "shield".to_string()],  // Has required items
-//!         ..  // Position doesn't matter
-//!     },
-//! });
-//! ```
-//!
-//! # Crate Features
-//!
-//! This crate has the following Cargo features:
-//!
-//! | Feature | Default | Description |
-//! |---------|---------|-------------|
-//! | `regex` | **Yes** | Enables regex pattern matching with the `=~ r"pattern"` syntax |
-//!
-//! To disable regex support (and avoid the regex dependency):
-//!
-//! ```toml
-//! [dependencies]
-//! assert-struct = { version = "0.1", default-features = false }
-//! ```
-//!
-//! # See Also
-//!
-//! - [`assert_struct!`] - The main macro reference documentation with complete syntax details
-//! - [GitHub Repository](https://github.com/carllerche/assert-struct) - Source code and issue tracking
-//! - [Examples](https://github.com/carllerche/assert-struct/tree/main/tests) - More usage examples
+//! For complete specification details, see the [`assert_struct!`] macro documentation.
 
 // Re-export the procedural macro
 pub use assert_struct_macros::assert_struct;

@@ -4,52 +4,26 @@
 [![Crates.io](https://img.shields.io/crates/v/assert-struct.svg)](https://crates.io/crates/assert-struct)
 [![Documentation](https://docs.rs/assert-struct/badge.svg)](https://docs.rs/assert-struct)
 
-Ergonomic structural assertions for Rust tests with helpful error messages. 
-`assert-struct` is a procedural macro that enables clean, readable assertions 
-for complex data structures without verbose field-by-field comparisons. When 
-assertions fail, it provides clear, actionable error messages showing exactly 
-what went wrong. It's the testing tool you need when `assert_eq!` isn't enough 
-and manually comparing fields is too cumbersome.
+Ergonomic structural assertions for Rust tests with helpful error messages.
 
-## Quick Example
+## What is assert-struct?
 
-```rust
-use assert_struct::assert_struct;
+`assert-struct` is a procedural macro that enables clean, readable assertions for complex data structures. Instead of verbose field-by-field comparisons, you can assert on nested structures with clear, maintainable syntax. When assertions fail, it provides precise error messages showing exactly what went wrong and where.
 
-#[derive(Debug)]
-struct User {
-    name: String,
-    age: u32,
-    email: String,
-    role: String,
-}
+## Why use assert-struct?
 
-let user = User {
-    name: "Alice".to_string(),
-    age: 30,
-    email: "alice@example.com".to_string(),
-    role: "admin".to_string(),
-};
-
-// Only check the fields you care about
-assert_struct!(user, User {
-    name: "Alice",
-    age: 30,
-    ..  // Ignore email and role
-});
-```
-
-## Why assert-struct?
-
-Testing complex data structures in Rust often involves tedious boilerplate:
+**The Problem**: Testing complex data structures in Rust is tedious and verbose:
 
 ```rust
-// Without assert-struct: verbose and hard to read
+// Verbose and hard to maintain
 assert_eq!(response.user.profile.age, 25);
 assert!(response.user.profile.verified);
 assert_eq!(response.status.code, 200);
+```
 
-// With assert-struct: clean and intuitive
+**The Solution**: Clean, structural assertions:
+
+```rust
 assert_struct!(response, Response {
     user: User {
         profile: Profile {
@@ -63,98 +37,34 @@ assert_struct!(response, Response {
 });
 ```
 
-## Features
+## When to use assert-struct?
 
-### Core Capabilities
+- **API Response Testing** - Validate JSON deserialization results
+- **Database Query Testing** - Check returned records match expectations  
+- **Complex State Validation** - Assert on deeply nested application state
+- **Partial Data Matching** - Focus on relevant fields, ignore the rest
 
-- **Helpful error messages** - Clear, actionable errors showing field paths, expected vs actual values
-- **Partial matching** - Use `..` to check only the fields you care about
-- **Deep nesting** - Assert on nested structs without manual field access chains
-- **String literals** - Compare `String` fields directly with `"text"` literals
-- **Collections** - Assert on `Vec` fields with element-wise patterns
-- **Tuples** - Full support for multi-field tuples with advanced patterns
-- **Enum support** - Match on `Option`, `Result`, and custom enum variants
+## Key Features
 
-### Advanced Matchers
+- **Partial matching** with `..` - check only the fields you care about
+- **Deep nesting** - assert on nested structs without field access chains
+- **Advanced matchers** - comparisons (`> 18`), ranges (`0..100`), regex (`=~ r"pattern"`)
+- **Method calls** - `field.len(): 5`, `field.is_some(): true`
+- **Collections** - element-wise patterns for `Vec` fields
+- **Enums & tuples** - full support for `Option`, `Result`, and custom types
+- **Smart pointers** - dereference `Box<T>`, `Rc<T>`, `Arc<T>` with `*field`
+- **Helpful errors** - precise error messages with field paths and context
 
-- **Comparison operators** - Use `<`, `<=`, `>`, `>=` for numeric field assertions
-- **Equality operators** - Use `==` and `!=` for explicit equality/inequality checks
-- **Range patterns** - Use `18..=65`, `0.0..100.0` for range matching
-- **Regex patterns** - Match string fields with regular expressions using `=~ r"pattern"`
-- **Slice patterns** - Element-wise patterns for `Vec` fields like `[> 0, < 10, == 5]`
-- **Advanced enum patterns** - Use comparison operators and regex inside `Some()` and other variants
-
-### Field Operations
-
-- **Smart pointer dereferencing** - Use `*` to dereference `Box<T>`, `Rc<T>`, `Arc<T>` fields
-- **Multiple dereferencing** - Use `**` for nested smart pointers like `Box<Box<T>>`
-- **Tuple dereferencing** - Use indexed syntax `*1:` to dereference tuple elements
-- **Method calls** - Use `field.method(): value` to call methods on fields and assert on the result
-- **Tuple element method calls** - Use `(0.method(): value, 1.method(): value)` to call methods on tuple elements
-
-## Helpful Error Messages
-
-When assertions fail, `assert-struct` provides clear, detailed error messages that show exactly what went wrong:
-
-### Before (using `assert_eq!`)
-```text
-thread 'test_name' panicked at tests/example.rs:17:5:
-assertion `left == right` failed
-  left: "Alice"
- right: "Bob"
-```
-
-### After (using `assert-struct`)
-```text
-assert_struct! failed:
-
-value mismatch:
-  --> `user.profile.name` (tests/example.rs:17)
-  actual: "Alice"
-  expected: "Bob"
-```
-
-The error messages include:
-- **Field path** - Shows exactly which field failed (e.g., `user.profile.name`)
-- **Location** - File name and line number where the assertion failed
-- **Actual vs Expected** - Clear comparison of values
-- **Pattern context** - Shows the pattern that didn't match (e.g., `> 30`, `=~ r"@example\.com$"`)
-
-### Complex Example
-
-```rust
-assert_struct!(response, Response {
-    user: User {
-        age: > 30,
-        email: =~ r"@company\.com$",
-        ..
-    },
-    ..
-});
-```
-
-Failure output:
-```text
-assert_struct! failed:
-
-comparison mismatch:
-  --> `response.user.age` (tests/api.rs:45)
-  actual: 25
-  expected: > 30
-```
-
-## Installation
+## Quick Start
 
 Add to your `Cargo.toml`:
 
 ```toml
-[dependencies]
-assert-struct = "0.1.0"
+[dev-dependencies]
+assert-struct = "0.1"
 ```
 
-## Usage
-
-### Basic Assertions
+Basic usage:
 
 ```rust
 use assert_struct::assert_struct;
@@ -163,892 +73,64 @@ use assert_struct::assert_struct;
 struct User {
     name: String,
     age: u32,
+    active: bool,
 }
 
 let user = User {
     name: "Alice".to_string(),
     age: 30,
+    active: true,
 };
 
-// Assert all fields (exhaustive)
+// Exact match
 assert_struct!(user, User {
     name: "Alice",
     age: 30,
+    active: true,
 });
-```
 
-### Partial Matching
-
-Use `..` to check only specific fields:
-
-```rust
+// Partial match with comparisons
 assert_struct!(user, User {
-    name: "Alice",
-    ..  // Don't check other fields
+    name: "Alice", 
+    age: >= 18,  // Adult check
+    ..           // Ignore other fields
 });
 ```
 
-### Nested Structures
+## Examples
 
-Assert on deeply nested structs without verbose field access:
+Common patterns:
 
 ```rust
-#[derive(Debug)]
-struct Address {
-    street: String,
-    city: String,
-    zip: u32,
-}
-
-#[derive(Debug)]
-struct Person {
-    name: String,
-    age: u32,
-    address: Address,
-}
-
-let person = Person {
-    name: "Bob".to_string(),
-    age: 25,
-    address: Address {
-        street: "123 Main St".to_string(),
-        city: "Springfield".to_string(),
-        zip: 12345,
-    },
-};
-
-assert_struct!(person, Person {
-    name: "Bob",
-    age: 25,
-    address: Address {
-        street: "123 Main St",
-        city: "Springfield",
-        zip: 12345,
-    },
+// Method calls
+assert_struct!(data, Data {
+    items.len(): > 0,
+    text.contains("hello"): true,
+    ..
 });
 
-// Or with partial matching on nested structs
-assert_struct!(person, Person {
-    name: "Bob",
-    address: Address {
-        city: "Springfield",
+// Collections
+assert_struct!(response, Response {
+    scores: [> 80.0, >= 90.0, < 100.0],
+    ..
+});
+
+// Enums and Options
+assert_struct!(result, Result {
+    user_data: Some(User {
+        age: >= 18,
+        verified: true,
         ..
-    },
+    }),
     ..
 });
-```
-
-### Collections
-
-Element-wise pattern matching for vectors:
-
-```rust
-#[derive(Debug)]
-struct Data {
-    values: Vec<u32>,
-    names: Vec<String>,
-}
-
-let data = Data {
-    values: vec![5, 15, 25],
-    names: vec!["alice".to_string(), "bob".to_string()],
-};
-
-// Exact matching
-assert_struct!(data, Data {
-    values: [5, 15, 25],
-    names: ["alice", "bob"],  // String literals work!
-});
-
-// Advanced patterns with comparison operators
-assert_struct!(data, Data {
-    values: [> 0, < 20, == 25],  // Different matcher for each element
-    names: ["alice", "bob"],
-});
-
-// Mixed patterns with ranges and regex
-#[derive(Debug)]
-struct Analytics {
-    scores: Vec<f64>,
-    user_agents: Vec<String>,
-    response_codes: Vec<u16>,
-}
-
-let analytics = Analytics {
-    scores: vec![85.5, 92.3, 78.9],
-    user_agents: vec![
-        "Mozilla/5.0 Chrome".to_string(),
-        "Mozilla/5.0 Firefox".to_string(),
-    ],
-    response_codes: vec![200, 201, 404],
-};
-
-assert_struct!(analytics, Analytics {
-    scores: [>= 80.0, > 90.0, 70.0..=80.0],  // Range patterns in slices
-    user_agents: [=~ r".*Chrome.*", =~ r".*Firefox.*"],  // Regex patterns
-    response_codes: [200, 201, >= 400],  // Mixed exact and comparison
-});
-
-// Nested collections with smart pointers
-#[derive(Debug)]
-struct Repository {
-    cached_results: Vec<Box<String>>,
-}
-
-let repo = Repository {
-    cached_results: vec![
-        Box::new("result1".to_string()),
-        Box::new("result2".to_string()),
-    ],
-};
-
-assert_struct!(repo, Repository {
-    cached_results: [*"result1", *"result2"],  // Dereference in slice patterns
-});
-```
-
-### Tuples
-
-Full support for multi-field tuples with advanced pattern matching:
-
-```rust
-#[derive(Debug)]
-struct Data {
-    point: (i32, i32),
-    metadata: (String, u32, bool),
-    nested: ((f64, f64), (String, bool)),
-}
-
-let data = Data {
-    point: (15, 25),
-    metadata: ("info".to_string(), 100, true),
-    nested: ((1.5, 2.5), ("test".to_string(), false)),
-};
-
-// Basic tuple matching
-assert_struct!(data, Data {
-    point: (15, 25),
-    metadata: ("info", 100, true),  // String literals work!
-    nested: ((1.5, 2.5), ("test", false)),  // Nested tuples!
-});
-
-// Advanced patterns with comparisons
-assert_struct!(data, Data {
-    point: (> 10, < 30),  // Comparison operators in tuples
-    metadata: ("info", >= 50, true),
-    nested: ((> 1.0, <= 3.0), ("test", false)),
-});
-
-// Enum tuple variants with multiple fields
-#[derive(Debug, PartialEq)]
-enum Event {
-    Click(i32, i32),
-    Drag(i32, i32, i32, i32),
-    Scroll(f64, String),
-}
-
-struct Log {
-    event: Event,
-}
-
-let log = Log {
-    event: Event::Drag(10, 20, 110, 120),
-};
-
-assert_struct!(log, Log {
-    event: Event::Drag(>= 0, >= 0, < 200, < 200),  // Comparisons in enum tuples
-});
-```
-
-### Regex Patterns
-
-Use `=~ r"pattern"` to match string fields against regular expressions:
-
-```rust
-#[derive(Debug)]
-struct User {
-    username: String,
-    email: String,
-}
-
-let user = User {
-    username: "user_123".to_string(),
-    email: "alice@example.com".to_string(),
-};
-
-assert_struct!(user, User {
-    username: =~ r"^user_\d+$",  // Must start with "user_" followed by digits
-    email: =~ r"^[^@]+@[^@]+\.[^@]+$",  // Basic email pattern
-});
-```
-
-Note: Regex support is enabled by default but can be disabled by turning off
-default features.
-
-### Advanced Pattern Matching with Like Trait
-
-The `Like` trait enables flexible pattern matching beyond simple equality. You can use regex patterns from variables, pre-compiled regex, or even implement custom matching logic:
-
-```rust
-use assert_struct::{assert_struct, Like};
-use regex::Regex;
-
-#[derive(Debug)]
-struct User {
-    email: String,
-    username: String,
-}
-
-let user = User {
-    email: "alice@example.com".to_string(),
-    username: "alice_doe".to_string(),
-};
-
-// Use pre-compiled regex for better performance
-let email_regex = Regex::new(r"^[^@]+@example\.com$").unwrap();
-assert_struct!(user, User {
-    email: =~ email_regex,
-    ..
-});
-
-// Use patterns from variables
-let username_pattern = r"^[a-z_]+$";
-assert_struct!(user, User {
-    username: =~ username_pattern,
-    ..
-});
-
-// Custom Like implementation
-struct DomainPattern {
-    domain: String,
-}
-
-impl Like<DomainPattern> for String {
-    fn like(&self, pattern: &DomainPattern) -> bool {
-        self.ends_with(&format!("@{}", pattern.domain))
-    }
-}
-
-let domain = DomainPattern { domain: "example.com".to_string() };
-assert_struct!(user, User {
-    email: =~ domain,
-    ..
-});
-
-### Option and Result Types
-
-Native support for Rust's standard `Option` and `Result` types:
-
-```rust
-#[derive(Debug)]
-struct UserProfile {
-    name: String,
-    age: Option<u32>,
-    email_verified: Result<bool, String>,
-}
-
-let profile = UserProfile {
-    name: "Alice".to_string(),
-    age: Some(30),
-    email_verified: Ok(true),
-};
-
-assert_struct!(profile, UserProfile {
-    name: "Alice",
-    age: Some(30),
-    email_verified: Ok(true),
-});
-
-// Advanced patterns with Option
-assert_struct!(profile, UserProfile {
-    name: "Alice",
-    age: Some(>= 18),  // Adult check inside Some
-    email_verified: Ok(true),
-});
-```
-
-### Custom Enums
-
-Full support for custom enum types with all variant types:
-
-```rust
-#[derive(Debug, PartialEq)]
-enum Status {
-    Active,
-    Inactive,
-    Pending { since: String },
-    Error { code: i32, message: String },
-}
-
-#[derive(Debug)]
-struct Account {
-    id: u32,
-    status: Status,
-}
-
-let account = Account {
-    id: 1,
-    status: Status::Pending {
-        since: "2024-01-01".to_string(),
-    },
-};
-
-assert_struct!(account, Account {
-    id: 1,
-    status: Status::Pending {
-        since: "2024-01-01",
-    },
-});
-
-// Partial matching on enum fields
-let error_account = Account {
-    id: 2,
-    status: Status::Error {
-        code: 500,
-        message: "Internal error".to_string(),
-    },
-};
-
-assert_struct!(error_account, Account {
-    id: 2,
-    status: Status::Error {
-        code: 500,
-        ..  // Ignore the message field
-    },
-});
-```
-
-### Smart Pointer Dereferencing
-
-When working with smart pointers like `Box<T>`, `Rc<T>`, or `Arc<T>`, you can use the `*` operator to dereference them directly in patterns:
-
-```rust
-use assert_struct::assert_struct;
-use std::rc::Rc;
-use std::sync::Arc;
-
-#[derive(Debug)]
-struct Data {
-    boxed_number: Box<i32>,
-    shared_text: Rc<String>,
-    atomic_flag: Arc<bool>,
-    mixed_tuple: (String, Box<i32>),
-}
-
-let data = Data {
-    boxed_number: Box::new(42),
-    shared_text: Rc::new("hello".to_string()),
-    atomic_flag: Arc::new(true),
-    mixed_tuple: ("test".to_string(), Box::new(99)),
-};
-
-// Basic dereferencing
-assert_struct!(data, Data {
-    *boxed_number: 42,           // Dereference Box<i32>
-    *shared_text: "hello",       // Dereference Rc<String>
-    *atomic_flag: true,          // Dereference Arc<bool>
-    ..
-});
-
-// Dereferencing with comparison operators
-assert_struct!(data, Data {
-    *boxed_number: > 40,         // Dereference and compare
-    *shared_text: =~ r"h.*o",    // Dereference and regex match
-    *atomic_flag: == true,       // Explicit equality after deref
-    ..
-});
-
-// Mixed tuple dereferencing with indexed syntax
-assert_struct!(data, Data {
-    mixed_tuple: ("test", *1: 99),  // *1: dereferences the second element
-    ..
-});
-
-// Multiple dereferencing for nested smart pointers
-#[derive(Debug)]
-struct NestedData {
-    nested_box: Box<Box<i32>>,
-}
-
-let nested = NestedData {
-    nested_box: Box::new(Box::new(42)),
-};
-
-assert_struct!(nested, NestedData {
-    **nested_box: 42,  // Double dereference
-});
-```
-
-#### Smart Pointer Error Messages
-
-Field operations are also shown in error messages for clear debugging:
-
-```rust
-// This will fail and show the dereferencing in the error path
-assert_struct!(data, Data {
-    *boxed_number: 100,  // Expected 100, actual 42
-    ..
-});
-```
-
-Error output:
-```text
-assert_struct! failed:
-
-   | Data {
-mismatch:
-  --> `data.*boxed_number` (line 15)
-   |     *boxed_number: 100,
-   |                    ^^^ actual: 42
-   | }
-```
-
-The error clearly shows `data.*boxed_number` indicating the dereferencing operation was applied.
-
-### Method Call Patterns
-
-Call methods on fields and assert on their results using the `field.method(): value` syntax. This is particularly useful for testing properties like length, emptiness, or content checks:
-
-```rust
-use assert_struct::assert_struct;
-use std::collections::HashMap;
-
-#[derive(Debug)]
-struct Data {
-    text: String,
-    numbers: Vec<i32>,
-    maybe_value: Option<String>,
-    result_value: Result<i32, String>,
-    map: HashMap<String, i32>,
-    tuple_data: (Vec<String>, String, Option<i32>),
-}
-
-let data = Data {
-    text: "hello world".to_string(),
-    numbers: vec![1, 2, 3, 4, 5],
-    maybe_value: Some("test".to_string()),
-    result_value: Ok(42),
-    map: {
-        let mut m = HashMap::new();
-        m.insert("key1".to_string(), 10);
-        m.insert("key2".to_string(), 20);
-        m
-    },
-    tuple_data: (
-        vec!["a".to_string(), "b".to_string()],
-        "middle".to_string(),
-        Some(99),
-    ),
-};
-
-// Basic method calls
-assert_struct!(data, Data {
-    text.len(): 11,                    // String length
-    numbers.len(): 5,                  // Vector length
-    maybe_value.is_some(): true,       // Option state
-    result_value.is_ok(): true,        // Result state
-    map.len(): 2,                      // HashMap size
-    ..
-});
-
-// Method calls with comparison operators
-assert_struct!(data, Data {
-    text.len(): > 10,                  // Length greater than 10
-    numbers.len(): >= 5,               // At least 5 elements
-    map.len(): == 2,                   // Exactly 2 entries
-    ..
-});
-
-// Method calls with arguments
-assert_struct!(data, Data {
-    text.contains("world"): true,      // Contains substring
-    numbers.contains(&3): true,        // Contains element
-    map.contains_key("key1"): true,    // Has key
-    text.starts_with("hello"): true,   // Starts with prefix
-    ..
-});
-```
-
-#### Tuple Element Method Calls
-
-Use indexed syntax to call methods on specific tuple elements:
-
-```rust
-// Method calls on tuple elements
-assert_struct!(data, Data {
-    tuple_data: (
-        0.len(): 2,                    // First element (Vec) length
-        1.len(): 6,                    // Second element (String) length  
-        2.is_some(): true,             // Third element (Option) state
-    ),
-    ..
-});
-
-// With comparison operators
-assert_struct!(data, Data {
-    tuple_data: (
-        0.len(): < 5,                  // Vec has fewer than 5 elements
-        1.len(): > 5,                  // String longer than 5 chars
-        _,                             // Ignore third element
-    ),
-    ..
-});
-```
-
-#### Method Call Error Messages
-
-When method call assertions fail, error messages show the method call in the field path:
-
-```rust
-// This will fail and show method call in error
-assert_struct!(data, Data {
-    text.len(): 20,  // Expected 20, actual 11
-    ..
-});
-```
-
-Error output:
-```text
-assert_struct! failed:
-
-   | Data {
-comparison mismatch:
-  --> `data.text.len()` (line 15)
-   |     text.len(): 20,
-   |                 ^^ actual: 11
-   | }
-```
-
-The error clearly shows `data.text.len()` indicating the method call was applied to the field.
-
-### Comparison and Equality Operators
-
-Perfect for range checks, threshold validations, and explicit equality tests:
-
-```rust
-#[derive(Debug)]
-struct Metrics {
-    cpu_usage: f64,
-    memory_mb: u32,
-    response_time_ms: u32,
-    status: String,
-}
-
-let metrics = Metrics {
-    cpu_usage: 75.5,
-    memory_mb: 1024,
-    response_time_ms: 150,
-    status: "ok".to_string(),
-};
-
-assert_struct!(metrics, Metrics {
-    cpu_usage: < 80.0,         // Less than 80%
-    memory_mb: <= 2048,         // At most 2GB
-    response_time_ms: < 200,    // Under 200ms
-    status: == "ok",            // Exact equality
-});
-
-// Inequality checks
-assert_struct!(metrics, Metrics {
-    status: != "error",         // Not equal to "error"
-    memory_mb: != 0,            // Not zero
-    ..
-});
-
-// Complex expressions
-fn get_threshold() -> f64 { 75.0 }
-
-assert_struct!(metrics, Metrics {
-    cpu_usage: < get_threshold() + 5.0,  // Function calls and arithmetic
-    memory_mb: >= config.min_memory,     // Field access
-    response_time_ms: < limits[2],       // Array indexing
-    ..
-});
-```
-
-## Cookbook: Common Patterns
-
-### Testing with Smart Pointers
-
-```rust
-use assert_struct::assert_struct;
-use std::rc::Rc;
-use std::sync::Arc;
-
-// Testing cached data structures
-#[derive(Debug)]
-struct Cache {
-    data: Arc<Vec<String>>,
-    metadata: Box<CacheMetadata>,
-}
-
-#[derive(Debug)]
-struct CacheMetadata {
-    hits: u64,
-    misses: u64,
-}
-
-let cache = Cache {
-    data: Arc::new(vec!["item1".to_string(), "item2".to_string()]),
-    metadata: Box::new(CacheMetadata { hits: 10, misses: 2 }),
-};
-
-assert_struct!(cache, Cache {
-    *data: ["item1", "item2"],      // Dereference Arc<Vec<String>>
-    *metadata: CacheMetadata {      // Dereference Box<CacheMetadata>
-        hits: >= 5,
-        misses: < 5,
-    },
-});
-```
-
-### Testing Configuration Objects
-
-```rust
-#[derive(Debug)]
-struct Config {
-    database_url: Option<String>,
-    port: u16,
-    features: Vec<String>,
-    timeouts: (u32, u32, u32),  // connect, read, write
-}
-
-let config = Config {
-    database_url: Some("postgres://localhost:5432/test".to_string()),
-    port: 8080,
-    features: vec!["auth".to_string(), "logging".to_string()],
-    timeouts: (5000, 30000, 10000),
-};
-
-assert_struct!(config, Config {
-    database_url: Some(=~ r"^postgres://.*"),  // Regex in Option
-    port: 8000..=9000,                         // Port in valid range
-    features: [=~ r"auth", =~ r"log.*"],       // Feature validation
-    features.len(): >= 2,                      // Has at least 2 features
-    timeouts: (< 10000, < 60000, < 20000),    // All timeouts reasonable
-});
-```
-
-### Testing Result Chains
-
-```rust
-#[derive(Debug)]
-struct ProcessingResult {
-    step1: Result<String, String>,
-    step2: Result<i32, String>,
-    step3: Result<bool, String>,
-}
-
-let result = ProcessingResult {
-    step1: Ok("processed".to_string()),
-    step2: Ok(42),
-    step3: Err("validation failed".to_string()),
-};
-
-assert_struct!(result, ProcessingResult {
-    step1: Ok(=~ r"process.*"),           // Success with pattern
-    step2: Ok(> 0),                      // Success with comparison
-    step3: Err(=~ r"validation.*"),      // Expected error with pattern
-});
-```
-
-### Testing Event Systems
-
-```rust
-#[derive(Debug, PartialEq)]
-enum Event {
-    Click { x: i32, y: i32 },
-    Scroll { delta: f64 },
-    KeyPress(char),
-    Resize(u32, u32),
-}
-
-#[derive(Debug)]
-struct EventLog {
-    events: Vec<Event>,
-    timestamps: Vec<u64>,
-}
-
-let log = EventLog {
-    events: vec![
-        Event::Click { x: 100, y: 200 },
-        Event::Scroll { delta: -5.0 },
-        Event::Resize(1920, 1080),
-    ],
-    timestamps: vec![1000, 1005, 1010],
-};
-
-assert_struct!(log, EventLog {
-    events: [
-        Event::Click { x: > 50, y: > 100 },     // Click in valid area
-        Event::Scroll { delta: < 0.0 },         // Scroll up
-        Event::Resize(>= 1000, >= 720),         // Minimum resolution
-    ],
-    timestamps: [>= 1000, >= 1000, >= 1000],   // All after start time
-});
-```
-
-### Testing Nested API Structures
-
-```rust
-#[derive(Debug)]
-struct ApiResponse {
-    meta: ResponseMeta,
-    data: UserProfile,
-    errors: Option<Vec<ApiError>>,
-}
-
-#[derive(Debug)]
-struct ResponseMeta {
-    status: u16,
-    request_id: String,
-    cache_hit: bool,
-}
-
-#[derive(Debug)]
-struct UserProfile {
-    id: u64,
-    settings: UserSettings,
-    preferences: Vec<String>,
-}
-
-#[derive(Debug)]
-struct UserSettings {
-    theme: String,
-    notifications: Box<NotificationSettings>,
-}
-
-#[derive(Debug)]
-struct NotificationSettings {
-    email: bool,
-    push: bool,
-}
-
-let response = ApiResponse {
-    meta: ResponseMeta {
-        status: 200,
-        request_id: "req_123456".to_string(),
-        cache_hit: true,
-    },
-    data: UserProfile {
-        id: 42,
-        settings: UserSettings {
-            theme: "dark".to_string(),
-            notifications: Box::new(NotificationSettings {
-                email: true,
-                push: false,
-            }),
-        },
-        preferences: vec!["privacy".to_string(), "performance".to_string()],
-    },
-    errors: None,
-};
-
-assert_struct!(response, ApiResponse {
-    meta: ResponseMeta {
-        status: 200..=299,                    // Success status
-        request_id: =~ r"^req_\w+$",         // Valid request ID format
-        cache_hit: true,
-    },
-    data: UserProfile {
-        id: > 0,                             // Valid user ID
-        settings: UserSettings {
-            theme: =~ r"^(light|dark)$",     // Valid theme
-            *notifications: NotificationSettings {  // Dereference Box
-                email: == true,              // Email notifications enabled
-                ..                           // Don't care about push
-            },
-        },
-        preferences: [=~ r"privacy", =~ r"perf.*"],  // Contains expected prefs
-    },
-    errors: None,                            // No errors
-});
-```
-
-## Real-World Examples
-
-### Testing API Responses
-
-```rust
-#[derive(Debug)]
-struct ApiResponse {
-    status: String,
-    data: UserData,
-    timestamp: i64,
-}
-
-// After deserializing JSON response
-assert_struct!(response, ApiResponse {
-    status: "success",
-    data: UserData {
-        username: "testuser",
-        permissions: vec!["read".to_string(), "write".to_string()],
-        ..  // Don't check the generated ID
-    },
-    ..  // Don't check timestamp
-});
-```
-
-### Testing Database Records
-
-```rust
-// After fetching from database
-assert_struct!(product, Product {
-    name: "Laptop",
-    price: > 500.0,      // Price above minimum
-    stock: > 0,          // In stock
-    category: "Electronics",
-    ..  // Ignore auto-generated ID
-});
-```
-
-### Testing State Changes
-
-```rust
-// After game action
-assert_struct!(state, GameState {
-    score: >= 1000,      // Minimum score achieved
-    level: 3,            // Reached level 3
-    player: Player {
-        health: > 0,     // Still alive
-        inventory: vec!["sword".to_string(), "shield".to_string()],  // Has required items
-        ..  // Position doesn't matter
-    },
-});
-```
-
-## Crate Features
-
-| Feature | Default | Description |
-|---------|---------|-------------|
-| `regex` | **Yes** | Enables regex pattern matching with the `=~ r"pattern"` syntax |
-
-To disable regex support (and avoid the regex dependency):
-
-```toml
-[dependencies]
-assert-struct = { version = "0.1", default-features = false }
 ```
 
 ## Documentation
 
-See the [full documentation](https://docs.rs/assert-struct) for:
-- Complete syntax reference
-- All supported matchers
-- Advanced usage patterns
-- Compilation error examples
-
-## Development
-
-```bash
-cargo test           # Run all tests
-cargo test --doc     # Test documentation examples
-cargo doc --open     # View local documentation
-```
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+- **[API Documentation](https://docs.rs/assert-struct)** - Complete API reference with examples
+- **[Examples Directory](examples/)** - Real-world usage examples
+- **Getting Started Guide** - See the main crate documentation
 
 ## License
 
