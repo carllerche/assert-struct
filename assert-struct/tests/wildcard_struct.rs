@@ -140,7 +140,6 @@ fn test_wildcard_partial_matching() {
 }
 
 #[test]
-#[should_panic(expected = "mismatch")]
 fn test_wildcard_struct_failure() {
     let data = Outer {
         inner: Inner {
@@ -150,13 +149,20 @@ fn test_wildcard_struct_failure() {
         count: 5,
     };
 
-    assert_struct!(data, _ {
-        inner: _ {
-            value: 20,  // This should fail
+    let message = std::panic::catch_unwind(|| {
+        assert_struct!(data, _ {
+            inner: _ {
+                value: 20,  // This should fail
+                ..
+            },
             ..
-        },
-        ..
-    });
+        });
+    })
+    .unwrap_err()
+    .downcast::<String>()
+    .unwrap();
+
+    insta::assert_snapshot!(message);
 }
 
 #[test]
