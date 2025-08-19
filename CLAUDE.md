@@ -26,6 +26,7 @@ Focus on clean design, good architecture, and comprehensive functionality rather
 ### Core Features (Implemented)
 - **Partial matching**: Check only the fields you care about with `..`
 - **Nested struct support**: Deep assertions without verbose field access chains
+- **Nested field access**: Direct access to nested fields `outer.inner.field: value`
 - **Comparison operators**: `<`, `<=`, `>`, `>=` for numeric assertions
 - **Equality operators**: `==`, `!=` for explicit equality checks
 - **Range patterns**: `18..=65`, `0.0..100.0` for range matching

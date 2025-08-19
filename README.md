@@ -109,6 +109,14 @@ assert_struct!(data, Data {
     ..
 });
 
+// Nested field access
+assert_struct!(company, Company {
+    info.name: "TechCorp",
+    info.address.city: "San Francisco",
+    info.address.zip: > 90000,
+    ..
+});
+
 // Collections
 assert_struct!(response, Response {
     scores: [> 80.0, >= 90.0, < 100.0],

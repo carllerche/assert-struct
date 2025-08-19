@@ -1,6 +1,7 @@
 use crate::{AssertStruct, ComparisonOp, FieldAssertion, FieldOperation, Pattern, TupleElement};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, quote_spanned};
+use std::collections::HashSet;
 use syn::{Expr, Token, punctuated::Punctuated, spanned::Spanned};
 
 pub fn expand(assert: &AssertStruct) -> TokenStream {
@@ -513,7 +514,21 @@ fn generate_struct_match_assertion_with_collection(
     }
 
     let struct_path = struct_path.as_ref().unwrap();
-    let field_names: Vec<_> = fields.iter().map(|f| &f.field_name).collect();
+
+    // For nested field access, we need to collect unique field names only
+    // If we have middle.inner.value and middle.count, we only want "middle" once
+    let mut unique_field_names = HashSet::new();
+    let field_names: Vec<_> = fields
+        .iter()
+        .filter_map(|f| {
+            if unique_field_names.insert(f.field_name.clone()) {
+                Some(&f.field_name)
+            } else {
+                None
+            }
+        })
+        .collect();
+
     let field_path_str = field_path.join(".");
 
     let rest_pattern = if rest {
@@ -571,7 +586,7 @@ fn generate_struct_match_assertion_with_collection(
                     FieldOperation::Deref { .. } => false, // Dereferencing removes reference level
                     FieldOperation::Method { .. } => false, // Method calls return owned values
                     FieldOperation::Combined { .. } => false, // Combined with deref also removes reference level
-                    FieldOperation::Nested { .. } => true, // Nested field access keeps reference level
+                    FieldOperation::Nested { .. } => false, // Nested field access auto-derefs to get field value
                 };
                 (expr, is_ref)
             } else {

@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/nested_field_access.rs
+expression: message
+---
+assert_struct! failed:
+
+   | Container {
+mismatch:
+  --> `container.data.score` (line 22)
+   |     score: > 50,
+   |            ^^^^ actual: 25
+   | }
