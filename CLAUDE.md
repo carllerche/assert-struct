@@ -20,7 +20,7 @@ Focus on clean design, good architecture, and comprehensive functionality rather
 2. **No Speculative Features**: Don't implement "nice to have" features without clear use cases. Examples of avoided complexity:
    - Utility types (CaseInsensitive, Prefix, Suffix) - users can implement these if needed
    - Complex pattern combinators (Vec for OR, tuples for AND) - adds complexity without proven value
-   - Wildcard patterns (Option as wildcard) - clever but unnecessary
+   - Option as wildcard pattern (using None to mean "any value") - clever but unnecessary
 3. **Performance Optimization**: Only optimize the common case (string literals compiled at macro expansion time), not every possible case.
 
 ### Core Features (Implemented)
@@ -37,15 +37,15 @@ Focus on clean design, good architecture, and comprehensive functionality rather
 - **Tuple support**: Multi-field tuples with advanced patterns `(> 10, < 30)`
 - **Method call patterns**: `field.method(): value` and `(0.method(): value, _)` for tuple elements
 - **Pattern composition**: Combine all features (e.g., `Some(> 30)`, `Event::Click(>= 0, < 100)`)
+- **Wildcard struct patterns**: Use `_` instead of type names to avoid imports `_ { field: value, .. }`
+- **Smart pointer dereferencing**: Direct pattern matching through `Box`, `Arc`, `Rc` with `*field: value`
 
-### NEW: Improved Error Messages (Phase 1 Complete)
+### Improved Error Messages
 - **Fancy error formatting**: Shows pattern context with precise failure location
 - **Pattern underlining**: Exact position of mismatch highlighted with `^^^^^`
 - **Field path tracking**: Full path to failing field (e.g., `user.profile.age`)
 - **Equality vs comparison**: Different formatting for `==` patterns showing expected value
 - **Zero runtime cost**: Pattern strings generated at compile time
-
-See IMPROVED_ERRORS_STATUS.md for implementation details and remaining work.
 
 ### Example Use Case
 ```rust
@@ -264,9 +264,8 @@ When implementing proc macros, prefer generating code that uses Rust's native sy
 - ✅ Different error types (comparison, equality, range, etc.)
 - ✅ Field path tracking through nested structures
 
-### Next Priorities
-See IMPROVED_ERRORS_STATUS.md for detailed list of remaining work:
-1. Multiple failure collection
-2. Slice diff format for literals
-3. More accurate pattern location tracking
-4. Enhanced error details (regex notes, Like trait messages)
+### Potential Future Improvements
+1. Multiple failure collection - show all failures at once instead of stopping at first
+2. Slice diff format for literals - better visualization of array/vec differences
+3. More accurate pattern location tracking - improved error underlining
+4. Enhanced error details - regex pattern notes, Like trait custom messages
