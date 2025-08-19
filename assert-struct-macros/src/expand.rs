@@ -456,21 +456,19 @@ fn generate_wildcard_struct_assertion_with_collection(
             let mut new_path = field_path.to_vec();
             new_path.push(field_name.to_string());
             
-            // Generate field access expression
-            // We need to determine if we should add & based on whether value_expr is already a reference
-            let field_access = if is_ref {
-                // value_expr is already a reference, so value_expr.field gives us a field value
-                // We need to take its reference for comparison
-                quote! { &(#value_expr).#field_name }
-            } else {
-                // value_expr is not a reference, so we need to reference the whole thing
-                quote! { &(#value_expr).#field_name }
-            };
-            
             // Apply operations if any and determine reference level
             let (accessed_value, is_ref_after) = if let Some(ops) = field_operations {
-                // When applying operations, we pass true since field_access is already a reference
-                let expr = apply_field_operations(&field_access, ops, true);
+                // For method calls, we need to access the field without taking a reference
+                // since the method call will operate on the field directly
+                let base_field_access = if is_ref {
+                    quote! { (#value_expr).#field_name }
+                } else {
+                    quote! { (#value_expr).#field_name }
+                };
+                
+                // Apply operations - pass false for in_ref_context since we're not taking a reference
+                let expr = apply_field_operations(&base_field_access, ops, false);
+                
                 // Operations change the reference level based on their type
                 let is_ref = match ops {
                     FieldOperation::Deref { .. } => false, // Dereferencing removes reference level
@@ -480,8 +478,17 @@ fn generate_wildcard_struct_assertion_with_collection(
                 };
                 (expr, is_ref)
             } else {
+                // No operations - we need a reference to the field for comparison
+                let field_access = if is_ref {
+                    // value_expr is already a reference, so value_expr.field gives us a field value
+                    // We need to take its reference for comparison
+                    quote! { &(#value_expr).#field_name }
+                } else {
+                    // value_expr is not a reference, so we need to reference the field
+                    quote! { &(#value_expr).#field_name }
+                };
                 // field_access is already a reference, so is_ref = true
-                (field_access.clone(), true)
+                (field_access, true)
             };
             
             // Recursively expand the pattern for this field

@@ -91,27 +91,26 @@ fn test_wildcard_with_comparisons() {
     });
 }
 
-// TODO: Fix method calls with wildcard patterns
-// #[test]
-// fn test_wildcard_with_method_calls() {
-//     let data = Outer {
-//         inner: Inner {
-//             value: 0,
-//             text: "hello world".to_string(),
-//         },
-//         count: 3,
-//     };
+#[test]
+fn test_wildcard_with_method_calls() {
+    let data = Outer {
+        inner: Inner {
+            value: 0,
+            text: "hello world".to_string(),
+        },
+        count: 3,
+    };
 
-//     assert_struct!(data, _ {
-//         inner: _ {
-//             text.len(): 11,
-//             text.contains("world"): true,
-//             ..
-//         },
-//         count: > 0,
-//         ..
-//     });
-// }
+    assert_struct!(data, _ {
+        inner: _ {
+            text.len(): 11,
+            text.contains("world"): true,
+            ..
+        },
+        count: > 0,
+        ..
+    });
+}
 
 #[test]
 fn test_wildcard_partial_matching() {
