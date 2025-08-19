@@ -456,8 +456,86 @@ fn parse_element_operations(input: ParseStream) -> Result<Option<FieldOperation>
     }
 }
 
-/// Parse method call syntax: .method_name(args...)
-/// Returns a FieldOperation::Method or FieldOperation::Combined if existing operations are present
+/// Parse field operations starting from the first field name
+/// Handles chained operations like .field, [index], .method(), etc.
+fn parse_field_operations(
+    input: ParseStream,
+    existing_operations: Option<FieldOperation>,
+) -> Result<FieldOperation> {
+    let mut operations = vec![];
+
+    // Continue parsing operations in the chain
+    while input.peek(Token![.]) || input.peek(syn::token::Bracket) {
+        if input.peek(syn::token::Bracket) {
+            // Parse index operation: [expr]
+            let content;
+            syn::bracketed!(content in input);
+            let index: syn::Expr = content.parse()?;
+            
+            operations.push(FieldOperation::Index { index });
+        } else if input.peek(Token![.]) {
+            // Parse method call or field access
+            let _: Token![.] = input.parse()?;
+            let next_name: syn::Ident = input.parse()?;
+
+            if input.peek(syn::token::Paren) {
+                // Method call
+                let args_content;
+                syn::parenthesized!(args_content in input);
+
+                let mut args = Vec::new();
+                while !args_content.is_empty() {
+                    let arg: syn::Expr = args_content.parse()?;
+                    args.push(arg);
+
+                    if !args_content.peek(Token![,]) {
+                        break;
+                    }
+                    let _: Token![,] = args_content.parse()?;
+                }
+
+                operations.push(FieldOperation::Method {
+                    name: next_name,
+                    args,
+                });
+            } else {
+                // Field access - collect consecutive fields into a Nested operation
+                let mut fields = vec![next_name];
+                
+                // Continue parsing dots and identifiers for nested access
+                while input.peek(Token![.]) && !input.peek2(syn::token::Paren) && !input.peek2(syn::token::Bracket) {
+                    let _: Token![.] = input.parse()?;
+                    let field: syn::Ident = input.parse()?;
+                    fields.push(field);
+                }
+                
+                operations.push(FieldOperation::Nested { fields });
+            }
+        }
+    }
+
+    // Build the final operation
+    let final_operation = if operations.len() == 1 {
+        operations.into_iter().next().unwrap()
+    } else if operations.is_empty() {
+        return Err(syn::Error::new(input.span(), "Expected field operations"));
+    } else {
+        FieldOperation::Chained { operations }
+    };
+
+    // Combine with existing operations if present
+    if let Some(FieldOperation::Deref { count }) = existing_operations {
+        Ok(FieldOperation::Combined {
+            deref_count: count,
+            operation: Box::new(final_operation),
+        })
+    } else {
+        Ok(final_operation)
+    }
+}
+
+/// Parse chained operations: .method_name(args...), .field, or [index]
+/// Returns a FieldOperation with appropriate chaining
 fn parse_method_call(
     input: ParseStream,
     existing_operations: Option<FieldOperation>,
@@ -465,8 +543,12 @@ fn parse_method_call(
     let _: Token![.] = input.parse()?;
     let method_name: syn::Ident = input.parse()?;
 
-    // Check for method call parentheses
+    // Start building a chain of operations
+    let mut operations = vec![];
+    
+    // Add the first field access or method call
     if input.peek(syn::token::Paren) {
+        // This is a method call: .method()
         let args_content;
         syn::parenthesized!(args_content in input);
 
@@ -483,43 +565,85 @@ fn parse_method_call(
             let _: Token![,] = args_content.parse()?;
         }
 
-        let method_op = FieldOperation::Method {
+        operations.push(FieldOperation::Method {
             name: method_name,
             args,
-        };
-
-        // Combine with existing operations if present
-        if let Some(FieldOperation::Deref { count }) = existing_operations {
-            Ok(FieldOperation::Combined {
-                deref_count: count,
-                operation: Box::new(method_op),
-            })
-        } else {
-            Ok(method_op)
-        }
+        });
     } else {
-        // This is nested field access: field.nested
-        // Start with the first nested field
+        // This starts nested field access: .field
         let mut fields = vec![method_name];
 
         // Continue parsing dots and identifiers for nested access
-        while input.peek(Token![.]) && !input.peek2(syn::token::Paren) {
+        while input.peek(Token![.]) && !input.peek2(syn::token::Paren) && !input.peek2(syn::token::Bracket) {
             let _: Token![.] = input.parse()?;
             let field: syn::Ident = input.parse()?;
             fields.push(field);
         }
 
-        let nested_op = FieldOperation::Nested { fields };
+        operations.push(FieldOperation::Nested { fields });
+    }
 
-        // Combine with existing operations if present
-        if let Some(FieldOperation::Deref { count }) = existing_operations {
-            Ok(FieldOperation::Combined {
-                deref_count: count,
-                operation: Box::new(nested_op),
-            })
-        } else {
-            Ok(nested_op)
+    // Continue parsing additional operations in the chain
+    while input.peek(Token![.]) || input.peek(syn::token::Bracket) {
+        if input.peek(syn::token::Bracket) {
+            // Parse index operation: [expr]
+            let content;
+            syn::bracketed!(content in input);
+            let index: syn::Expr = content.parse()?;
+            
+            operations.push(FieldOperation::Index { index });
+        } else if input.peek(Token![.]) {
+            // Parse additional method call or field access
+            let _: Token![.] = input.parse()?;
+            let next_name: syn::Ident = input.parse()?;
+
+            if input.peek(syn::token::Paren) {
+                // Method call
+                let args_content;
+                syn::parenthesized!(args_content in input);
+
+                let mut args = Vec::new();
+                while !args_content.is_empty() {
+                    let arg: syn::Expr = args_content.parse()?;
+                    args.push(arg);
+
+                    if !args_content.peek(Token![,]) {
+                        break;
+                    }
+                    let _: Token![,] = args_content.parse()?;
+                }
+
+                operations.push(FieldOperation::Method {
+                    name: next_name,
+                    args,
+                });
+            } else {
+                // Field access - we need to add this to the last Nested operation if it exists
+                if let Some(FieldOperation::Nested { fields }) = operations.last_mut() {
+                    fields.push(next_name);
+                } else {
+                    // Start a new nested operation
+                    operations.push(FieldOperation::Nested { fields: vec![next_name] });
+                }
+            }
         }
+    }
+
+    // Build the final operation
+    let final_operation = if operations.len() == 1 {
+        operations.into_iter().next().unwrap()
+    } else {
+        FieldOperation::Chained { operations }
+    };
+
+    // Combine with existing operations if present
+    if let Some(FieldOperation::Deref { count }) = existing_operations {
+        Ok(FieldOperation::Combined {
+            deref_count: count,
+            operation: Box::new(final_operation),
+        })
+    } else {
+        Ok(final_operation)
     }
 }
 
@@ -618,12 +742,12 @@ impl Parse for FieldAssertion {
             operations = Some(FieldOperation::Deref { count: deref_count });
         }
 
-        // Parse field name and potential method calls manually using tokens
+        // Parse field name and potential chained operations
         let field_name: syn::Ident = input.parse()?;
 
-        // Check for method calls: field.method()
-        if input.peek(Token![.]) {
-            operations = Some(parse_method_call(input, operations)?);
+        // Check for chained operations: field.method(), field.nested, field[index], etc.
+        if input.peek(Token![.]) || input.peek(syn::token::Bracket) {
+            operations = Some(parse_field_operations(input, operations)?);
         }
 
         let _: Token![:] = input.parse()?;
