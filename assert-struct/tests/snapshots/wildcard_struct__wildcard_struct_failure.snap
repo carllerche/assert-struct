@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/wildcard_struct.rs
+expression: message
+---
+assert_struct! failed:
+
+   | _ { ... _ {
+mismatch:
+  --> `data.inner.value` (line 154)
+   |     value: 20,
+   |            ^^ actual: 10
+   | } ... }

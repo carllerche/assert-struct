@@ -42,9 +42,10 @@ pub(crate) enum Pattern {
         expr: Expr,
     },
     // Struct pattern: User { name: \"Alice\", age: 30, .. }
+    // When path is None, it's a wildcard pattern: _ { name: \"Alice\", .. }
     Struct {
         node_id: usize,
-        path: syn::Path,
+        path: Option<syn::Path>, // None for wildcard patterns
         fields: Punctuated<FieldAssertion, Token![,]>,
         rest: bool,
     },
@@ -135,7 +136,11 @@ impl fmt::Display for Pattern {
             Pattern::Struct {
                 path, fields, rest, ..
             } => {
-                write!(f, "{} {{ ", path_to_string(path))?;
+                if let Some(p) = path {
+                    write!(f, "{} {{ ", path_to_string(p))?;
+                } else {
+                    write!(f, "_ {{ ")?;
+                }
                 for (i, field) in fields.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
@@ -383,6 +388,7 @@ impl fmt::Display for ComparisonOp {
 /// assert_struct!(expression, TypePattern);
 ///
 /// TypePattern ::= TypeName '{' FieldPatternList '}'
+///              | '_' '{' FieldPatternList '}'  // Wildcard pattern
 /// FieldPatternList ::= (FieldPattern ',')* ('..')?
 /// FieldPattern ::= FieldName ':' Pattern
 ///              | FieldName FieldOperation ':' Pattern  
@@ -449,6 +455,13 @@ impl fmt::Display for ComparisonOp {
 /// | **Unit Variant** | `field: EnumType::Variant` | Match unit enum variant | Enum with unit variant |
 /// | **Tuple Variant** | `field: EnumType::Variant(patterns...)` | Match tuple enum variant | Enum with tuple variant |
 /// | **Struct Variant** | `field: EnumType::Variant { fields... }` | Match struct enum variant | Enum with struct variant |
+///
+/// ## Wildcard Struct Patterns
+///
+/// | Pattern | Syntax | Description | Constraints |
+/// |---------|--------|-------------|-------------|
+/// | **Wildcard Struct** | `value: _ { fields... }` | Match struct without naming type | Must use `..` for partial matching |
+/// | **Nested Wildcard** | `_ { field: _ { ... }, .. }` | Nested anonymous structs | Avoids importing nested types |
 ///
 /// ## Collection Patterns
 ///

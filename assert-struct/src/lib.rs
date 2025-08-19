@@ -467,6 +467,75 @@
 //! });
 //! ```
 //!
+//! ## Wildcard Patterns
+//!
+//! Use wildcard patterns (`_`) to avoid importing types while still asserting on their structure:
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # mod api {
+//! #     #[derive(Debug)]
+//! #     pub struct Response {
+//! #         pub user: User,
+//! #         pub metadata: Metadata,
+//! #     }
+//! #     #[derive(Debug)]
+//! #     pub struct User {
+//! #         pub id: u32,
+//! #         pub name: String,
+//! #     }
+//! #     #[derive(Debug)]
+//! #     pub struct Metadata {
+//! #         pub timestamp: u64,
+//! #         pub version: String,
+//! #     }
+//! # }
+//! # let response = api::Response {
+//! #     user: api::User { id: 123, name: "Alice".to_string() },
+//! #     metadata: api::Metadata { timestamp: 1234567890, version: "1.0".to_string() }
+//! # };
+//! // No need to import User or Metadata types!
+//! assert_struct!(response, _ {
+//!     user: _ {
+//!         id: 123,
+//!         name: "Alice",
+//!         ..
+//!     },
+//!     metadata: _ {
+//!         version: "1.0",
+//!         ..  // Ignore other metadata fields
+//!     },
+//!     ..
+//! });
+//! ```
+//!
+//! This is particularly useful when testing API responses where you don't want to import all the nested types:
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct JsonResponse { data: Data }
+//! # #[derive(Debug)]
+//! # struct Data { items: Vec<Item>, total: u32 }
+//! # #[derive(Debug)]
+//! # struct Item { id: u32, value: String }
+//! # let json_response = JsonResponse {
+//! #     data: Data {
+//! #         items: vec![Item { id: 1, value: "test".to_string() }],
+//! #         total: 1
+//! #     }
+//! # };
+//! // Test deeply nested structures without imports
+//! assert_struct!(json_response, _ {
+//!     data: _ {
+//!         items: [_ { id: 1, value: "test", .. }],
+//!         total: 1,
+//!         ..
+//!     },
+//!     ..
+//! });
+//! ```
+//!
 //! # Error Messages
 //!
 //! When assertions fail, `assert-struct` provides detailed, actionable error messages:
