@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/nested_field_access.rs
+expression: message
+---
+assert_struct! failed:
+
+   | Outer {
+mismatch:
+  --> `data.inner.value` (line 22)
+   |     value: 100,
+   |            ^^^ actual: 42
+   | }

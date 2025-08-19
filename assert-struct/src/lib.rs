@@ -161,6 +161,15 @@
 //!     },
 //!     ..
 //! });
+//!
+//! // Direct nested field access (no need to nest structs)
+//! assert_struct!(order, Order {
+//!     customer.name: "Bob",
+//!     customer.address.city: "Paris",
+//!     customer.address.country: "France",
+//!     total: > 50.0,
+//!     ..
+//! });
 //! ```
 //!
 //! # Pattern Types

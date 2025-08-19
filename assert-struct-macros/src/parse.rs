@@ -498,12 +498,28 @@ fn parse_method_call(
             Ok(method_op)
         }
     } else {
-        // This would be nested field access: field.nested
-        // For now, we'll treat this as an error since we're focusing on method calls
-        Err(syn::Error::new_spanned(
-            method_name,
-            "Nested field access not yet supported. Use method calls with parentheses: .method()",
-        ))
+        // This is nested field access: field.nested
+        // Start with the first nested field
+        let mut fields = vec![method_name];
+
+        // Continue parsing dots and identifiers for nested access
+        while input.peek(Token![.]) && !input.peek2(syn::token::Paren) {
+            let _: Token![.] = input.parse()?;
+            let field: syn::Ident = input.parse()?;
+            fields.push(field);
+        }
+
+        let nested_op = FieldOperation::Nested { fields };
+
+        // Combine with existing operations if present
+        if let Some(FieldOperation::Deref { count }) = existing_operations {
+            Ok(FieldOperation::Combined {
+                deref_count: count,
+                operation: Box::new(nested_op),
+            })
+        } else {
+            Ok(nested_op)
+        }
     }
 }
 
