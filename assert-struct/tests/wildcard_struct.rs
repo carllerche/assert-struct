@@ -198,8 +198,11 @@ fn test_normal_struct_pattern_still_works() {
     };
 
     // Traditional pattern with type name
-    assert_struct!(data, Inner {
-        value: 100,
-        text: "normal",
-    });
+    assert_struct!(
+        data,
+        Inner {
+            value: 100,
+            text: "normal",
+        }
+    );
 }

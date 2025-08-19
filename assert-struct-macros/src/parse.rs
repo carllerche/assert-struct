@@ -122,26 +122,26 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
     if input.peek(Token![_]) {
         let fork = input.fork();
         let _: Token![_] = fork.parse()?;
-        
+
         // Check if this is a wildcard struct pattern: `_ { ... }`
         if fork.peek(syn::token::Brace) {
             let _: Token![_] = input.parse()?;
             let content;
             syn::braced!(content in input);
             let expected: Expected = content.parse()?;
-            
+
             // Wildcard struct patterns must use rest pattern (..)
             // to indicate partial matching
             if !expected.rest {
                 return Err(syn::Error::new_spanned(
                     quote! { _ },
-                    "Wildcard struct patterns must use '..' for partial matching"
+                    "Wildcard struct patterns must use '..' for partial matching",
                 ));
             }
-            
+
             return Ok(Pattern::Struct {
                 node_id: next_node_id(),
-                path: None,  // None indicates wildcard
+                path: None, // None indicates wildcard
                 fields: expected.fields,
                 rest: expected.rest,
             });

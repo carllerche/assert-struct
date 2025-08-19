@@ -45,7 +45,7 @@ pub(crate) enum Pattern {
     // When path is None, it's a wildcard pattern: _ { name: \"Alice\", .. }
     Struct {
         node_id: usize,
-        path: Option<syn::Path>,  // None for wildcard patterns
+        path: Option<syn::Path>, // None for wildcard patterns
         fields: Punctuated<FieldAssertion, Token![,]>,
         rest: bool,
     },

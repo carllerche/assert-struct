@@ -239,7 +239,7 @@ fn generate_pattern_nodes(
             let name_str = if let Some(p) = path {
                 quote! { #p }.to_string().replace(" :: ", "::")
             } else {
-                "_".to_string()  // Use "_" for wildcard struct patterns
+                "_".to_string() // Use "_" for wildcard struct patterns
             };
 
             let field_entries: Vec<TokenStream> = fields
@@ -307,7 +307,7 @@ fn generate_pattern_assertion_with_collection(
             ..
         } => generate_struct_match_assertion_with_collection(
             value_expr,
-            struct_path,  // Now passing &Option<syn::Path>
+            struct_path, // Now passing &Option<syn::Path>
             fields,
             *rest,
             is_ref,
@@ -451,20 +451,20 @@ fn generate_wildcard_struct_assertion_with_collection(
             let field_name = &f.field_name;
             let field_pattern = &f.pattern;
             let field_operations = &f.operations;
-            
-            // Build path for this field 
+
+            // Build path for this field
             let mut new_path = field_path.to_vec();
             new_path.push(field_name.to_string());
-            
+
             // Apply operations if any and determine reference level
             let (accessed_value, is_ref_after) = if let Some(ops) = field_operations {
                 // For method calls, we need to access the field without taking a reference
                 // since the method call will operate on the field directly
                 let base_field_access = quote! { (#value_expr).#field_name };
-                
+
                 // Apply operations - pass false for in_ref_context since we're not taking a reference
                 let expr = apply_field_operations(&base_field_access, ops, false);
-                
+
                 // Operations change the reference level based on their type
                 let is_ref = match ops {
                     FieldOperation::Deref { .. } => false, // Dereferencing removes reference level
@@ -479,17 +479,17 @@ fn generate_wildcard_struct_assertion_with_collection(
                 // field_access is already a reference, so is_ref = true
                 (field_access, true)
             };
-            
+
             // Recursively expand the pattern for this field
             generate_pattern_assertion_with_collection(
                 &accessed_value,
                 field_pattern,
-                is_ref_after, 
+                is_ref_after,
                 &new_path,
             )
         })
         .collect();
-    
+
     quote! {
         #(#field_assertions)*
     }
@@ -508,14 +508,10 @@ fn generate_struct_match_assertion_with_collection(
     // If struct_path is None, it's a wildcard pattern - use field access
     if struct_path.is_none() {
         return generate_wildcard_struct_assertion_with_collection(
-            value_expr,
-            fields,
-            is_ref,
-            field_path,
-            node_ident,
+            value_expr, fields, is_ref, field_path, node_ident,
         );
     }
-    
+
     let struct_path = struct_path.as_ref().unwrap();
     let field_names: Vec<_> = fields.iter().map(|f| &f.field_name).collect();
     let field_path_str = field_path.join(".");
@@ -920,7 +916,7 @@ fn pattern_to_string(pattern: &Pattern) -> String {
             } else {
                 "_ { .. }".to_string()
             }
-        },
+        }
         Pattern::Tuple { path, elements, .. } => {
             if let Some(p) = path {
                 if elements.is_empty() {
