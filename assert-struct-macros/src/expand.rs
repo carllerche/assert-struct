@@ -441,7 +441,7 @@ fn generate_pattern_assertion_with_collection(
 fn generate_wildcard_struct_assertion_with_collection(
     value_expr: &TokenStream,
     fields: &Punctuated<FieldAssertion, Token![,]>,
-    is_ref: bool,
+    _is_ref: bool,
     field_path: &[String],
     _node_ident: &Ident,
 ) -> TokenStream {
@@ -460,11 +460,7 @@ fn generate_wildcard_struct_assertion_with_collection(
             let (accessed_value, is_ref_after) = if let Some(ops) = field_operations {
                 // For method calls, we need to access the field without taking a reference
                 // since the method call will operate on the field directly
-                let base_field_access = if is_ref {
-                    quote! { (#value_expr).#field_name }
-                } else {
-                    quote! { (#value_expr).#field_name }
-                };
+                let base_field_access = quote! { (#value_expr).#field_name };
                 
                 // Apply operations - pass false for in_ref_context since we're not taking a reference
                 let expr = apply_field_operations(&base_field_access, ops, false);
@@ -479,14 +475,7 @@ fn generate_wildcard_struct_assertion_with_collection(
                 (expr, is_ref)
             } else {
                 // No operations - we need a reference to the field for comparison
-                let field_access = if is_ref {
-                    // value_expr is already a reference, so value_expr.field gives us a field value
-                    // We need to take its reference for comparison
-                    quote! { &(#value_expr).#field_name }
-                } else {
-                    // value_expr is not a reference, so we need to reference the field
-                    quote! { &(#value_expr).#field_name }
-                };
+                let field_access = quote! { &(#value_expr).#field_name };
                 // field_access is already a reference, so is_ref = true
                 (field_access, true)
             };
