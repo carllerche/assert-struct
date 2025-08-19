@@ -7,6 +7,7 @@ struct Container {
     value: Option<(u32, String, bool)>,
 }
 
+#[allow(clippy::double_parens)]
 pub fn test_case() {
     let container = Container {
         id: 4,

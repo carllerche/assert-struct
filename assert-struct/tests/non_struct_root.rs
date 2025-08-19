@@ -86,6 +86,7 @@ fn test_result_with_slice_at_root() {
 }
 
 #[test]
+#[allow(clippy::double_parens)]
 fn test_nested_pattern_at_root() {
     // Simple nested patterns work
     let simple = Some((10, 20));
