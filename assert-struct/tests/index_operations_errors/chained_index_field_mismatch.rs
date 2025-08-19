@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![allow(clippy::cmp_owned)] // Generated macro code compares owned strings which is correct
 use assert_struct::assert_struct;
 
 #[derive(Debug)]

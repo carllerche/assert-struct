@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/index_operations.rs
+expression: message
+---
+assert_struct! failed:
+
+   | Data {
+mismatch:
+  --> `data.items[0].tags[0]` (line 24)
+   |     tags[0]: "python",
+   |              ^^^^^^^^ actual: "rust"
+   | }

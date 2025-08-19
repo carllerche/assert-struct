@@ -1,0 +1,12 @@
+---
+source: assert-struct/tests/index_operations.rs
+expression: message
+---
+assert_struct! failed:
+
+   | Data {
+mismatch:
+  --> `data.values[1]` (line 15)
+   |     values[1]: > 20,
+   |                ^^^^ actual: 15
+   | }
