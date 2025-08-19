@@ -23,7 +23,11 @@ struct Item {
 fn test_basic_index_operations() {
     let data = Data {
         values: vec![10, 20, 30],
-        names: vec!["alice".to_string(), "bob".to_string(), "charlie".to_string()],
+        names: vec![
+            "alice".to_string(),
+            "bob".to_string(),
+            "charlie".to_string(),
+        ],
         matrix: vec![vec![1, 2], vec![3, 4], vec![5, 6]],
     };
 
@@ -167,7 +171,19 @@ fn test_index_with_expressions() {
 // Error message tests using the error_message_test! macro
 mod util;
 
-error_message_test!("index_operations_errors/index_value_mismatch.rs", index_value_mismatch);
-error_message_test!("index_operations_errors/nested_index_mismatch.rs", nested_index_mismatch);
-error_message_test!("index_operations_errors/index_comparison_failure.rs", index_comparison_failure);
-error_message_test!("index_operations_errors/chained_index_field_mismatch.rs", chained_index_field_mismatch);
+error_message_test!(
+    "index_operations_errors/index_value_mismatch.rs",
+    index_value_mismatch
+);
+error_message_test!(
+    "index_operations_errors/nested_index_mismatch.rs",
+    nested_index_mismatch
+);
+error_message_test!(
+    "index_operations_errors/index_comparison_failure.rs",
+    index_comparison_failure
+);
+error_message_test!(
+    "index_operations_errors/chained_index_field_mismatch.rs",
+    chained_index_field_mismatch
+);

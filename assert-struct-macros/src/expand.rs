@@ -745,12 +745,13 @@ fn field_operation_returns_reference(operation: &FieldOperation) -> bool {
     match operation {
         FieldOperation::Deref { .. } => false, // Dereferencing removes reference level
         FieldOperation::Method { .. } => false, // Method calls return owned values
-        FieldOperation::Nested { .. } => true, // Nested field access keeps reference level  
-        FieldOperation::Index { .. } => true, // Index operations return references to elements
+        FieldOperation::Nested { .. } => true, // Nested field access keeps reference level
+        FieldOperation::Index { .. } => true,  // Index operations return references to elements
         FieldOperation::Combined { .. } => false, // Combined with deref also removes reference level
         FieldOperation::Chained { operations } => {
             // For chained operations, the reference level is determined by the last operation
-            operations.last()
+            operations
+                .last()
                 .map(field_operation_returns_reference)
                 .unwrap_or(false)
         }
@@ -966,9 +967,9 @@ fn generate_comparison_assertion_with_collection(
 
     // Check if this is an index operation by looking at the path
     // Exclude slice patterns which start with [
-    let is_index_operation = path.iter().any(|segment| {
-        segment.contains("[") && !segment.starts_with("[")
-    });
+    let is_index_operation = path
+        .iter()
+        .any(|segment| segment.contains("[") && !segment.starts_with("["));
 
     // Adjust for reference level
     let actual_expr = if is_ref {
@@ -1243,9 +1244,9 @@ fn generate_simple_assertion_with_collection(
 
     // Check if this is an index operation by looking at the path
     // Exclude slice patterns which start with [
-    let is_index_operation = path.iter().any(|segment| {
-        segment.contains("[") && !segment.starts_with("[")
-    });
+    let is_index_operation = path
+        .iter()
+        .any(|segment| segment.contains("[") && !segment.starts_with("["));
 
     let span = expected.span();
     if is_index_operation {

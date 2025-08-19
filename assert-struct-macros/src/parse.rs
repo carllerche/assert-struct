@@ -471,7 +471,7 @@ fn parse_field_operations(
             let content;
             syn::bracketed!(content in input);
             let index: syn::Expr = content.parse()?;
-            
+
             operations.push(FieldOperation::Index { index });
         } else if input.peek(Token![.]) {
             // Parse method call or field access
@@ -501,14 +501,17 @@ fn parse_field_operations(
             } else {
                 // Field access - collect consecutive fields into a Nested operation
                 let mut fields = vec![next_name];
-                
+
                 // Continue parsing dots and identifiers for nested access
-                while input.peek(Token![.]) && !input.peek2(syn::token::Paren) && !input.peek2(syn::token::Bracket) {
+                while input.peek(Token![.])
+                    && !input.peek2(syn::token::Paren)
+                    && !input.peek2(syn::token::Bracket)
+                {
                     let _: Token![.] = input.parse()?;
                     let field: syn::Ident = input.parse()?;
                     fields.push(field);
                 }
-                
+
                 operations.push(FieldOperation::Nested { fields });
             }
         }
@@ -545,7 +548,7 @@ fn parse_method_call(
 
     // Start building a chain of operations
     let mut operations = vec![];
-    
+
     // Add the first field access or method call
     if input.peek(syn::token::Paren) {
         // This is a method call: .method()
@@ -574,7 +577,10 @@ fn parse_method_call(
         let mut fields = vec![method_name];
 
         // Continue parsing dots and identifiers for nested access
-        while input.peek(Token![.]) && !input.peek2(syn::token::Paren) && !input.peek2(syn::token::Bracket) {
+        while input.peek(Token![.])
+            && !input.peek2(syn::token::Paren)
+            && !input.peek2(syn::token::Bracket)
+        {
             let _: Token![.] = input.parse()?;
             let field: syn::Ident = input.parse()?;
             fields.push(field);
@@ -590,7 +596,7 @@ fn parse_method_call(
             let content;
             syn::bracketed!(content in input);
             let index: syn::Expr = content.parse()?;
-            
+
             operations.push(FieldOperation::Index { index });
         } else if input.peek(Token![.]) {
             // Parse additional method call or field access
@@ -623,7 +629,9 @@ fn parse_method_call(
                     fields.push(next_name);
                 } else {
                     // Start a new nested operation
-                    operations.push(FieldOperation::Nested { fields: vec![next_name] });
+                    operations.push(FieldOperation::Nested {
+                        fields: vec![next_name],
+                    });
                 }
             }
         }

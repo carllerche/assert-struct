@@ -321,7 +321,7 @@ impl fmt::Display for TupleElement {
                                     FieldOperation::Index { index } => {
                                         write!(f, "[{}]", quote::quote! { #index })?;
                                     }
-                                    _ => write!(f, "{}", op)?
+                                    _ => write!(f, "{}", op)?,
                                 }
                             }
                             write!(f, ": {}", pattern)
