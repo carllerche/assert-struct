@@ -457,7 +457,7 @@ fn parse_element_operations(input: ParseStream) -> Result<Option<FieldOperation>
 }
 
 /// Parse field operations starting from the first field name
-/// Handles chained operations like .field, [index], .method(), etc.
+/// Handles chained operations like .field, \[index\], .method(), etc.
 fn parse_field_operations(
     input: ParseStream,
     existing_operations: Option<FieldOperation>,
@@ -537,7 +537,7 @@ fn parse_field_operations(
     }
 }
 
-/// Parse chained operations: .method_name(args...), .field, or [index]
+/// Parse chained operations: .method_name(args...), .field, or \[index\]
 /// Returns a FieldOperation with appropriate chaining
 fn parse_method_call(
     input: ParseStream,
