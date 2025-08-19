@@ -83,7 +83,7 @@ fn get_pattern_span(pattern: &Pattern) -> Option<Span> {
         Pattern::Regex { span, .. } => Some(*span),
         #[cfg(feature = "regex")]
         Pattern::Like { expr, .. } => Some(expr.span()),
-        Pattern::Struct { path, .. } => Some(path.span()),
+        Pattern::Struct { path, .. } => path.as_ref().map(|p| p.span()),
         Pattern::Tuple { path, .. } => path.as_ref().map(|p| p.span()),
         Pattern::Slice { .. } | Pattern::Rest { .. } | Pattern::Wildcard { .. } => None,
         Pattern::Closure { closure, .. } => Some(closure.span()),
@@ -235,8 +235,12 @@ fn generate_pattern_nodes(
         Pattern::Struct {
             path, fields, rest, ..
         } => {
-            // Fix: Remove spaces around :: when converting path to string
-            let name_str = quote! { #path }.to_string().replace(" :: ", "::");
+            // Handle wildcard struct patterns (path is None)
+            let name_str = if let Some(p) = path {
+                quote! { #p }.to_string().replace(" :: ", "::")
+            } else {
+                "_".to_string()  // Use "_" for wildcard struct patterns
+            };
 
             let field_entries: Vec<TokenStream> = fields
                 .iter()
@@ -303,7 +307,7 @@ fn generate_pattern_assertion_with_collection(
             ..
         } => generate_struct_match_assertion_with_collection(
             value_expr,
-            struct_path,
+            struct_path,  // Now passing &Option<syn::Path>
             fields,
             *rest,
             is_ref,
@@ -433,16 +437,90 @@ fn generate_pattern_assertion_with_collection(
     }
 }
 
+/// Generate wildcard struct assertion using direct field access
+fn generate_wildcard_struct_assertion_with_collection(
+    value_expr: &TokenStream,
+    fields: &Punctuated<FieldAssertion, Token![,]>,
+    is_ref: bool,
+    field_path: &[String],
+    _node_ident: &Ident,
+) -> TokenStream {
+    let field_assertions: Vec<_> = fields
+        .iter()
+        .map(|f| {
+            let field_name = &f.field_name;
+            let field_pattern = &f.pattern;
+            let field_operations = &f.operations;
+            
+            // Build path for this field 
+            let mut new_path = field_path.to_vec();
+            new_path.push(field_name.to_string());
+            
+            // Generate field access expression
+            // We need to determine if we should add & based on whether value_expr is already a reference
+            let field_access = if is_ref {
+                // value_expr is already a reference, so value_expr.field gives us a field value
+                // We need to take its reference for comparison
+                quote! { &(#value_expr).#field_name }
+            } else {
+                // value_expr is not a reference, so we need to reference the whole thing
+                quote! { &(#value_expr).#field_name }
+            };
+            
+            // Apply operations if any and determine reference level
+            let (accessed_value, is_ref_after) = if let Some(ops) = field_operations {
+                // When applying operations, we pass true since field_access is already a reference
+                let expr = apply_field_operations(&field_access, ops, true);
+                // Operations change the reference level based on their type
+                let is_ref = match ops {
+                    FieldOperation::Deref { .. } => false, // Dereferencing removes reference level
+                    FieldOperation::Method { .. } => false, // Method calls return owned values
+                    FieldOperation::Combined { .. } => false, // Combined with deref also removes reference level
+                    FieldOperation::Nested { .. } => true, // Nested field access keeps reference level
+                };
+                (expr, is_ref)
+            } else {
+                // field_access is already a reference, so is_ref = true
+                (field_access.clone(), true)
+            };
+            
+            // Recursively expand the pattern for this field
+            generate_pattern_assertion_with_collection(
+                &accessed_value,
+                field_pattern,
+                is_ref_after, 
+                &new_path,
+            )
+        })
+        .collect();
+    
+    quote! {
+        #(#field_assertions)*
+    }
+}
+
 /// Generate struct assertion with error collection for multiple field failures
 fn generate_struct_match_assertion_with_collection(
     value_expr: &TokenStream,
-    struct_path: &syn::Path,
+    struct_path: &Option<syn::Path>,
     fields: &Punctuated<FieldAssertion, Token![,]>,
     rest: bool,
     is_ref: bool,
     field_path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
+    // If struct_path is None, it's a wildcard pattern - use field access
+    if struct_path.is_none() {
+        return generate_wildcard_struct_assertion_with_collection(
+            value_expr,
+            fields,
+            is_ref,
+            field_path,
+            node_ident,
+        );
+    }
+    
+    let struct_path = struct_path.as_ref().unwrap();
     let field_names: Vec<_> = fields.iter().map(|f| &f.field_name).collect();
     let field_path_str = field_path.join(".");
 
@@ -840,7 +918,13 @@ fn pattern_to_string(pattern: &Pattern) -> String {
         Pattern::Rest { .. } => "..".to_string(),
         Pattern::Wildcard { .. } => "_".to_string(),
         Pattern::Closure { closure, .. } => quote! { #closure }.to_string(),
-        Pattern::Struct { path, .. } => quote! { #path { .. } }.to_string(),
+        Pattern::Struct { path, .. } => {
+            if let Some(p) = path {
+                quote! { #p { .. } }.to_string()
+            } else {
+                "_ { .. }".to_string()
+            }
+        },
         Pattern::Tuple { path, elements, .. } => {
             if let Some(p) = path {
                 if elements.is_empty() {

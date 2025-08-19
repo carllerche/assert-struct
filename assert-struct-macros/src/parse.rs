@@ -1,6 +1,7 @@
 use crate::{
     AssertStruct, ComparisonOp, Expected, FieldAssertion, FieldOperation, Pattern, TupleElement,
 };
+use quote::quote;
 use std::cell::Cell;
 use syn::{Result, Token, parse::Parse, parse::ParseStream, punctuated::Punctuated};
 
@@ -117,11 +118,40 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
 
     // Wildcard pattern: _ for ignoring a value while asserting it exists
     // Example: `Some(_)`, `field: _`, `[1, _, 3]`
+    // Special case: `_ { ... }` for wildcard struct patterns
     if input.peek(Token![_]) {
-        let _: Token![_] = input.parse()?;
-        return Ok(Pattern::Wildcard {
-            node_id: next_node_id(),
-        });
+        let fork = input.fork();
+        let _: Token![_] = fork.parse()?;
+        
+        // Check if this is a wildcard struct pattern: `_ { ... }`
+        if fork.peek(syn::token::Brace) {
+            let _: Token![_] = input.parse()?;
+            let content;
+            syn::braced!(content in input);
+            let expected: Expected = content.parse()?;
+            
+            // Wildcard struct patterns must use rest pattern (..)
+            // to indicate partial matching
+            if !expected.rest {
+                return Err(syn::Error::new_spanned(
+                    quote! { _ },
+                    "Wildcard struct patterns must use '..' for partial matching"
+                ));
+            }
+            
+            return Ok(Pattern::Struct {
+                node_id: next_node_id(),
+                path: None,  // None indicates wildcard
+                fields: expected.fields,
+                rest: expected.rest,
+            });
+        } else {
+            // Regular wildcard pattern
+            let _: Token![_] = input.parse()?;
+            return Ok(Pattern::Wildcard {
+                node_id: next_node_id(),
+            });
+        }
     }
 
     // AMBIGUITY: `..` could be a rest pattern OR start of a range like `..10`
@@ -311,7 +341,7 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             let expected: Expected = content.parse()?;
             return Ok(Pattern::Struct {
                 node_id: next_node_id(),
-                path,
+                path: Some(path),
                 fields: expected.fields,
                 rest: expected.rest,
             });
