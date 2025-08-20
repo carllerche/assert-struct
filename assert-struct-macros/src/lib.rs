@@ -229,12 +229,20 @@ enum FieldOperation {
     /// Stores the chain of field names to access
     Nested { fields: Vec<syn::Ident> },
 
-    /// Combined operation: dereferencing followed by method/nested access
-    /// Example: *field.method(), **field.inner, etc.
+    /// Index operation: field\[0\], field\[index\], etc.
+    /// Stores the index expression to use
+    Index { index: syn::Expr },
+
+    /// Combined operation: dereferencing followed by method/nested/index access
+    /// Example: *field.method(), **field.inner, *field\[0\], etc.
     Combined {
         deref_count: usize,
         operation: Box<FieldOperation>,
     },
+
+    /// Chained operations: nested field followed by index or method
+    /// Example: field.nested\[0\], field.inner.method(), field.sub\[1\].len()
+    Chained { operations: Vec<FieldOperation> },
 }
 
 // Field assertion - a field name paired with its expected pattern
@@ -293,6 +301,31 @@ impl fmt::Display for TupleElement {
                             }
                             write!(f, ": {}", pattern)
                         }
+                        FieldOperation::Index { index: idx } => {
+                            // Show index access after the tuple index: 0[1]:
+                            write!(f, "{}[{}]: {}", index, quote::quote! { #idx }, pattern)
+                        }
+                        FieldOperation::Chained { operations } => {
+                            // Show chained operations after the tuple index: 0.field[1]:
+                            write!(f, "{}", index)?;
+                            for op in operations {
+                                match op {
+                                    FieldOperation::Nested { fields } => {
+                                        for field in fields {
+                                            write!(f, ".{}", field)?;
+                                        }
+                                    }
+                                    FieldOperation::Method { name, .. } => {
+                                        write!(f, ".{}()", name)?;
+                                    }
+                                    FieldOperation::Index { index } => {
+                                        write!(f, "[{}]", quote::quote! { #index })?;
+                                    }
+                                    _ => write!(f, "{}", op)?,
+                                }
+                            }
+                            write!(f, ": {}", pattern)
+                        }
                         FieldOperation::Combined {
                             deref_count,
                             operation,
@@ -334,6 +367,15 @@ impl fmt::Display for FieldOperation {
             FieldOperation::Nested { fields } => {
                 for field in fields {
                     write!(f, ".{}", field)?;
+                }
+                Ok(())
+            }
+            FieldOperation::Index { index } => {
+                write!(f, "[{}]", quote::quote! { #index })
+            }
+            FieldOperation::Chained { operations } => {
+                for op in operations {
+                    write!(f, "{}", op)?;
                 }
                 Ok(())
             }

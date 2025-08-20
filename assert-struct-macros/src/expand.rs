@@ -467,12 +467,7 @@ fn generate_wildcard_struct_assertion_with_collection(
                 let expr = apply_field_operations(&base_field_access, ops, false);
 
                 // Operations change the reference level based on their type
-                let is_ref = match ops {
-                    FieldOperation::Deref { .. } => false, // Dereferencing removes reference level
-                    FieldOperation::Method { .. } => false, // Method calls return owned values
-                    FieldOperation::Combined { .. } => false, // Combined with deref also removes reference level
-                    FieldOperation::Nested { .. } => true, // Nested field access keeps reference level
-                };
+                let is_ref = field_operation_returns_reference(ops);
                 (expr, is_ref)
             } else {
                 // No operations - we need a reference to the field for comparison
@@ -548,30 +543,7 @@ fn generate_struct_match_assertion_with_collection(
             let mut new_path = field_path.to_vec();
             let field_path_str = if let Some(ops) = field_operations {
                 // Include operation in path for better error messages
-                match ops {
-                    FieldOperation::Deref { count } => {
-                        let stars = "*".repeat(*count);
-                        format!("{}{}", stars, field_name)
-                    }
-                    FieldOperation::Method { name, .. } => {
-                        format!("{}.{}()", field_name, name)
-                    }
-                    FieldOperation::Nested { fields } => {
-                        let nested = fields
-                            .iter()
-                            .map(|f| f.to_string())
-                            .collect::<Vec<_>>()
-                            .join(".");
-                        format!("{}.{}", field_name, nested)
-                    }
-                    FieldOperation::Combined {
-                        deref_count,
-                        operation,
-                    } => {
-                        let stars = "*".repeat(*deref_count);
-                        format!("{}{}{}", stars, field_name, operation)
-                    }
-                }
+                generate_field_operation_path(field_name.to_string(), ops)
             } else {
                 field_name.to_string()
             };
@@ -582,12 +554,7 @@ fn generate_struct_match_assertion_with_collection(
                 // We're always in a reference context for struct destructuring (match &value)
                 let expr = apply_field_operations(&quote! { #field_name }, ops, true);
                 // Operations change the reference level based on their type
-                let is_ref = match ops {
-                    FieldOperation::Deref { .. } => false, // Dereferencing removes reference level
-                    FieldOperation::Method { .. } => false, // Method calls return owned values
-                    FieldOperation::Combined { .. } => false, // Combined with deref also removes reference level
-                    FieldOperation::Nested { .. } => false, // Nested field access auto-derefs to get field value
-                };
+                let is_ref = field_operation_returns_reference(ops);
                 (expr, is_ref)
             } else {
                 (quote! { #field_name }, true)
@@ -668,8 +635,47 @@ fn generate_struct_match_assertion_with_collection(
     }
 }
 
+/// Generate a readable path string for a field operation for error messages
+fn generate_field_operation_path(base_field: String, operation: &FieldOperation) -> String {
+    match operation {
+        FieldOperation::Deref { count } => {
+            let stars = "*".repeat(*count);
+            format!("{}{}", stars, base_field)
+        }
+        FieldOperation::Method { name, .. } => {
+            format!("{}.{}()", base_field, name)
+        }
+        FieldOperation::Nested { fields } => {
+            let nested = fields
+                .iter()
+                .map(|f| f.to_string())
+                .collect::<Vec<_>>()
+                .join(".");
+            format!("{}.{}", base_field, nested)
+        }
+        FieldOperation::Index { index } => {
+            format!("{}[{}]", base_field, quote! { #index })
+        }
+        FieldOperation::Combined {
+            deref_count,
+            operation,
+        } => {
+            let stars = "*".repeat(*deref_count);
+            let base_with_deref = format!("{}{}", stars, base_field);
+            generate_field_operation_path(base_with_deref, operation)
+        }
+        FieldOperation::Chained { operations } => {
+            let mut result = base_field;
+            for op in operations {
+                result = generate_field_operation_path(result, op);
+            }
+            result
+        }
+    }
+}
+
 /// Apply field operations to a value expression
-/// This generates the appropriate dereferencing, method calls, or nested field access
+/// This generates the appropriate dereferencing, method calls, nested field access, or index operations
 ///
 /// # Parameters
 /// - `base_expr`: The base expression to apply operations to
@@ -704,6 +710,9 @@ fn apply_field_operations(
             }
             expr
         }
+        FieldOperation::Index { index } => {
+            quote! { #base_expr[#index] }
+        }
         FieldOperation::Combined {
             deref_count,
             operation,
@@ -720,6 +729,31 @@ fn apply_field_operations(
             }
             // Then apply the nested operation (no longer in ref context after deref)
             apply_field_operations(&expr, operation, false)
+        }
+        FieldOperation::Chained { operations } => {
+            let mut expr = base_expr.clone();
+            for op in operations {
+                expr = apply_field_operations(&expr, op, false);
+            }
+            expr
+        }
+    }
+}
+
+/// Helper function to determine if a field operation returns a reference
+fn field_operation_returns_reference(operation: &FieldOperation) -> bool {
+    match operation {
+        FieldOperation::Deref { .. } => false, // Dereferencing removes reference level
+        FieldOperation::Method { .. } => false, // Method calls return owned values
+        FieldOperation::Nested { .. } => false, // Nested field access auto-derefs to get field value
+        FieldOperation::Index { .. } => true,   // Index operations return references to elements
+        FieldOperation::Combined { .. } => false, // Combined with deref also removes reference level
+        FieldOperation::Chained { operations } => {
+            // For chained operations, the reference level is determined by the last operation
+            operations
+                .last()
+                .map(field_operation_returns_reference)
+                .unwrap_or(false)
         }
     }
 }
@@ -776,30 +810,7 @@ fn process_tuple_elements(
                 let mut elem_path = field_path.to_vec();
                 let elem_path_str = if let Some(ops) = operations {
                     // Include operation in path for better error messages
-                    match ops {
-                        FieldOperation::Deref { count } => {
-                            let stars = "*".repeat(*count);
-                            format!("{}{}", stars, i)
-                        }
-                        FieldOperation::Method { name, .. } => {
-                            format!("{}.{}()", i, name)
-                        }
-                        FieldOperation::Nested { fields } => {
-                            let nested = fields
-                                .iter()
-                                .map(|f| f.to_string())
-                                .collect::<Vec<_>>()
-                                .join(".");
-                            format!("{}.{}", i, nested)
-                        }
-                        FieldOperation::Combined {
-                            deref_count,
-                            operation,
-                        } => {
-                            let stars = "*".repeat(*deref_count);
-                            format!("{}{}{}", stars, i, operation)
-                        }
-                    }
+                    generate_field_operation_path(i.to_string(), ops)
                 } else {
                     i.to_string()
                 };
@@ -814,13 +825,8 @@ fn process_tuple_elements(
                 };
 
                 // Apply the same reference level logic as for struct fields
-                let is_ref_after_operations = if operations.is_some() {
-                    match operations.as_ref().unwrap() {
-                        FieldOperation::Deref { .. } => false, // Dereferencing removes reference level
-                        FieldOperation::Method { .. } => false, // Method calls return owned values
-                        FieldOperation::Combined { .. } => false, // Combined with deref also removes reference level
-                        FieldOperation::Nested { .. } => is_ref, // Nested field access keeps reference level
-                    }
+                let is_ref_after_operations = if let Some(ops) = operations {
+                    field_operation_returns_reference(ops)
                 } else {
                     is_ref
                 };
@@ -959,6 +965,12 @@ fn generate_comparison_assertion_with_collection(
 ) -> TokenStream {
     let field_path = path.join(".");
 
+    // Check if this is an index operation by looking at the path
+    // Exclude slice patterns which start with [
+    let is_index_operation = path
+        .iter()
+        .any(|segment| segment.contains("[") && !segment.starts_with("["));
+
     // Adjust for reference level
     let actual_expr = if is_ref {
         quote! { #value_expr }
@@ -966,7 +978,17 @@ fn generate_comparison_assertion_with_collection(
         quote! { &#value_expr }
     };
 
-    let comparison = if is_ref {
+    let comparison = if is_index_operation {
+        // For index operations, avoid references on both sides
+        match op {
+            ComparisonOp::Less => quote! { #value_expr < #expected },
+            ComparisonOp::LessEqual => quote! { #value_expr <= #expected },
+            ComparisonOp::Greater => quote! { #value_expr > #expected },
+            ComparisonOp::GreaterEqual => quote! { #value_expr >= #expected },
+            ComparisonOp::Equal => quote! { #value_expr == #expected },
+            ComparisonOp::NotEqual => quote! { #value_expr != #expected },
+        }
+    } else if is_ref {
         match op {
             ComparisonOp::Less => quote! { #value_expr < &(#expected) },
             ComparisonOp::LessEqual => quote! { #value_expr <= &(#expected) },
@@ -1220,10 +1242,37 @@ fn generate_simple_assertion_with_collection(
     let field_path_str = path.join(".");
     let expected_str = quote! { #expected }.to_string();
 
+    // Check if this is an index operation by looking at the path
+    // Exclude slice patterns which start with [
+    let is_index_operation = path
+        .iter()
+        .any(|segment| segment.contains("[") && !segment.starts_with("["));
+
     let span = expected.span();
-    if is_ref {
+    if is_index_operation {
+        // For index operations, avoid references on both sides to fix type inference
         quote_spanned! {span=>
-            if #value_expr != &#transformed {
+            if #value_expr != #transformed {
+                let __line = line!();
+                let __file = file!();
+                let __error = ::assert_struct::__macro_support::ErrorContext {
+                    field_path: #field_path_str.to_string(),
+                    pattern_str: #expected_str.to_string(),
+                    actual_value: format!("{:?}", #value_expr),
+                    line_number: __line,
+                    file_name: __file,
+                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
+
+                expected_value: None,
+
+                error_node: Some(&#node_ident),
+                };
+                __errors.push(__error);
+            }
+        }
+    } else if is_ref {
+        quote_spanned! {span=>
+            if #value_expr != &(#transformed) {
                 let __line = line!();
                 let __file = file!();
                 let __error = ::assert_struct::__macro_support::ErrorContext {
@@ -1243,7 +1292,7 @@ fn generate_simple_assertion_with_collection(
         }
     } else {
         quote_spanned! {span=>
-            if &#value_expr != &#transformed {
+            if &#value_expr != &(#transformed) {
                 let __line = line!();
                 let __file = file!();
                 let __error = ::assert_struct::__macro_support::ErrorContext {

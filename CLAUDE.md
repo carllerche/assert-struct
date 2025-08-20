@@ -33,6 +33,7 @@ Focus on clean design, good architecture, and comprehensive functionality rather
 - **Regex patterns**: `=~ r"pattern"` for string matching (feature-gated)
 - **Like trait**: `=~ expr` for flexible pattern matching with variables/expressions
 - **Slice patterns**: Element-wise patterns for Vec fields `[> 0, < 10, == 5]`
+- **Index operations**: Direct indexing into collections `values[0]: 10`, `matrix[0][1]: 2`
 - **Enum support**: Full support for Option, Result, and custom enums (all variant types)
 - **Tuple support**: Multi-field tuples with advanced patterns `(> 10, < 30)`
 - **Method call patterns**: `field.method(): value` and `(0.method(): value, _)` for tuple elements
@@ -65,6 +66,7 @@ assert_struct!(response, Response {
     },
     items.len(): > 0,        // Method call patterns
     items: [> 0, < 100, > 0],  // Element-wise patterns
+    items[0]: > 0,           // Index operations
     ..
 });
 

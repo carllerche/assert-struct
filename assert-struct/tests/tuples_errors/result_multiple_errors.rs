@@ -7,6 +7,7 @@ struct Response {
     data: Result<(i32, String), String>,
 }
 
+#[allow(clippy::double_parens)]
 pub fn test_case() {
     let response = Response {
         id: 5,

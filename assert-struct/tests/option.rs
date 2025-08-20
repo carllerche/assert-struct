@@ -166,6 +166,7 @@ struct Settings {
 }
 
 #[test]
+#[allow(clippy::double_parens)]
 fn test_option_with_collections() {
     let settings = Settings {
         notifications: Some(vec!["email".to_string(), "sms".to_string()]),
