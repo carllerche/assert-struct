@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - 2025-01-18
+## [0.1.0] - 2025-08-21
 
 ### Added
 
@@ -13,7 +13,7 @@ Initial release of assert-struct - a procedural macro for ergonomic structural a
 
 #### Core Features
 - **Structural assertions** - Assert on struct fields with pattern matching syntax
-- **Partial matching** - Use `..` to ignore fields you don't care about  
+- **Partial matching** - Use `..` to ignore fields you don't care about
 - **Nested structures** - Deep assertions without verbose field access chains
 - **String literals** - Direct string comparison without `.to_string()`
 
