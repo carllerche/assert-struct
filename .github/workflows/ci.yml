@@ -13,17 +13,16 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - 1.85.0  # MSRV - Minimum Supported Rust Version (2024 edition)
+    # Pin Rust version to ensure consistent compilation error messages across CI runs.
+    # Compilation error message tests (trybuild) are sensitive to Rust version changes.
+    # Updating the pinned version should be done in a dedicated PR that also fixes any error message tests.
     steps:
       - uses: actions/checkout@v5
       
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ matrix.rust }}
+          toolchain: 1.89.0
       
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -41,7 +40,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: target
-          key: ${{ runner.os }}-cargo-build-target-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-build-target-1.89.0-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Build
         run: cargo build --workspace --verbose
@@ -57,6 +56,44 @@ jobs:
       
       - name: Run doc tests
         run: cargo test --workspace --doc --verbose
+
+  msrv:
+    name: MSRV Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      
+      - name: Install Rust MSRV
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.0  # MSRV - Minimum Supported Rust Version (2024 edition)
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-1.85.0-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Check with MSRV
+        run: cargo check --workspace --verbose
+      
+      - name: Check with all features
+        run: cargo check --workspace --all-features --verbose
+      
+      - name: Check without default features
+        run: cargo check --workspace --no-default-features --verbose
 
   fmt:
     name: Rustfmt

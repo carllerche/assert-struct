@@ -978,33 +978,34 @@ fn generate_comparison_assertion_with_collection(
         quote! { &#value_expr }
     };
 
+    let span = expected.span();
     let comparison = if is_index_operation {
         // For index operations, avoid references on both sides
         match op {
-            ComparisonOp::Less => quote! { #value_expr < #expected },
-            ComparisonOp::LessEqual => quote! { #value_expr <= #expected },
-            ComparisonOp::Greater => quote! { #value_expr > #expected },
-            ComparisonOp::GreaterEqual => quote! { #value_expr >= #expected },
-            ComparisonOp::Equal => quote! { #value_expr == #expected },
-            ComparisonOp::NotEqual => quote! { #value_expr != #expected },
+            ComparisonOp::Less => quote_spanned! {span=> #value_expr < #expected },
+            ComparisonOp::LessEqual => quote_spanned! {span=> #value_expr <= #expected },
+            ComparisonOp::Greater => quote_spanned! {span=> #value_expr > #expected },
+            ComparisonOp::GreaterEqual => quote_spanned! {span=> #value_expr >= #expected },
+            ComparisonOp::Equal => quote_spanned! {span=> #value_expr == #expected },
+            ComparisonOp::NotEqual => quote_spanned! {span=> #value_expr != #expected },
         }
     } else if is_ref {
         match op {
-            ComparisonOp::Less => quote! { #value_expr < &(#expected) },
-            ComparisonOp::LessEqual => quote! { #value_expr <= &(#expected) },
-            ComparisonOp::Greater => quote! { #value_expr > &(#expected) },
-            ComparisonOp::GreaterEqual => quote! { #value_expr >= &(#expected) },
-            ComparisonOp::Equal => quote! { #value_expr == &(#expected) },
-            ComparisonOp::NotEqual => quote! { #value_expr != &(#expected) },
+            ComparisonOp::Less => quote_spanned! {span=> #value_expr < &(#expected) },
+            ComparisonOp::LessEqual => quote_spanned! {span=> #value_expr <= &(#expected) },
+            ComparisonOp::Greater => quote_spanned! {span=> #value_expr > &(#expected) },
+            ComparisonOp::GreaterEqual => quote_spanned! {span=> #value_expr >= &(#expected) },
+            ComparisonOp::Equal => quote_spanned! {span=> #value_expr == &(#expected) },
+            ComparisonOp::NotEqual => quote_spanned! {span=> #value_expr != &(#expected) },
         }
     } else {
         match op {
-            ComparisonOp::Less => quote! { &#value_expr < &(#expected) },
-            ComparisonOp::LessEqual => quote! { &#value_expr <= &(#expected) },
-            ComparisonOp::Greater => quote! { &#value_expr > &(#expected) },
-            ComparisonOp::GreaterEqual => quote! { &#value_expr >= &(#expected) },
-            ComparisonOp::Equal => quote! { &#value_expr == &(#expected) },
-            ComparisonOp::NotEqual => quote! { &#value_expr != &(#expected) },
+            ComparisonOp::Less => quote_spanned! {span=> &#value_expr < &(#expected) },
+            ComparisonOp::LessEqual => quote_spanned! {span=> &#value_expr <= &(#expected) },
+            ComparisonOp::Greater => quote_spanned! {span=> &#value_expr > &(#expected) },
+            ComparisonOp::GreaterEqual => quote_spanned! {span=> &#value_expr >= &(#expected) },
+            ComparisonOp::Equal => quote_spanned! {span=> &#value_expr == &(#expected) },
+            ComparisonOp::NotEqual => quote_spanned! {span=> &#value_expr != &(#expected) },
         }
     };
 
@@ -1020,8 +1021,8 @@ fn generate_comparison_assertion_with_collection(
         quote! { None }
     };
 
-    let span = expected.span();
     quote_spanned! {span=>
+        #[allow(clippy::nonminimal_bool)]
         if !(#comparison) {
             // Capture line number using proper spanning
             let __line = line!();
@@ -1459,8 +1460,9 @@ fn generate_like_assertion_with_collection(
     let field_path_str = path.join(".");
     let pattern_str = format!("=~ {}", quote! { #pattern_expr });
 
+    let span = pattern_expr.span();
     if is_ref {
-        quote! {
+        quote_spanned! {span=>
             {
                 use ::assert_struct::Like;
                 if !#value_expr.like(&#pattern_expr) {
@@ -1473,16 +1475,15 @@ fn generate_like_assertion_with_collection(
                         line_number: __line,
                         file_name: __file,
                         error_type: ::assert_struct::__macro_support::ErrorType::Regex,
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
+                        expected_value: None,
+                        error_node: Some(&#node_ident),
                     };
                     __errors.push(__error);
                 }
             }
         }
     } else {
-        quote! {
+        quote_spanned! {span=>
             {
                 use ::assert_struct::Like;
                 if !(&#value_expr).like(&#pattern_expr) {
@@ -1495,9 +1496,8 @@ fn generate_like_assertion_with_collection(
                         line_number: __line,
                         file_name: __file,
                         error_type: ::assert_struct::__macro_support::ErrorType::Regex,
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
+                        expected_value: None,
+                        error_node: Some(&#node_ident),
                     };
                     __errors.push(__error);
                 }
@@ -1524,7 +1524,8 @@ fn generate_closure_assertion_with_collection(
         quote! { &#value_expr }
     };
 
-    quote! {
+    let span = closure.span();
+    quote_spanned! {span=>
         {
             if !::assert_struct::__macro_support::check_closure_condition(#actual_expr, #closure) {
                 let __line = line!();

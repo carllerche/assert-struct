@@ -1,0 +1,15 @@
+error[E0277]: can't compare `String` with `{integer}`
+  --> tests/compile_fail/type_error_span.rs:14:20
+   |
+14 |         *value: == 42,
+   |                    ^^ no implementation for `String == {integer}`
+   |
+   = help: the trait `PartialEq<{integer}>` is not implemented for `String`
+   = help: the following other types implement trait `PartialEq<Rhs>`:
+             `String` implements `PartialEq<&str>`
+             `String` implements `PartialEq<ByteStr>`
+             `String` implements `PartialEq<ByteString>`
+             `String` implements `PartialEq<Cow<'_, str>>`
+             `String` implements `PartialEq<str>`
+             `String` implements `PartialEq`
+   = note: required for `&String` to implement `PartialEq<&{integer}>`

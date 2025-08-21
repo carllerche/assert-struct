@@ -1,0 +1,19 @@
+error[E0631]: type mismatch in closure arguments
+  --> tests/compile_fail/closure_type_error_span.rs:15:16
+   |
+15 |         value: |x: i32| x > 0,  // Type error: closure expects i32 but gets &String
+   |                ^-------
+   |                |
+   |                expected due to this
+   |                found signature defined here
+   |
+   = note: expected closure signature `fn(&String) -> _`
+              found closure signature `fn(i32) -> _`
+note: required by a bound in `check_closure_condition`
+  --> src/lib.rs
+   |
+   |     pub fn check_closure_condition<T, F>(value: T, predicate: F) -> bool
+   |            ----------------------- required by a bound in this function
+   |     where
+   |         F: FnOnce(T) -> bool,
+   |            ^^^^^^^^^^^^^^^^^ required by this bound in `check_closure_condition`
