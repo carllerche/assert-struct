@@ -1,6 +1,9 @@
 #![allow(dead_code)]
 use assert_struct::assert_struct;
 
+#[macro_use]
+mod util;
+
 #[derive(Debug)]
 struct User {
     name: String,
@@ -103,3 +106,6 @@ fn test_mixed_repeated_patterns() {
         .. 
     });
 }
+
+// Error message test using snapshot testing
+error_message_test!("repeated_field_patterns_errors/repeated_field_failure.rs", repeated_field_failure);
