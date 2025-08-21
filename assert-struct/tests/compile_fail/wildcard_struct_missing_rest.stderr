@@ -1,0 +1,5 @@
+error: Wildcard struct patterns must use '..' for partial matching
+  --> tests/compile_fail/wildcard_struct_missing_rest.rs:11:23
+   |
+11 |     assert_struct!(s, _ {
+   |                       ^
