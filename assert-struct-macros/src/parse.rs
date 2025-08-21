@@ -1,7 +1,6 @@
 use crate::{
     AssertStruct, ComparisonOp, Expected, FieldAssertion, FieldOperation, Pattern, TupleElement,
 };
-use quote::quote;
 use std::cell::Cell;
 use syn::{Result, Token, parse::Parse, parse::ParseStream, punctuated::Punctuated};
 
@@ -125,7 +124,7 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
 
         // Check if this is a wildcard struct pattern: `_ { ... }`
         if fork.peek(syn::token::Brace) {
-            let _: Token![_] = input.parse()?;
+            let underscore_token: Token![_] = input.parse()?;
             let content;
             syn::braced!(content in input);
             let expected: Expected = content.parse()?;
@@ -134,7 +133,7 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             // to indicate partial matching
             if !expected.rest {
                 return Err(syn::Error::new_spanned(
-                    quote! { _ },
+                    underscore_token,
                     "Wildcard struct patterns must use '..' for partial matching",
                 ));
             }
