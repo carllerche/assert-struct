@@ -1524,7 +1524,8 @@ fn generate_closure_assertion_with_collection(
         quote! { &#value_expr }
     };
 
-    quote! {
+    let span = closure.span();
+    quote_spanned! {span=>
         {
             if !::assert_struct::__macro_support::check_closure_condition(#actual_expr, #closure) {
                 let __line = line!();
