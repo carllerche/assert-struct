@@ -1022,6 +1022,7 @@ fn generate_comparison_assertion_with_collection(
     };
 
     quote_spanned! {span=>
+        #[allow(clippy::nonminimal_bool)]
         if !(#comparison) {
             // Capture line number using proper spanning
             let __line = line!();
