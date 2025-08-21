@@ -1,0 +1,9 @@
+error[E0599]: no method named `like` found for reference `&Expr` in the current scope
+  --> tests/compile_fail/like_trait_span_issue.rs:23:20
+   |
+23 |         filter: =~ user_id_string(),  // Type error: Expr doesn't implement Like<String>
+   |                    ^^^^^^^^^^^^^^ method not found in `&Expr`
+   |
+   = help: items from traits can only be used if the trait is implemented and in scope
+   = note: the following trait defines an item `like`, perhaps you need to implement it:
+           candidate #1: `assert_struct::Like`

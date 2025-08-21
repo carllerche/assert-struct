@@ -1459,8 +1459,9 @@ fn generate_like_assertion_with_collection(
     let field_path_str = path.join(".");
     let pattern_str = format!("=~ {}", quote! { #pattern_expr });
 
+    let span = pattern_expr.span();
     if is_ref {
-        quote! {
+        quote_spanned! {span=>
             {
                 use ::assert_struct::Like;
                 if !#value_expr.like(&#pattern_expr) {
@@ -1473,16 +1474,15 @@ fn generate_like_assertion_with_collection(
                         line_number: __line,
                         file_name: __file,
                         error_type: ::assert_struct::__macro_support::ErrorType::Regex,
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
+                        expected_value: None,
+                        error_node: Some(&#node_ident),
                     };
                     __errors.push(__error);
                 }
             }
         }
     } else {
-        quote! {
+        quote_spanned! {span=>
             {
                 use ::assert_struct::Like;
                 if !(&#value_expr).like(&#pattern_expr) {
@@ -1495,9 +1495,8 @@ fn generate_like_assertion_with_collection(
                         line_number: __line,
                         file_name: __file,
                         error_type: ::assert_struct::__macro_support::ErrorType::Regex,
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
+                        expected_value: None,
+                        error_node: Some(&#node_ident),
                     };
                     __errors.push(__error);
                 }
