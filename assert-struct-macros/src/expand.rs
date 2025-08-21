@@ -978,33 +978,34 @@ fn generate_comparison_assertion_with_collection(
         quote! { &#value_expr }
     };
 
+    let span = expected.span();
     let comparison = if is_index_operation {
         // For index operations, avoid references on both sides
         match op {
-            ComparisonOp::Less => quote! { #value_expr < #expected },
-            ComparisonOp::LessEqual => quote! { #value_expr <= #expected },
-            ComparisonOp::Greater => quote! { #value_expr > #expected },
-            ComparisonOp::GreaterEqual => quote! { #value_expr >= #expected },
-            ComparisonOp::Equal => quote! { #value_expr == #expected },
-            ComparisonOp::NotEqual => quote! { #value_expr != #expected },
+            ComparisonOp::Less => quote_spanned! {span=> #value_expr < #expected },
+            ComparisonOp::LessEqual => quote_spanned! {span=> #value_expr <= #expected },
+            ComparisonOp::Greater => quote_spanned! {span=> #value_expr > #expected },
+            ComparisonOp::GreaterEqual => quote_spanned! {span=> #value_expr >= #expected },
+            ComparisonOp::Equal => quote_spanned! {span=> #value_expr == #expected },
+            ComparisonOp::NotEqual => quote_spanned! {span=> #value_expr != #expected },
         }
     } else if is_ref {
         match op {
-            ComparisonOp::Less => quote! { #value_expr < &(#expected) },
-            ComparisonOp::LessEqual => quote! { #value_expr <= &(#expected) },
-            ComparisonOp::Greater => quote! { #value_expr > &(#expected) },
-            ComparisonOp::GreaterEqual => quote! { #value_expr >= &(#expected) },
-            ComparisonOp::Equal => quote! { #value_expr == &(#expected) },
-            ComparisonOp::NotEqual => quote! { #value_expr != &(#expected) },
+            ComparisonOp::Less => quote_spanned! {span=> #value_expr < &(#expected) },
+            ComparisonOp::LessEqual => quote_spanned! {span=> #value_expr <= &(#expected) },
+            ComparisonOp::Greater => quote_spanned! {span=> #value_expr > &(#expected) },
+            ComparisonOp::GreaterEqual => quote_spanned! {span=> #value_expr >= &(#expected) },
+            ComparisonOp::Equal => quote_spanned! {span=> #value_expr == &(#expected) },
+            ComparisonOp::NotEqual => quote_spanned! {span=> #value_expr != &(#expected) },
         }
     } else {
         match op {
-            ComparisonOp::Less => quote! { &#value_expr < &(#expected) },
-            ComparisonOp::LessEqual => quote! { &#value_expr <= &(#expected) },
-            ComparisonOp::Greater => quote! { &#value_expr > &(#expected) },
-            ComparisonOp::GreaterEqual => quote! { &#value_expr >= &(#expected) },
-            ComparisonOp::Equal => quote! { &#value_expr == &(#expected) },
-            ComparisonOp::NotEqual => quote! { &#value_expr != &(#expected) },
+            ComparisonOp::Less => quote_spanned! {span=> &#value_expr < &(#expected) },
+            ComparisonOp::LessEqual => quote_spanned! {span=> &#value_expr <= &(#expected) },
+            ComparisonOp::Greater => quote_spanned! {span=> &#value_expr > &(#expected) },
+            ComparisonOp::GreaterEqual => quote_spanned! {span=> &#value_expr >= &(#expected) },
+            ComparisonOp::Equal => quote_spanned! {span=> &#value_expr == &(#expected) },
+            ComparisonOp::NotEqual => quote_spanned! {span=> &#value_expr != &(#expected) },
         }
     };
 
@@ -1020,7 +1021,6 @@ fn generate_comparison_assertion_with_collection(
         quote! { None }
     };
 
-    let span = expected.span();
     quote_spanned! {span=>
         if !(#comparison) {
             // Capture line number using proper spanning
