@@ -1,6 +1,6 @@
 # assert-struct
 
-[![CI](https://github.com/carllerche/assert-struct/workflows/CI/badge.svg?branch=main)](https://github.com/carllerche/assert-struct/actions)
+[![CI](https://github.com/carllerche/assert-struct/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/carllerche/assert-struct/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/assert-struct.svg)](https://crates.io/crates/assert-struct)
 [![Documentation](https://docs.rs/assert-struct/badge.svg)](https://docs.rs/assert-struct)
 
@@ -40,7 +40,7 @@ assert_struct!(response, Response {
 ## When to use assert-struct?
 
 - **API Response Testing** - Validate JSON deserialization results
-- **Database Query Testing** - Check returned records match expectations  
+- **Database Query Testing** - Check returned records match expectations
 - **Complex State Validation** - Assert on deeply nested application state
 - **Partial Data Matching** - Focus on relevant fields, ignore the rest
 
@@ -91,7 +91,7 @@ assert_struct!(user, User {
 
 // Partial match with comparisons
 assert_struct!(user, User {
-    name: "Alice", 
+    name: "Alice",
     age: >= 18,  // Adult check
     ..           // Ignore other fields
 });
