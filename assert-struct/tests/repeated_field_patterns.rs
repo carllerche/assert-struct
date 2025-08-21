@@ -11,7 +11,7 @@ struct User {
     active: bool,
 }
 
-#[derive(Debug)]  
+#[derive(Debug)]
 struct Container {
     foo: InnerStruct,
     bar: String,
@@ -32,11 +32,11 @@ fn test_repeated_field_patterns() {
     };
 
     // Multiple constraints on the same field should all be checked
-    assert_struct!(user, User { 
-        age: >= 10, 
+    assert_struct!(user, User {
+        age: >= 10,
         age: <= 99,
         age: != 100,  // Additional constraint
-        .. 
+        ..
     });
 }
 
@@ -49,10 +49,10 @@ fn test_repeated_field_with_equality() {
     };
 
     // Mix comparison and equality patterns on same field
-    assert_struct!(user, User { 
+    assert_struct!(user, User {
         age: >= 18,
         age: == 30,
-        .. 
+        ..
     });
 }
 
@@ -62,10 +62,10 @@ fn test_repeated_method_field_access_patterns() {
         foo: InnerStruct { bar: 1, baz: 2 },
         bar: "test".to_string(),
     };
-    
+
     // Multiple access patterns on the same nested field
-    assert_struct!(container, Container { 
-        foo.bar: 1, 
+    assert_struct!(container, Container {
+        foo.bar: 1,
         foo.baz: 2,
         foo.bar: > 0,  // Additional constraint on foo.bar
         ..
@@ -78,11 +78,11 @@ fn test_repeated_complex_field_access() {
         foo: InnerStruct { bar: 42, baz: 100 },
         bar: "complex".to_string(),
     };
-    
+
     // Complex repeated patterns with different operations
-    assert_struct!(container, Container { 
+    assert_struct!(container, Container {
         foo.bar: >= 40,
-        foo.bar: <= 50, 
+        foo.bar: <= 50,
         foo.baz: > 50,
         foo.baz: != 99,
         ..
@@ -98,14 +98,17 @@ fn test_mixed_repeated_patterns() {
     };
 
     // Mix direct field access and repeated patterns
-    assert_struct!(user, User { 
+    assert_struct!(user, User {
         name: "Charlie",
         age: >= 30,
         age: < 40,
         active: true,
-        .. 
+        ..
     });
 }
 
 // Error message test using snapshot testing
-error_message_test!("repeated_field_patterns_errors/repeated_field_failure.rs", repeated_field_failure);
+error_message_test!(
+    "repeated_field_patterns_errors/repeated_field_failure.rs",
+    repeated_field_failure
+);
