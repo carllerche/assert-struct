@@ -15,12 +15,11 @@ impl AsyncValue {
     async fn get_value(&self) -> i32 {
         self.value
     }
-    
+
     async fn get_doubled(&self) -> i32 {
         self.value * 2
     }
 }
-
 
 #[tokio::test]
 async fn test_await_in_field_pattern() {
@@ -28,7 +27,7 @@ async fn test_await_in_field_pattern() {
         async_field: AsyncValue { value: 42 },
         regular_field: "test".to_string(),
     };
-    
+
     // Test basic await pattern
     assert_struct!(data, AsyncStruct {
         async_field.get_value().await: 42,
@@ -43,7 +42,7 @@ async fn test_await_with_result_pattern() {
         async_field: AsyncValue { value: 42 },
         regular_field: "test".to_string(),
     };
-    
+
     // Test await with Result pattern
     assert_struct!(data, AsyncStruct {
         async_field.get_value().await: 42,
@@ -57,7 +56,7 @@ async fn test_await_with_comparison() {
         async_field: AsyncValue { value: 50 },
         regular_field: "test".to_string(),
     };
-    
+
     // Test await with comparison patterns
     assert_struct!(data, AsyncStruct {
         async_field.get_value().await: > 30,
@@ -73,7 +72,7 @@ async fn test_tuple_with_await() {
         AsyncValue { value: 20 },
         "regular".to_string(),
     );
-    
+
     // Test await in tuple patterns
     assert_struct!(data, (
         0.get_value().await: 10,
@@ -89,7 +88,7 @@ async fn test_complex_nested_await() {
         inner: AsyncStruct,
         counter: i32,
     }
-    
+
     let data = NestedStruct {
         inner: AsyncStruct {
             async_field: AsyncValue { value: 100 },
@@ -97,7 +96,7 @@ async fn test_complex_nested_await() {
         },
         counter: 5,
     };
-    
+
     // Test nested structure with await
     assert_struct!(data, NestedStruct {
         inner: AsyncStruct {
@@ -116,7 +115,7 @@ async fn test_wildcard_struct_with_await() {
         async_field: AsyncValue { value: 75 },
         regular_field: "wildcard".to_string(),
     };
-    
+
     // Test wildcard pattern with await
     assert_struct!(data, _ {
         async_field.get_value().await: 75,
@@ -130,7 +129,7 @@ async fn test_await_with_range() {
         async_field: AsyncValue { value: 25 },
         regular_field: "range".to_string(),
     };
-    
+
     // Test await with range patterns
     assert_struct!(data, AsyncStruct {
         async_field.get_value().await: 20..=30,
