@@ -456,7 +456,7 @@ fn parse_element_operations(input: ParseStream) -> Result<Option<FieldOperation>
 }
 
 /// Parse field operations starting from the first field name
-/// Handles chained operations like .field, [index], .method(), .await, etc.
+/// Handles chained operations like .field, \[index\], .method(), .await, etc.
 fn parse_field_operations(
     input: ParseStream,
     existing_operations: Option<FieldOperation>,
@@ -488,7 +488,7 @@ fn parse_field_operations(
     }
 }
 
-/// Parse a single operation: .await, .field, .method(), or [index]
+/// Parse a single operation: .await, .field, .method(), or \[index\]
 /// This function parses exactly one operation and returns it
 fn parse_single_operation(input: ParseStream) -> Result<FieldOperation> {
     if input.peek(Token![.]) {
@@ -549,7 +549,7 @@ fn parse_single_operation(input: ParseStream) -> Result<FieldOperation> {
     }
 }
 
-/// Parse a chain of operations: .method().await[0].field, etc.
+/// Parse a chain of operations: .method().await\[0\].field, etc.
 /// Returns a FieldOperation with appropriate chaining
 fn parse_operations_chain(
     input: ParseStream,
