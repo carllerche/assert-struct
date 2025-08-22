@@ -242,3 +242,183 @@ fn test_mixed_patterns() {
         ..
     });
 }
+
+// Custom map type that only implements len() and get() to test duck typing
+#[derive(Debug)]
+struct CustomMap<K, V> {
+    entries: Vec<(K, V)>,
+}
+
+impl<K, V> CustomMap<K, V> {
+    fn new() -> Self {
+        Self {
+            entries: Vec::new(),
+        }
+    }
+
+    fn insert(&mut self, key: K, value: V) {
+        self.entries.push((key, value));
+    }
+
+    fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    fn get<Q>(&self, key: &Q) -> Option<&V>
+    where
+        K: std::borrow::Borrow<Q>,
+        Q: Eq + ?Sized,
+    {
+        self.entries
+            .iter()
+            .find(|(k, _)| k.borrow() == key)
+            .map(|(_, v)| v)
+    }
+}
+
+#[derive(Debug)]
+struct CustomMapData {
+    string_map: CustomMap<String, String>,
+    int_map: CustomMap<String, i32>,
+}
+
+#[test]
+fn test_custom_map_duck_typing() {
+    let mut string_map = CustomMap::new();
+    string_map.insert("key1".to_string(), "value1".to_string());
+    string_map.insert("key2".to_string(), "value2".to_string());
+
+    let mut int_map = CustomMap::new();
+    int_map.insert("count".to_string(), 42);
+
+    let data = CustomMapData {
+        string_map,
+        int_map,
+    };
+
+    // Test exact matching with custom map
+    assert_struct!(data, CustomMapData {
+        string_map: #{ "key1": "value1", "key2": "value2" },
+        ..
+    });
+
+    // Test partial matching with custom map
+    assert_struct!(data, CustomMapData {
+        string_map: #{ "key1": "value1", .. },
+        int_map: #{ "count": 42 },
+        ..
+    });
+}
+
+#[test]
+fn test_custom_map_with_patterns() {
+    let mut int_map = CustomMap::new();
+    int_map.insert("score".to_string(), 85);
+    int_map.insert("level".to_string(), 3);
+
+    let data = CustomMapData {
+        string_map: CustomMap::new(),
+        int_map,
+    };
+
+    // Test with comparison patterns on custom map
+    assert_struct!(data, CustomMapData {
+        int_map: #{
+            "score": > 80,
+            "level": <= 5,
+            ..
+        },
+        ..
+    });
+}
+
+#[test]
+fn test_empty_custom_map() {
+    let data = CustomMapData {
+        string_map: CustomMap::new(),
+        int_map: CustomMap::new(),
+    };
+
+    // Test empty custom map matching
+    assert_struct!(data, CustomMapData {
+        string_map: #{},
+        int_map: #{},
+        ..
+    });
+}
+
+#[test]
+#[allow(unused_variables)] // Wildcard patterns intentionally don't use field names
+fn test_wildcard_only_pattern() {
+    let mut string_map = HashMap::new();
+    string_map.insert("any".to_string(), "value".to_string());
+    string_map.insert("keys".to_string(), "here".to_string());
+
+    let mut custom_map = CustomMap::new();
+    custom_map.insert("custom".to_string(), "data".to_string());
+
+    let data = TestData {
+        string_map,
+        int_map: HashMap::new(),
+        btree_map: BTreeMap::new(),
+        nested_map: HashMap::new(),
+    };
+
+    let custom_data = CustomMapData {
+        string_map: custom_map,
+        int_map: CustomMap::new(),
+    };
+
+    // Test wildcard-only pattern - matches any map regardless of contents
+    assert_struct!(data, TestData {
+        string_map: #{ .. },  // Matches map with any contents
+        int_map: #{ .. },     // Matches empty map too
+        ..
+    });
+
+    assert_struct!(custom_data, CustomMapData {
+        string_map: #{ .. },  // Matches custom map with contents
+        int_map: #{ .. },     // Matches empty custom map
+        ..
+    });
+}
+
+#[test]
+#[allow(unused_variables)] // Wildcard patterns intentionally don't use field names
+fn test_empty_vs_wildcard_distinction() {
+    let mut non_empty_map = HashMap::new();
+    non_empty_map.insert("key".to_string(), "value".to_string());
+
+    let empty_map = HashMap::new();
+
+    let data_with_empty = TestData {
+        string_map: empty_map,
+        int_map: HashMap::new(),
+        btree_map: BTreeMap::new(),
+        nested_map: HashMap::new(),
+    };
+
+    let data_with_content = TestData {
+        string_map: non_empty_map,
+        int_map: HashMap::new(),
+        btree_map: BTreeMap::new(),
+        nested_map: HashMap::new(),
+    };
+
+    // #{} requires exactly empty map (len() == 0)
+    assert_struct!(data_with_empty, TestData {
+        string_map: #{},
+        ..
+    });
+
+    // #{ .. } matches any map regardless of content
+    assert_struct!(data_with_content, TestData {
+        string_map: #{ .. },
+        ..
+    });
+
+    assert_struct!(data_with_empty, TestData {
+        string_map: #{ .. },
+        ..
+    });
+}

@@ -1632,13 +1632,13 @@ fn generate_map_assertion_with_collection(
         let expected_len = entries.len();
         quote_spanned! {map_span=>
             // Check exact length for maps without rest pattern
-            if #value_expr.len() != #expected_len {
+            if (#value_expr).len() != #expected_len {
                 let __line = line!();
                 let __file = file!();
                 let __error = ::assert_struct::__macro_support::ErrorContext {
                     field_path: #field_path_str.to_string(),
                     pattern_str: format!("#{{ {} entries }}", #expected_len),
-                    actual_value: format!("map with {} entries", #value_expr.len()),
+                    actual_value: format!("map with {} entries", (#value_expr).len()),
                     line_number: __line,
                     file_name: __file,
                     error_type: ::assert_struct::__macro_support::ErrorType::Value,
@@ -1679,10 +1679,10 @@ fn generate_map_assertion_with_collection(
                 })
             ) {
                 // For string literals, convert to String to match HashMap<String, V>
-                quote_spanned! {span=> #value_expr.get(&(#key).to_string()) }
+                quote_spanned! {span=> (#value_expr).get(&(#key).to_string()) }
             } else {
                 // For other expressions, try as-is
-                quote_spanned! {span=> #value_expr.get(&#key) }
+                quote_spanned! {span=> (#value_expr).get(&#key) }
             };
 
             quote_spanned! {span=>
