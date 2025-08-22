@@ -471,8 +471,8 @@ fn generate_pattern_assertion_with_collection(
             let map_span = entries
                 .first()
                 .map(|(key, _)| key.span())
-                .unwrap_or_else(|| proc_macro2::Span::call_site());
-            
+                .unwrap_or_else(proc_macro2::Span::call_site);
+
             generate_map_assertion_with_collection(
                 value_expr,
                 entries,
