@@ -494,16 +494,17 @@ fn parse_field_operations(
 /// Parse a single operation: .await, .field, .method(), or \[index\]
 /// This function parses exactly one operation and returns it
 fn parse_single_operation(input: ParseStream) -> Result<FieldOperation> {
-    let span = input.span();
-    
     if input.peek(Token![.]) {
+        let dot_span = input.span();
         let _: Token![.] = input.parse()?;
 
         if input.peek(Token![await]) {
+            let await_span = input.span();
             let _: Token![await] = input.parse()?;
-            Ok(FieldOperation::Await { span })
+            Ok(FieldOperation::Await { span: await_span })
         } else {
             let ident: syn::Ident = input.parse()?;
+            let method_span = ident.span();
 
             if input.peek(syn::token::Paren) {
                 // Method call with args
@@ -521,7 +522,7 @@ fn parse_single_operation(input: ParseStream) -> Result<FieldOperation> {
                     let _: Token![,] = args_content.parse()?;
                 }
 
-                Ok(FieldOperation::Method { name: ident, args, span })
+                Ok(FieldOperation::Method { name: ident, args, span: method_span })
             } else {
                 // Field access - might be chained like .field.nested.deep
                 let mut fields = vec![ident];
@@ -537,15 +538,16 @@ fn parse_single_operation(input: ParseStream) -> Result<FieldOperation> {
                     fields.push(field);
                 }
 
-                Ok(FieldOperation::Nested { fields, span })
+                Ok(FieldOperation::Nested { fields, span: dot_span })
             }
         }
     } else if input.peek(syn::token::Bracket) {
-        // Index operation
+        // Index operation - need to capture the span that encompasses the bracket
+        let bracket_token;
         let content;
-        syn::bracketed!(content in input);
+        bracket_token = syn::bracketed!(content in input);
         let index: syn::Expr = content.parse()?;
-        Ok(FieldOperation::Index { index, span })
+        Ok(FieldOperation::Index { index, span: bracket_token.span.open() })
     } else {
         Err(syn::Error::new(
             input.span(),

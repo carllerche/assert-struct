@@ -1,5 +1,0 @@
-error: expected identifier, found keyword `await`
-  --> tests/trybuild/compile_fail/span_propagation_complex.rs:29:21
-   |
-29 |         0.collect().await.unwrap(): [
-   |                     ^^^^^
