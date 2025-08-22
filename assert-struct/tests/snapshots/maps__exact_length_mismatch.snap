@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | TestData {
 mismatch:
-  --> `data.string_map` (line 19)
+  --> `data.string_map` (line 20)
    |     string_map: #{"key1": "value1"},
    |                 ^^^^^^^^^^^^^^^^^^^ actual: map with 2 entries
    | }

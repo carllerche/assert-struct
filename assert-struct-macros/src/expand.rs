@@ -467,6 +467,12 @@ fn generate_pattern_assertion_with_collection(
         }
         Pattern::Map { entries, rest, .. } => {
             // Generate map assertion with error collection
+            // Use span from first entry or default span if empty
+            let map_span = entries
+                .first()
+                .map(|(key, _)| key.span())
+                .unwrap_or_else(|| proc_macro2::Span::call_site());
+            
             generate_map_assertion_with_collection(
                 value_expr,
                 entries,
@@ -474,6 +480,7 @@ fn generate_pattern_assertion_with_collection(
                 is_ref,
                 path,
                 &node_ident,
+                map_span,
             )
         }
         Pattern::Rest { .. } => {
@@ -1616,13 +1623,14 @@ fn generate_map_assertion_with_collection(
     _is_ref: bool,
     path: &[String],
     node_ident: &Ident,
+    map_span: proc_macro2::Span,
 ) -> TokenStream {
     let field_path_str = path.join(".");
 
     // Generate length check assertion for exact matching (when no rest pattern)
     let len_check = if !rest {
         let expected_len = entries.len();
-        quote! {
+        quote_spanned! {map_span=>
             // Check exact length for maps without rest pattern
             if #value_expr.len() != #expected_len {
                 let __line = line!();
