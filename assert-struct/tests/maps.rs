@@ -1,6 +1,9 @@
 use assert_struct::assert_struct;
 use std::collections::{BTreeMap, HashMap};
 
+#[path = "util/mod.rs"]
+mod util;
+
 #[derive(Debug)]
 struct TestData {
     string_map: HashMap<String, String>,
@@ -193,66 +196,10 @@ fn test_map_with_regex_patterns() {
     });
 }
 
-#[test]
-#[should_panic]
-fn test_exact_length_mismatch() {
-    let mut string_map = HashMap::new();
-    string_map.insert("key1".to_string(), "value1".to_string());
-    string_map.insert("key2".to_string(), "value2".to_string());
-
-    let data = TestData {
-        string_map,
-        int_map: HashMap::new(),
-        btree_map: BTreeMap::new(),
-        nested_map: HashMap::new(),
-    };
-
-    // This should fail because we have 2 entries but pattern expects exactly 1
-    assert_struct!(data, TestData {
-        string_map: #{ "key1": "value1" },
-        ..
-    });
-}
-
-#[test]
-#[should_panic]
-fn test_missing_key() {
-    let mut string_map = HashMap::new();
-    string_map.insert("key1".to_string(), "value1".to_string());
-
-    let data = TestData {
-        string_map,
-        int_map: HashMap::new(),
-        btree_map: BTreeMap::new(),
-        nested_map: HashMap::new(),
-    };
-
-    // This should fail because "missing_key" doesn't exist
-    assert_struct!(data, TestData {
-        string_map: #{ "missing_key": "value", .. },
-        ..
-    });
-}
-
-#[test]
-#[should_panic]
-fn test_value_mismatch() {
-    let mut string_map = HashMap::new();
-    string_map.insert("key1".to_string(), "actual_value".to_string());
-
-    let data = TestData {
-        string_map,
-        int_map: HashMap::new(),
-        btree_map: BTreeMap::new(),
-        nested_map: HashMap::new(),
-    };
-
-    // This should fail because value doesn't match
-    assert_struct!(data, TestData {
-        string_map: #{ "key1": "expected_value", .. },
-        ..
-    });
-}
+// Error message tests using insta snapshots
+error_message_test!("map_errors/exact_length_mismatch.rs", exact_length_mismatch);
+error_message_test!("map_errors/missing_key.rs", missing_key);
+error_message_test!("map_errors/value_mismatch.rs", value_mismatch);
 
 #[test]
 fn test_empty_map() {
