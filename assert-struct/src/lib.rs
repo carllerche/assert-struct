@@ -642,6 +642,10 @@ pub mod error;
 pub mod __macro_support {
     pub use crate::error::{ErrorContext, ErrorType, PatternNode, format_errors_with_root};
 
+    // Re-export regex types for macro expansion when regex feature is enabled
+    #[cfg(feature = "regex")]
+    pub use regex::Regex;
+
     /// Helper function to enable type inference for closure parameters in assert_struct patterns
     #[inline]
     pub fn check_closure_condition<T, F>(value: T, predicate: F) -> bool
