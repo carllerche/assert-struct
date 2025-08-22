@@ -33,7 +33,7 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
     quote! {
         {
             // Suppress clippy warnings that are expected in macro-generated code
-            #[allow(clippy::neg_cmp_op_on_partial_ord, clippy::op_ref, clippy::zero_prefixed_literal)]
+            #[allow(clippy::neg_cmp_op_on_partial_ord, clippy::op_ref, clippy::zero_prefixed_literal, clippy::bool_comparison)]
             let __assert_struct_result = {
                 // Generate all node constants
                 #(#node_constants)*
@@ -638,17 +638,17 @@ fn generate_struct_match_assertion_with_collection(
 /// Generate a readable path string for a field operation for error messages
 fn generate_field_operation_path(base_field: String, operation: &FieldOperation) -> String {
     match operation {
-        FieldOperation::Deref { count } => {
+        FieldOperation::Deref { count, .. } => {
             let stars = "*".repeat(*count);
             format!("{}{}", stars, base_field)
         }
         FieldOperation::Method { name, .. } => {
             format!("{}.{}()", base_field, name)
         }
-        FieldOperation::Await => {
+        FieldOperation::Await { .. } => {
             format!("{}.await", base_field)
         }
-        FieldOperation::Nested { fields } => {
+        FieldOperation::Nested { fields, .. } => {
             let nested = fields
                 .iter()
                 .map(|f| f.to_string())
@@ -656,18 +656,19 @@ fn generate_field_operation_path(base_field: String, operation: &FieldOperation)
                 .join(".");
             format!("{}.{}", base_field, nested)
         }
-        FieldOperation::Index { index } => {
+        FieldOperation::Index { index, .. } => {
             format!("{}[{}]", base_field, quote! { #index })
         }
         FieldOperation::Combined {
             deref_count,
             operation,
+            ..
         } => {
             let stars = "*".repeat(*deref_count);
             let base_with_deref = format!("{}{}", stars, base_field);
             generate_field_operation_path(base_with_deref, operation)
         }
-        FieldOperation::Chained { operations } => {
+        FieldOperation::Chained { operations, .. } => {
             let mut result = base_field;
             for op in operations {
                 result = generate_field_operation_path(result, op);
@@ -690,38 +691,39 @@ fn apply_field_operations(
     in_ref_context: bool,
 ) -> TokenStream {
     match operation {
-        FieldOperation::Deref { count } => {
+        FieldOperation::Deref { count, span } => {
             let mut expr = base_expr.clone();
             // In reference context, we need one extra dereference
             let total_count = if in_ref_context { count + 1 } else { *count };
             for _ in 0..total_count {
-                expr = quote! { *#expr };
+                expr = quote_spanned! { *span=> *#expr };
             }
             expr
         }
-        FieldOperation::Method { name, args } => {
+        FieldOperation::Method { name, args, span } => {
             if args.is_empty() {
-                quote! { #base_expr.#name() }
+                quote_spanned! { *span=> #base_expr.#name() }
             } else {
-                quote! { #base_expr.#name(#(#args),*) }
+                quote_spanned! { *span=> #base_expr.#name(#(#args),*) }
             }
         }
-        FieldOperation::Await => {
-            quote! { #base_expr.await }
+        FieldOperation::Await { span } => {
+            quote_spanned! { *span=> #base_expr.await }
         }
-        FieldOperation::Nested { fields } => {
+        FieldOperation::Nested { fields, span } => {
             let mut expr = base_expr.clone();
             for field in fields {
-                expr = quote! { #expr.#field };
+                expr = quote_spanned! { *span=> #expr.#field };
             }
             expr
         }
-        FieldOperation::Index { index } => {
-            quote! { #base_expr[#index] }
+        FieldOperation::Index { index, span } => {
+            quote_spanned! { *span=> #base_expr[#index] }
         }
         FieldOperation::Combined {
             deref_count,
             operation,
+            span,
         } => {
             // First apply dereferencing with reference context awareness
             let mut expr = base_expr.clone();
@@ -731,12 +733,12 @@ fn apply_field_operations(
                 *deref_count
             };
             for _ in 0..total_count {
-                expr = quote! { *#expr };
+                expr = quote_spanned! { *span=> *#expr };
             }
             // Then apply the nested operation (no longer in ref context after deref)
             apply_field_operations(&expr, operation, false)
         }
-        FieldOperation::Chained { operations } => {
+        FieldOperation::Chained { operations, .. } => {
             let mut expr = base_expr.clone();
             for op in operations {
                 expr = apply_field_operations(&expr, op, false);
@@ -751,11 +753,11 @@ fn field_operation_returns_reference(operation: &FieldOperation) -> bool {
     match operation {
         FieldOperation::Deref { .. } => false, // Dereferencing removes reference level
         FieldOperation::Method { .. } => false, // Method calls return owned values
-        FieldOperation::Await => false,        // Await returns owned values
+        FieldOperation::Await { .. } => false, // Await returns owned values
         FieldOperation::Nested { .. } => false, // Nested field access auto-derefs to get field value
         FieldOperation::Index { .. } => true,   // Index operations return references to elements
         FieldOperation::Combined { .. } => false, // Combined with deref also removes reference level
-        FieldOperation::Chained { operations } => {
+        FieldOperation::Chained { operations, .. } => {
             // For chained operations, the reference level is determined by the last operation
             operations
                 .last()

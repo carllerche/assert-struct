@@ -1,0 +1,5 @@
+error[E0608]: cannot index into a value of type `&i32`
+  --> tests/compile_fail/simple_span_test.rs:13:14
+   |
+13 |         value[0]: 42,
+   |              ^
