@@ -1410,7 +1410,7 @@ fn generate_regex_assertion_with_collection(
         quote_spanned! {span=>
             {
                 use ::assert_struct::Like;
-                let re = ::regex::Regex::new(#pattern_str)
+                let re = ::assert_struct::__macro_support::Regex::new(#pattern_str)
                     .expect(concat!("Invalid regex pattern: ", #pattern_str));
                 if !#value_expr.like(&re) {
                     let __line = line!();
@@ -1434,7 +1434,7 @@ fn generate_regex_assertion_with_collection(
         quote_spanned! {span=>
             {
                 use ::assert_struct::Like;
-                let re = ::regex::Regex::new(#pattern_str)
+                let re = ::assert_struct::__macro_support::Regex::new(#pattern_str)
                     .expect(concat!("Invalid regex pattern: ", #pattern_str));
                 if !(&#value_expr).like(&re) {
                     let __line = line!();
