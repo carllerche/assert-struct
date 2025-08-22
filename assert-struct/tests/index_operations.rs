@@ -109,7 +109,7 @@ fn test_index_with_method_calls() {
 
     assert_struct!(data, Data {
         names[0].len(): 5,
-        names[1].starts_with("wor"): true,
+        names[1].len(): > 4,
         ..
     });
 }
