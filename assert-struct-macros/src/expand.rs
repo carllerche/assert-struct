@@ -645,6 +645,9 @@ fn generate_field_operation_path(base_field: String, operation: &FieldOperation)
         FieldOperation::Method { name, .. } => {
             format!("{}.{}()", base_field, name)
         }
+        FieldOperation::Await => {
+            format!("{}.await", base_field)
+        }
         FieldOperation::Nested { fields } => {
             let nested = fields
                 .iter()
@@ -675,7 +678,7 @@ fn generate_field_operation_path(base_field: String, operation: &FieldOperation)
 }
 
 /// Apply field operations to a value expression
-/// This generates the appropriate dereferencing, method calls, nested field access, or index operations
+/// This generates the appropriate dereferencing, method calls, nested field access, index operations, or await
 ///
 /// # Parameters
 /// - `base_expr`: The base expression to apply operations to
@@ -702,6 +705,9 @@ fn apply_field_operations(
             } else {
                 quote! { #base_expr.#name(#(#args),*) }
             }
+        }
+        FieldOperation::Await => {
+            quote! { #base_expr.await }
         }
         FieldOperation::Nested { fields } => {
             let mut expr = base_expr.clone();
@@ -745,6 +751,7 @@ fn field_operation_returns_reference(operation: &FieldOperation) -> bool {
     match operation {
         FieldOperation::Deref { .. } => false, // Dereferencing removes reference level
         FieldOperation::Method { .. } => false, // Method calls return owned values
+        FieldOperation::Await => false,        // Await returns owned values
         FieldOperation::Nested { .. } => false, // Nested field access auto-derefs to get field value
         FieldOperation::Index { .. } => true,   // Index operations return references to elements
         FieldOperation::Combined { .. } => false, // Combined with deref also removes reference level

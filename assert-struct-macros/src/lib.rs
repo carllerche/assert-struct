@@ -225,6 +225,10 @@ enum FieldOperation {
         args: Vec<syn::Expr>,
     },
 
+    /// Await operation: field.await
+    /// For async futures that need to be awaited
+    Await,
+
     /// Nested field access: field.nested, field.inner.value, etc.
     /// Stores the chain of field names to access
     Nested { fields: Vec<syn::Ident> },
@@ -293,6 +297,10 @@ impl fmt::Display for TupleElement {
                             // Show method calls after the index: 0.len():
                             write!(f, "{}.{}(): {}", index, name, pattern)
                         }
+                        FieldOperation::Await => {
+                            // Show await after the index: 0.await:
+                            write!(f, "{}.await: {}", index, pattern)
+                        }
                         FieldOperation::Nested { fields } => {
                             // Show nested access after the index: 0.field:
                             write!(f, "{}", index)?;
@@ -317,6 +325,9 @@ impl fmt::Display for TupleElement {
                                     }
                                     FieldOperation::Method { name, .. } => {
                                         write!(f, ".{}()", name)?;
+                                    }
+                                    FieldOperation::Await => {
+                                        write!(f, ".await")?;
                                     }
                                     FieldOperation::Index { index } => {
                                         write!(f, "[{}]", quote::quote! { #index })?;
@@ -363,6 +374,9 @@ impl fmt::Display for FieldOperation {
             }
             FieldOperation::Method { name, .. } => {
                 write!(f, ".{}()", name)
+            }
+            FieldOperation::Await => {
+                write!(f, ".await")
             }
             FieldOperation::Nested { fields } => {
                 for field in fields {
