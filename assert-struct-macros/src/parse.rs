@@ -450,7 +450,10 @@ fn parse_element_operations(input: ParseStream) -> Result<Option<FieldOperation>
     }
 
     if deref_count > 0 {
-        Ok(Some(FieldOperation::Deref { count: deref_count, span }))
+        Ok(Some(FieldOperation::Deref {
+            count: deref_count,
+            span,
+        }))
     } else {
         Ok(None)
     }
@@ -480,7 +483,11 @@ fn parse_field_operations(
     };
 
     // Combine with existing operations if present
-    if let Some(FieldOperation::Deref { count, span: deref_span }) = existing_operations {
+    if let Some(FieldOperation::Deref {
+        count,
+        span: deref_span,
+    }) = existing_operations
+    {
         Ok(FieldOperation::Combined {
             deref_count: count,
             operation: Box::new(final_operation),
@@ -522,7 +529,11 @@ fn parse_single_operation(input: ParseStream) -> Result<FieldOperation> {
                     let _: Token![,] = args_content.parse()?;
                 }
 
-                Ok(FieldOperation::Method { name: ident, args, span: method_span })
+                Ok(FieldOperation::Method {
+                    name: ident,
+                    args,
+                    span: method_span,
+                })
             } else {
                 // Field access - might be chained like .field.nested.deep
                 let mut fields = vec![ident];
@@ -538,7 +549,10 @@ fn parse_single_operation(input: ParseStream) -> Result<FieldOperation> {
                     fields.push(field);
                 }
 
-                Ok(FieldOperation::Nested { fields, span: dot_span })
+                Ok(FieldOperation::Nested {
+                    fields,
+                    span: dot_span,
+                })
             }
         }
     } else if input.peek(syn::token::Bracket) {
@@ -546,7 +560,10 @@ fn parse_single_operation(input: ParseStream) -> Result<FieldOperation> {
         let content;
         let bracket_token = syn::bracketed!(content in input);
         let index: syn::Expr = content.parse()?;
-        Ok(FieldOperation::Index { index, span: bracket_token.span.open() })
+        Ok(FieldOperation::Index {
+            index,
+            span: bracket_token.span.open(),
+        })
     } else {
         Err(syn::Error::new(
             input.span(),
@@ -580,7 +597,11 @@ fn parse_operations_chain(
     };
 
     // Combine with existing operations if present
-    if let Some(FieldOperation::Deref { count, span: deref_span }) = existing_operations {
+    if let Some(FieldOperation::Deref {
+        count,
+        span: deref_span,
+    }) = existing_operations
+    {
         Ok(FieldOperation::Combined {
             deref_count: count,
             operation: Box::new(final_operation),
@@ -684,7 +705,10 @@ impl Parse for FieldAssertion {
         }
 
         if deref_count > 0 {
-            operations = Some(FieldOperation::Deref { count: deref_count, span });
+            operations = Some(FieldOperation::Deref {
+                count: deref_count,
+                span,
+            });
         }
 
         // Parse field name and potential chained operations

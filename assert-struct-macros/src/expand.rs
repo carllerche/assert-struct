@@ -753,7 +753,7 @@ fn field_operation_returns_reference(operation: &FieldOperation) -> bool {
     match operation {
         FieldOperation::Deref { .. } => false, // Dereferencing removes reference level
         FieldOperation::Method { .. } => false, // Method calls return owned values
-        FieldOperation::Await { .. } => false,        // Await returns owned values
+        FieldOperation::Await { .. } => false, // Await returns owned values
         FieldOperation::Nested { .. } => false, // Nested field access auto-derefs to get field value
         FieldOperation::Index { .. } => true,   // Index operations return references to elements
         FieldOperation::Combined { .. } => false, // Combined with deref also removes reference level

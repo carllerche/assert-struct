@@ -216,7 +216,7 @@ struct Expected {
 enum FieldOperation {
     /// Dereference operation: *field, **field, etc.
     /// The count indicates how many dereferences to perform
-    Deref { 
+    Deref {
         count: usize,
         span: proc_macro2::Span,
     },
@@ -231,20 +231,18 @@ enum FieldOperation {
 
     /// Await operation: field.await
     /// For async futures that need to be awaited
-    Await {
-        span: proc_macro2::Span,
-    },
+    Await { span: proc_macro2::Span },
 
     /// Nested field access: field.nested, field.inner.value, etc.
     /// Stores the chain of field names to access
-    Nested { 
+    Nested {
         fields: Vec<syn::Ident>,
         span: proc_macro2::Span,
     },
 
     /// Index operation: field\[0\], field\[index\], etc.
     /// Stores the index expression to use
-    Index { 
+    Index {
         index: syn::Expr,
         span: proc_macro2::Span,
     },
@@ -259,7 +257,7 @@ enum FieldOperation {
 
     /// Chained operations: nested field followed by index or method
     /// Example: field.nested\[0\], field.inner.method(), field.sub\[1\].len()
-    Chained { 
+    Chained {
         operations: Vec<FieldOperation>,
         span: proc_macro2::Span,
     },
