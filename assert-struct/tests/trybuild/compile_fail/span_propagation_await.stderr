@@ -1,0 +1,5 @@
+error: expected identifier, found keyword `await`
+  --> tests/trybuild/compile_fail/span_propagation_await.rs:15:15
+   |
+15 |         value.await: 42,
+   |               ^^^^^

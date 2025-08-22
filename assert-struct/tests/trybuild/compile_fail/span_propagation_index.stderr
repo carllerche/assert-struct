@@ -1,0 +1,10 @@
+error[E0608]: cannot index into a value of type `&i32`
+  --> tests/trybuild/compile_fail/span_propagation_index.rs:13:5
+   |
+13 | /     assert_struct!(data, TestStruct {
+14 | |         value[0]: 42,
+15 | |         ..
+16 | |     });
+   | |______^
+   |
+   = note: this error originates in the macro `assert_struct` (in Nightly builds, run with -Z macro-backtrace for more info)

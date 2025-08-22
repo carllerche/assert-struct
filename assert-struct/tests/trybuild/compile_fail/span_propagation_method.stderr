@@ -1,0 +1,8 @@
+error[E0599]: no method named `nonexistent_method` found for reference `&i32` in the current scope
+  --> tests/trybuild/compile_fail/span_propagation_method.rs:14:15
+   |
+13 | /     assert_struct!(data, TestStruct {
+14 | |         value.nonexistent_method(): 42,
+   | |              -^^^^^^^^^^^^^^^^^^ method not found in `&i32`
+   | |______________|
+   |
