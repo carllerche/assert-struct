@@ -543,9 +543,8 @@ fn parse_single_operation(input: ParseStream) -> Result<FieldOperation> {
         }
     } else if input.peek(syn::token::Bracket) {
         // Index operation - need to capture the span that encompasses the bracket
-        let bracket_token;
         let content;
-        bracket_token = syn::bracketed!(content in input);
+        let bracket_token = syn::bracketed!(content in input);
         let index: syn::Expr = content.parse()?;
         Ok(FieldOperation::Index { index, span: bracket_token.span.open() })
     } else {
