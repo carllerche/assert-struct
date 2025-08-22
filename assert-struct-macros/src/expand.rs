@@ -67,7 +67,8 @@ fn get_pattern_node_ident(pattern: &Pattern) -> Ident {
         | Pattern::Range { node_id, .. }
         | Pattern::Rest { node_id }
         | Pattern::Wildcard { node_id }
-        | Pattern::Closure { node_id, .. } => *node_id,
+        | Pattern::Closure { node_id, .. }
+        | Pattern::Map { node_id, .. } => *node_id,
         #[cfg(feature = "regex")]
         Pattern::Regex { node_id, .. } | Pattern::Like { node_id, .. } => *node_id,
     };
@@ -86,7 +87,10 @@ fn get_pattern_span(pattern: &Pattern) -> Option<Span> {
         Pattern::Like { expr, .. } => Some(expr.span()),
         Pattern::Struct { path, .. } => path.as_ref().map(|p| p.span()),
         Pattern::Tuple { path, .. } => path.as_ref().map(|p| p.span()),
-        Pattern::Slice { .. } | Pattern::Rest { .. } | Pattern::Wildcard { .. } => None,
+        Pattern::Slice { .. }
+        | Pattern::Rest { .. }
+        | Pattern::Wildcard { .. }
+        | Pattern::Map { .. } => None,
         Pattern::Closure { closure, .. } => Some(closure.span()),
     }
 }
@@ -106,7 +110,8 @@ fn generate_pattern_nodes(
         | Pattern::Range { node_id, .. }
         | Pattern::Rest { node_id }
         | Pattern::Wildcard { node_id }
-        | Pattern::Closure { node_id, .. } => *node_id,
+        | Pattern::Closure { node_id, .. }
+        | Pattern::Map { node_id, .. } => *node_id,
         #[cfg(feature = "regex")]
         Pattern::Regex { node_id, .. } | Pattern::Like { node_id, .. } => *node_id,
     };
@@ -274,6 +279,35 @@ fn generate_pattern_nodes(
                 }
             }
         }
+        Pattern::Map { entries, rest, .. } => {
+            let entry_refs: Vec<TokenStream> = entries
+                .iter()
+                .map(|(key, value)| {
+                    let key_str = quote! { #key }.to_string();
+                    let value_ref = generate_pattern_nodes(value, node_defs);
+                    quote! {
+                        (#key_str, &#value_ref)
+                    }
+                })
+                .collect();
+
+            if *rest {
+                quote! {
+                    ::assert_struct::__macro_support::PatternNode::Map {
+                        entries: &[
+                            #(#entry_refs,)*
+                            ("..", &::assert_struct::__macro_support::PatternNode::Rest)
+                        ],
+                    }
+                }
+            } else {
+                quote! {
+                    ::assert_struct::__macro_support::PatternNode::Map {
+                        entries: &[#(#entry_refs),*],
+                    }
+                }
+            }
+        }
     };
 
     node_defs.push((node_id, node_def));
@@ -426,6 +460,17 @@ fn generate_pattern_assertion_with_collection(
             generate_closure_assertion_with_collection(
                 value_expr,
                 closure,
+                is_ref,
+                path,
+                &node_ident,
+            )
+        }
+        Pattern::Map { entries, rest, .. } => {
+            // Generate map assertion with error collection
+            generate_map_assertion_with_collection(
+                value_expr,
+                entries,
+                *rest,
                 is_ref,
                 path,
                 &node_ident,
@@ -956,6 +1001,13 @@ fn pattern_to_string(pattern: &Pattern) -> String {
                 }
             } else {
                 format!("({} elements)", elements.len())
+            }
+        }
+        Pattern::Map { entries, rest, .. } => {
+            if *rest {
+                format!("#{{ {} entries, .. }}", entries.len())
+            } else {
+                format!("#{{ {} entries }}", entries.len())
             }
         }
         Pattern::Slice { elements, .. } => format!("[{} elements]", elements.len()),
@@ -1552,5 +1604,108 @@ fn generate_closure_assertion_with_collection(
                 __errors.push(__error);
             }
         }
+    }
+}
+
+/// Generate map assertion with error collection using duck typing
+/// Assumes map types have len() -> usize and get(&K) -> Option<&V> methods
+fn generate_map_assertion_with_collection(
+    value_expr: &TokenStream,
+    entries: &[(syn::Expr, Pattern)],
+    rest: bool,
+    _is_ref: bool,
+    path: &[String],
+    node_ident: &Ident,
+) -> TokenStream {
+    let field_path_str = path.join(".");
+
+    // Generate length check assertion for exact matching (when no rest pattern)
+    let len_check = if !rest {
+        let expected_len = entries.len();
+        quote! {
+            // Check exact length for maps without rest pattern
+            if #value_expr.len() != #expected_len {
+                let __line = line!();
+                let __file = file!();
+                let __error = ::assert_struct::__macro_support::ErrorContext {
+                    field_path: #field_path_str.to_string(),
+                    pattern_str: format!("#{{ {} entries }}", #expected_len),
+                    actual_value: format!("map with {} entries", #value_expr.len()),
+                    line_number: __line,
+                    file_name: __file,
+                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
+                    expected_value: Some(format!("{} entries", #expected_len)),
+                    error_node: Some(&#node_ident),
+                };
+                __errors.push(__error);
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    // Generate key-value assertions
+    let key_value_assertions: Vec<TokenStream> = entries
+        .iter()
+        .map(|(key, value_pattern)| {
+            let key_str = quote! { #key }.to_string();
+
+            // Build path for this key
+            let mut key_path = path.to_vec();
+            key_path.push(key_str.clone());
+
+            let span = key.span();
+            let pattern_assertion = generate_pattern_assertion_with_collection(
+                &quote! { __map_value },
+                value_pattern,
+                true, // map.get() returns Option<&V>, so we have a reference
+                &key_path,
+            );
+
+            // Handle different key types for duck typing
+            let get_expr = if matches!(
+                key,
+                syn::Expr::Lit(syn::ExprLit {
+                    lit: syn::Lit::Str(_),
+                    ..
+                })
+            ) {
+                // For string literals, convert to String to match HashMap<String, V>
+                quote_spanned! {span=> #value_expr.get(&(#key).to_string()) }
+            } else {
+                // For other expressions, try as-is
+                quote_spanned! {span=> #value_expr.get(&#key) }
+            };
+
+            quote_spanned! {span=>
+                // Check if key exists and apply pattern to the value
+                match #get_expr {
+                    Some(__map_value) => {
+                        // Apply pattern assertion to the value
+                        #pattern_assertion
+                    }
+                    None => {
+                        let __line = line!();
+                        let __file = file!();
+                        let __error = ::assert_struct::__macro_support::ErrorContext {
+                            field_path: #field_path_str.to_string(),
+                            pattern_str: format!("key: {}", #key_str),
+                            actual_value: "missing key".to_string(),
+                            line_number: __line,
+                            file_name: __file,
+                            error_type: ::assert_struct::__macro_support::ErrorType::Value,
+                            expected_value: Some(format!("key present: {}", #key_str)),
+                            error_node: Some(&#node_ident),
+                        };
+                        __errors.push(__error);
+                    }
+                }
+            }
+        })
+        .collect();
+
+    quote! {
+        #len_check
+        #(#key_value_assertions)*
     }
 }

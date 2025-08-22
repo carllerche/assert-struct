@@ -284,6 +284,27 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         }
     }
 
+    // Map patterns for map-like structures using duck typing
+    // Example: `#{ "key": "value" }` or `#{ "key": > 5, .. }`
+    if input.peek(Token![#]) {
+        let _: Token![#] = input.parse()?;
+        if input.peek(syn::token::Brace) {
+            let content;
+            syn::braced!(content in input);
+            let (entries, rest) = parse_map_entries(&content)?;
+            return Ok(Pattern::Map {
+                node_id: next_node_id(),
+                entries,
+                rest,
+            });
+        } else {
+            return Err(syn::Error::new(
+                input.span(),
+                "Expected `{` after `#` for map pattern",
+            ));
+        }
+    }
+
     // Slice patterns for Vec/array matching
     // Example: `[1, 2, 3]` or `[> 0, < 10, == 5]`
     if input.peek(syn::token::Bracket) {
@@ -798,4 +819,46 @@ fn check_for_special_syntax(content: ParseStream) -> bool {
     }
 
     false
+}
+
+/// Parse map entries: comma-separated key-value pairs with optional rest pattern
+/// Supports syntax like: "key1": pattern1, "key2": pattern2, ..
+fn parse_map_entries(input: ParseStream) -> Result<(Vec<(syn::Expr, Pattern)>, bool)> {
+    let mut entries = Vec::new();
+    let mut rest = false;
+
+    while !input.is_empty() {
+        // Check for rest pattern (..) which allows partial matching
+        if input.peek(Token![..]) {
+            let _: Token![..] = input.parse()?;
+            rest = true;
+            break;
+        }
+
+        // Parse key expression
+        let key: syn::Expr = input.parse()?;
+
+        // Expect colon separator
+        let _: Token![:] = input.parse()?;
+
+        // Parse value pattern
+        let value = parse_pattern(input)?;
+
+        entries.push((key, value));
+
+        if input.is_empty() {
+            break;
+        }
+
+        let _: Token![,] = input.parse()?;
+
+        // Rest pattern can appear after a comma
+        if input.peek(Token![..]) {
+            let _: Token![..] = input.parse()?;
+            rest = true;
+            break;
+        }
+    }
+
+    Ok((entries, rest))
 }
