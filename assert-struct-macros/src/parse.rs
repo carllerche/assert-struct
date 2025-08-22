@@ -441,6 +441,7 @@ fn parse_pattern_list(input: ParseStream) -> Result<Vec<Pattern>> {
 /// This is simpler than field operations since we only support * for now
 fn parse_element_operations(input: ParseStream) -> Result<Option<FieldOperation>> {
     let mut deref_count = 0;
+    let span = input.span();
 
     // Count leading * tokens for dereferencing
     while input.peek(Token![*]) {
@@ -449,7 +450,7 @@ fn parse_element_operations(input: ParseStream) -> Result<Option<FieldOperation>
     }
 
     if deref_count > 0 {
-        Ok(Some(FieldOperation::Deref { count: deref_count }))
+        Ok(Some(FieldOperation::Deref { count: deref_count, span }))
     } else {
         Ok(None)
     }
@@ -461,6 +462,7 @@ fn parse_field_operations(
     input: ParseStream,
     existing_operations: Option<FieldOperation>,
 ) -> Result<FieldOperation> {
+    let span = input.span();
     let mut operations = vec![];
 
     // Continue parsing operations in the chain using the helper
@@ -474,14 +476,15 @@ fn parse_field_operations(
     } else if operations.is_empty() {
         return Err(syn::Error::new(input.span(), "Expected field operations"));
     } else {
-        FieldOperation::Chained { operations }
+        FieldOperation::Chained { operations, span }
     };
 
     // Combine with existing operations if present
-    if let Some(FieldOperation::Deref { count }) = existing_operations {
+    if let Some(FieldOperation::Deref { count, span: deref_span }) = existing_operations {
         Ok(FieldOperation::Combined {
             deref_count: count,
             operation: Box::new(final_operation),
+            span: deref_span,
         })
     } else {
         Ok(final_operation)
@@ -491,12 +494,14 @@ fn parse_field_operations(
 /// Parse a single operation: .await, .field, .method(), or \[index\]
 /// This function parses exactly one operation and returns it
 fn parse_single_operation(input: ParseStream) -> Result<FieldOperation> {
+    let span = input.span();
+    
     if input.peek(Token![.]) {
         let _: Token![.] = input.parse()?;
 
         if input.peek(Token![await]) {
             let _: Token![await] = input.parse()?;
-            Ok(FieldOperation::Await)
+            Ok(FieldOperation::Await { span })
         } else {
             let ident: syn::Ident = input.parse()?;
 
@@ -516,7 +521,7 @@ fn parse_single_operation(input: ParseStream) -> Result<FieldOperation> {
                     let _: Token![,] = args_content.parse()?;
                 }
 
-                Ok(FieldOperation::Method { name: ident, args })
+                Ok(FieldOperation::Method { name: ident, args, span })
             } else {
                 // Field access - might be chained like .field.nested.deep
                 let mut fields = vec![ident];
@@ -532,7 +537,7 @@ fn parse_single_operation(input: ParseStream) -> Result<FieldOperation> {
                     fields.push(field);
                 }
 
-                Ok(FieldOperation::Nested { fields })
+                Ok(FieldOperation::Nested { fields, span })
             }
         }
     } else if input.peek(syn::token::Bracket) {
@@ -540,7 +545,7 @@ fn parse_single_operation(input: ParseStream) -> Result<FieldOperation> {
         let content;
         syn::bracketed!(content in input);
         let index: syn::Expr = content.parse()?;
-        Ok(FieldOperation::Index { index })
+        Ok(FieldOperation::Index { index, span })
     } else {
         Err(syn::Error::new(
             input.span(),
@@ -555,6 +560,7 @@ fn parse_operations_chain(
     input: ParseStream,
     existing_operations: Option<FieldOperation>,
 ) -> Result<FieldOperation> {
+    let span = input.span();
     let mut operations = vec![];
 
     // Parse the first operation (which should start with . or [)
@@ -569,14 +575,15 @@ fn parse_operations_chain(
     let final_operation = if operations.len() == 1 {
         operations.into_iter().next().unwrap()
     } else {
-        FieldOperation::Chained { operations }
+        FieldOperation::Chained { operations, span }
     };
 
     // Combine with existing operations if present
-    if let Some(FieldOperation::Deref { count }) = existing_operations {
+    if let Some(FieldOperation::Deref { count, span: deref_span }) = existing_operations {
         Ok(FieldOperation::Combined {
             deref_count: count,
             operation: Box::new(final_operation),
+            span: deref_span,
         })
     } else {
         Ok(final_operation)
@@ -667,6 +674,7 @@ impl Parse for FieldAssertion {
         // Check if we have field operations (starting with * for deref)
         let mut operations = None;
         let mut deref_count = 0;
+        let span = input.span();
 
         // Count leading * tokens for dereferencing
         while input.peek(Token![*]) {
@@ -675,7 +683,7 @@ impl Parse for FieldAssertion {
         }
 
         if deref_count > 0 {
-            operations = Some(FieldOperation::Deref { count: deref_count });
+            operations = Some(FieldOperation::Deref { count: deref_count, span });
         }
 
         // Parse field name and potential chained operations

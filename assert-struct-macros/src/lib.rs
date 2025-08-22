@@ -216,37 +216,53 @@ struct Expected {
 enum FieldOperation {
     /// Dereference operation: *field, **field, etc.
     /// The count indicates how many dereferences to perform
-    Deref { count: usize },
+    Deref { 
+        count: usize,
+        span: proc_macro2::Span,
+    },
 
     /// Method call: field.method(), field.len(), etc.
     /// Stores the method name and arguments (if any)
     Method {
         name: syn::Ident,
         args: Vec<syn::Expr>,
+        span: proc_macro2::Span,
     },
 
     /// Await operation: field.await
     /// For async futures that need to be awaited
-    Await,
+    Await {
+        span: proc_macro2::Span,
+    },
 
     /// Nested field access: field.nested, field.inner.value, etc.
     /// Stores the chain of field names to access
-    Nested { fields: Vec<syn::Ident> },
+    Nested { 
+        fields: Vec<syn::Ident>,
+        span: proc_macro2::Span,
+    },
 
     /// Index operation: field\[0\], field\[index\], etc.
     /// Stores the index expression to use
-    Index { index: syn::Expr },
+    Index { 
+        index: syn::Expr,
+        span: proc_macro2::Span,
+    },
 
     /// Combined operation: dereferencing followed by method/nested/index access
     /// Example: *field.method(), **field.inner, *field\[0\], etc.
     Combined {
         deref_count: usize,
         operation: Box<FieldOperation>,
+        span: proc_macro2::Span,
     },
 
     /// Chained operations: nested field followed by index or method
     /// Example: field.nested\[0\], field.inner.method(), field.sub\[1\].len()
-    Chained { operations: Vec<FieldOperation> },
+    Chained { 
+        operations: Vec<FieldOperation>,
+        span: proc_macro2::Span,
+    },
 }
 
 // Field assertion - a field name paired with its expected pattern
@@ -286,7 +302,7 @@ impl fmt::Display for TupleElement {
             } => {
                 if let Some(ops) = operations {
                     match ops {
-                        FieldOperation::Deref { count } => {
+                        FieldOperation::Deref { count, .. } => {
                             // Show deref operations before the index: *0:
                             for _ in 0..*count {
                                 write!(f, "*")?;
@@ -297,11 +313,11 @@ impl fmt::Display for TupleElement {
                             // Show method calls after the index: 0.len():
                             write!(f, "{}.{}(): {}", index, name, pattern)
                         }
-                        FieldOperation::Await => {
+                        FieldOperation::Await { .. } => {
                             // Show await after the index: 0.await:
                             write!(f, "{}.await: {}", index, pattern)
                         }
-                        FieldOperation::Nested { fields } => {
+                        FieldOperation::Nested { fields, .. } => {
                             // Show nested access after the index: 0.field:
                             write!(f, "{}", index)?;
                             for field in fields {
@@ -309,16 +325,16 @@ impl fmt::Display for TupleElement {
                             }
                             write!(f, ": {}", pattern)
                         }
-                        FieldOperation::Index { index: idx } => {
+                        FieldOperation::Index { index: idx, .. } => {
                             // Show index access after the tuple index: 0[1]:
                             write!(f, "{}[{}]: {}", index, quote::quote! { #idx }, pattern)
                         }
-                        FieldOperation::Chained { operations } => {
+                        FieldOperation::Chained { operations, .. } => {
                             // Show chained operations after the tuple index: 0.field[1]:
                             write!(f, "{}", index)?;
                             for op in operations {
                                 match op {
-                                    FieldOperation::Nested { fields } => {
+                                    FieldOperation::Nested { fields, .. } => {
                                         for field in fields {
                                             write!(f, ".{}", field)?;
                                         }
@@ -326,10 +342,10 @@ impl fmt::Display for TupleElement {
                                     FieldOperation::Method { name, .. } => {
                                         write!(f, ".{}()", name)?;
                                     }
-                                    FieldOperation::Await => {
+                                    FieldOperation::Await { .. } => {
                                         write!(f, ".await")?;
                                     }
-                                    FieldOperation::Index { index } => {
+                                    FieldOperation::Index { index, .. } => {
                                         write!(f, "[{}]", quote::quote! { #index })?;
                                     }
                                     _ => write!(f, "{}", op)?,
@@ -340,6 +356,7 @@ impl fmt::Display for TupleElement {
                         FieldOperation::Combined {
                             deref_count,
                             operation,
+                            ..
                         } => {
                             // Show combined operations: *0.len():
                             for _ in 0..*deref_count {
@@ -366,7 +383,7 @@ impl fmt::Display for TupleElement {
 impl fmt::Display for FieldOperation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FieldOperation::Deref { count } => {
+            FieldOperation::Deref { count, .. } => {
                 for _ in 0..*count {
                     write!(f, "*")?;
                 }
@@ -375,19 +392,19 @@ impl fmt::Display for FieldOperation {
             FieldOperation::Method { name, .. } => {
                 write!(f, ".{}()", name)
             }
-            FieldOperation::Await => {
+            FieldOperation::Await { .. } => {
                 write!(f, ".await")
             }
-            FieldOperation::Nested { fields } => {
+            FieldOperation::Nested { fields, .. } => {
                 for field in fields {
                     write!(f, ".{}", field)?;
                 }
                 Ok(())
             }
-            FieldOperation::Index { index } => {
+            FieldOperation::Index { index, .. } => {
                 write!(f, "[{}]", quote::quote! { #index })
             }
-            FieldOperation::Chained { operations } => {
+            FieldOperation::Chained { operations, .. } => {
                 for op in operations {
                     write!(f, "{}", op)?;
                 }
@@ -396,6 +413,7 @@ impl fmt::Display for FieldOperation {
             FieldOperation::Combined {
                 deref_count,
                 operation,
+                ..
             } => {
                 for _ in 0..*deref_count {
                     write!(f, "*")?;
