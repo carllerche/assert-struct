@@ -37,6 +37,9 @@ pub enum PatternNode {
     Tuple {
         items: &'static [&'static PatternNode],
     },
+    Map {
+        entries: &'static [(&'static str, &'static PatternNode)],
+    },
 
     // Enum patterns
     EnumVariant {
@@ -82,6 +85,7 @@ impl fmt::Display for PatternNode {
                 }
             }
             PatternNode::Tuple { items } => write!(f, "({})", ".., ".repeat(items.len())),
+            PatternNode::Map { entries } => write!(f, "#{{ {} entries }}", entries.len()),
             PatternNode::EnumVariant { path, args } => {
                 if args.is_some() {
                     write!(f, "{}(...)", path)
@@ -666,6 +670,14 @@ fn format_pattern_simple(node: &'static PatternNode) -> String {
                 .join(", ");
             format!("({})", content)
         }
+        PatternNode::Map { entries } => {
+            let content = entries
+                .iter()
+                .map(|(key, value)| format!("{}: {}", key, format_pattern_simple(value)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("#{{{}}}", content)
+        }
         PatternNode::EnumVariant { path, args } => {
             if let Some(args) = args {
                 if !args.is_empty() {
@@ -826,6 +838,21 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
                         underline_range: None,
                     }),
                 }
+            }
+        }
+        PatternNode::Map { entries } => {
+            let content = entries
+                .iter()
+                .map(|(key, value)| format!("{}: {}", key, format_pattern_simple(value)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            Fragment::Annotated {
+                pattern: format!("#{{{}}}", content),
+                annotation: error.map(|e| ErrorAnnotation {
+                    actual_value: format_actual_value(&e.actual_value, &e.error_type),
+                    error_type: e.error_type.clone(),
+                    underline_range: None,
+                }),
             }
         }
         PatternNode::Rest => Fragment::Rest,
@@ -1009,6 +1036,9 @@ fn node_contains_recursive(root: &'static PatternNode, target: &'static PatternN
         PatternNode::Tuple { items } => items
             .iter()
             .any(|item| node_contains_recursive(item, target)),
+        PatternNode::Map { entries } => entries
+            .iter()
+            .any(|(_, entry_node)| node_contains_recursive(entry_node, target)),
         _ => false,
     }
 }

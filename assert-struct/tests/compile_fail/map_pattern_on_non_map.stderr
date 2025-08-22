@@ -1,0 +1,9 @@
+error[E0277]: the type `str` cannot be indexed by `&String`
+  --> tests/compile_fail/map_pattern_on_non_map.rs:17:18
+   |
+17 |         name: #{ "key": "value" },
+   |                  ^^^^^ string indices are ranges of `usize`
+   |
+   = help: the trait `SliceIndex<str>` is not implemented for `&String`
+note: required by a bound in `core::str::<impl str>::get`
+  --> $RUST/core/src/str/mod.rs

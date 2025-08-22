@@ -98,6 +98,12 @@ pub(crate) enum Pattern {
         node_id: usize,
         closure: syn::ExprClosure,
     },
+    // Map pattern: #{ "key": pattern, .. } for map-like structures
+    Map {
+        node_id: usize,
+        entries: Vec<(syn::Expr, Pattern)>, // key-value pairs
+        rest: bool,                         // partial matching with ..
+    },
 }
 
 // Helper function to format syn expressions as strings
@@ -200,6 +206,22 @@ impl fmt::Display for Pattern {
             }
             Pattern::Closure { closure, .. } => {
                 write!(f, "{}", quote::quote! { #closure })
+            }
+            Pattern::Map { entries, rest, .. } => {
+                write!(f, "#{{ ")?;
+                for (i, (key, value)) in entries.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}: {}", expr_to_string(key), value)?;
+                }
+                if *rest {
+                    if !entries.is_empty() {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "..")?;
+                }
+                write!(f, " }}")
             }
         }
     }

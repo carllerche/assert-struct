@@ -24,6 +24,7 @@
 //!   - [Method Call Patterns](#method-call-patterns)
 //! - [Data Types](#data-types)
 //!   - [Collections (Vec/Slice)](#collections-vecslice)
+//!   - [Maps (HashMap/BTreeMap)](#maps-hashmapbtreemap)
 //!   - [Tuples](#tuples)
 //!   - [Enums (Option/Result/Custom)](#enums-optionresultcustom)
 //!   - [Smart Pointers](#smart-pointers)
@@ -336,6 +337,85 @@
 //!
 //! assert_struct!(data, Data {
 //!     items: [1, .., 5],      // First and last elements
+//! });
+//! ```
+//!
+//! ## Maps (HashMap/BTreeMap)
+//!
+//! Pattern matching for map-like structures using duck typing (works with any type that has `len()` and `get()` methods):
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # use std::collections::HashMap;
+//! # #[derive(Debug)]
+//! # struct Config {
+//! #     settings: HashMap<String, String>,
+//! #     flags: HashMap<String, bool>,
+//! # }
+//! # let mut settings = HashMap::new();
+//! # settings.insert("theme".to_string(), "dark".to_string());
+//! # settings.insert("language".to_string(), "en".to_string());
+//! # let mut flags = HashMap::new();
+//! # flags.insert("debug".to_string(), true);
+//! # flags.insert("verbose".to_string(), false);
+//! # let config = Config { settings, flags };
+//! // Exact matching (checks map length)
+//! assert_struct!(config, Config {
+//!     settings: #{ "theme": "dark", "language": "en" },
+//!     flags: #{ "debug": true, "verbose": false },
+//! });
+//!
+//! // Partial matching (ignores map length)
+//! assert_struct!(config, Config {
+//!     settings: #{ "theme": "dark", .. },     // Only check theme
+//!     flags: #{ "debug": true, .. },          // Only check debug flag
+//! });
+//! ```
+//!
+//! Advanced map patterns with comparisons and nested patterns:
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # use std::collections::{HashMap, BTreeMap};
+//! # #[derive(Debug)]
+//! # struct Analytics {
+//! #     metrics: HashMap<String, i32>,
+//! #     metadata: BTreeMap<String, String>,
+//! # }
+//! # let mut metrics = HashMap::new();
+//! # metrics.insert("views".to_string(), 1000);
+//! # metrics.insert("clicks".to_string(), 50);
+//! # metrics.insert("conversions".to_string(), 5);
+//! # let mut metadata = BTreeMap::new();
+//! # metadata.insert("version".to_string(), "v1.2.3".to_string());
+//! # metadata.insert("environment".to_string(), "production".to_string());
+//! # let analytics = Analytics { metrics, metadata };
+//! // Pattern matching with comparison operators
+//! assert_struct!(analytics, Analytics {
+//!     metrics: #{
+//!         "views": > 500,           // More than 500 views
+//!         "clicks": >= 10,          // At least 10 clicks
+//!         "conversions": > 0,       // Some conversions
+//!         ..
+//!     },
+//!     metadata: #{
+//!         "version": =~ r"^v\d+\.\d+\.\d+$",  // Semantic version pattern
+//!         "environment": != "development",     // Not in development
+//!         ..
+//!     },
+//! });
+//! ```
+//!
+//! Empty map matching:
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # use std::collections::HashMap;
+//! # #[derive(Debug)]
+//! # struct Data { cache: HashMap<String, i32> }
+//! # let data = Data { cache: HashMap::new() };
+//! assert_struct!(data, Data {
+//!     cache: #{},             // Empty map
 //! });
 //! ```
 //!
