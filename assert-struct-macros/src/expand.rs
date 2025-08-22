@@ -33,7 +33,7 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
     quote! {
         {
             // Suppress clippy warnings that are expected in macro-generated code
-            #[allow(clippy::neg_cmp_op_on_partial_ord, clippy::op_ref, clippy::zero_prefixed_literal)]
+            #[allow(clippy::neg_cmp_op_on_partial_ord, clippy::op_ref, clippy::zero_prefixed_literal, clippy::bool_comparison)]
             let __assert_struct_result = {
                 // Generate all node constants
                 #(#node_constants)*
@@ -1262,7 +1262,6 @@ fn generate_simple_assertion_with_collection(
     if is_index_operation {
         // For index operations, avoid references on both sides to fix type inference
         quote_spanned! {span=>
-            #[allow(clippy::bool_comparison)]
             if #value_expr != #transformed {
                 let __line = line!();
                 let __file = file!();
@@ -1283,7 +1282,6 @@ fn generate_simple_assertion_with_collection(
         }
     } else if is_ref {
         quote_spanned! {span=>
-            #[allow(clippy::bool_comparison)]
             if #value_expr != &(#transformed) {
                 let __line = line!();
                 let __file = file!();
@@ -1304,7 +1302,6 @@ fn generate_simple_assertion_with_collection(
         }
     } else {
         quote_spanned! {span=>
-            #[allow(clippy::bool_comparison)]
             if &#value_expr != &(#transformed) {
                 let __line = line!();
                 let __file = file!();
