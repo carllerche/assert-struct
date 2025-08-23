@@ -422,3 +422,190 @@ fn test_empty_vs_wildcard_distinction() {
         ..
     });
 }
+
+#[derive(Debug)]
+struct OptionMapData {
+    maybe_map: Option<HashMap<String, String>>,
+    int_map_opt: Option<HashMap<String, i32>>,
+    result_map: Result<HashMap<String, String>, String>,
+}
+
+#[test]
+fn test_option_some_with_map_patterns() {
+    let mut string_map = HashMap::new();
+    string_map.insert("key1".to_string(), "value1".to_string());
+    string_map.insert("key2".to_string(), "value2".to_string());
+
+    let mut int_map = HashMap::new();
+    int_map.insert("count".to_string(), 42);
+    int_map.insert("score".to_string(), 95);
+
+    let data = OptionMapData {
+        maybe_map: Some(string_map),
+        int_map_opt: Some(int_map),
+        result_map: Ok(HashMap::new()),
+    };
+
+    // Test Some with exact map matching
+    assert_struct!(data, OptionMapData {
+        maybe_map: Some(#{ "key1": "value1", "key2": "value2" }),
+        ..
+    });
+
+    // Test Some with partial map matching
+    assert_struct!(data, OptionMapData {
+        maybe_map: Some(#{ "key1": "value1", .. }),
+        int_map_opt: Some(#{ "count": 42, .. }),
+        ..
+    });
+
+    // Test Some with comparison patterns
+    assert_struct!(data, OptionMapData {
+        int_map_opt: Some(#{
+            "count": > 40,
+            "score": >= 90,
+            ..
+        }),
+        ..
+    });
+
+    // Test Ok with empty map
+    assert_struct!(data, OptionMapData {
+        result_map: Ok(#{}),
+        ..
+    });
+}
+
+#[test]
+fn test_result_ok_with_map_patterns() {
+    let mut user_data = HashMap::new();
+    user_data.insert("name".to_string(), "Alice".to_string());
+    user_data.insert("email".to_string(), "alice@example.com".to_string());
+    user_data.insert("role".to_string(), "admin".to_string());
+
+    let data = OptionMapData {
+        maybe_map: None,
+        int_map_opt: None,
+        result_map: Ok(user_data),
+    };
+
+    // Test Ok with exact matching
+    assert_struct!(data, OptionMapData {
+        result_map: Ok(#{
+            "name": "Alice",
+            "email": "alice@example.com",
+            "role": "admin"
+        }),
+        ..
+    });
+
+    // Test Ok with partial matching
+    assert_struct!(data, OptionMapData {
+        result_map: Ok(#{
+            "name": "Alice",
+            "role": "admin",
+            ..
+        }),
+        ..
+    });
+}
+
+#[test]
+#[cfg(feature = "regex")]
+fn test_option_some_with_map_regex_patterns() {
+    let mut contact_map = HashMap::new();
+    contact_map.insert("email".to_string(), "user@example.com".to_string());
+    contact_map.insert("phone".to_string(), "+1-555-0123".to_string());
+
+    let data = OptionMapData {
+        maybe_map: Some(contact_map),
+        int_map_opt: None,
+        result_map: Err("not loaded".to_string()),
+    };
+
+    // Test Some with regex patterns
+    assert_struct!(data, OptionMapData {
+        maybe_map: Some(#{
+            "email": =~ r".*@example\.com",
+            "phone": =~ r"\+1-.*",
+            ..
+        }),
+        ..
+    });
+}
+
+#[derive(Debug)]
+struct NestedOptionMapData {
+    nested_result: Result<Option<HashMap<String, i32>>, String>,
+    option_result: Option<Result<HashMap<String, String>, String>>,
+}
+
+#[test]
+fn test_nested_option_result_maps() {
+    let mut scores = HashMap::new();
+    scores.insert("level1".to_string(), 100);
+    scores.insert("level2".to_string(), 85);
+
+    let data = NestedOptionMapData {
+        nested_result: Ok(Some(scores)),
+        option_result: Some(Err("failed to load".to_string())),
+    };
+
+    // Test nested Ok(Some(HashMap))
+    assert_struct!(data, NestedOptionMapData {
+        nested_result: Ok(Some(#{
+            "level1": 100,
+            "level2": > 80,
+            ..
+        })),
+        ..
+    });
+
+    // Test Some(Err)
+    assert_struct!(
+        data,
+        NestedOptionMapData {
+            option_result: Some(Err("failed to load")),
+            ..
+        }
+    );
+}
+
+#[test]
+fn test_deeply_nested_map_patterns() {
+    let mut config = HashMap::new();
+    config.insert("timeout".to_string(), "30s".to_string());
+    config.insert("retries".to_string(), "3".to_string());
+
+    let data = NestedOptionMapData {
+        nested_result: Ok(None),
+        option_result: Some(Ok(config)),
+    };
+
+    // Test Ok(None)
+    assert_struct!(
+        data,
+        NestedOptionMapData {
+            nested_result: Ok(None),
+            ..
+        }
+    );
+
+    // Test Some(Ok(HashMap))
+    assert_struct!(data, NestedOptionMapData {
+        option_result: Some(Ok(#{
+            "timeout": "30s",
+            "retries": "3"
+        })),
+        ..
+    });
+
+    // Test partial matching in nested structure
+    assert_struct!(data, NestedOptionMapData {
+        option_result: Some(Ok(#{
+            "timeout": "30s",
+            ..
+        })),
+        ..
+    });
+}

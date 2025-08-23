@@ -794,6 +794,14 @@ fn check_for_special_syntax(content: ParseStream) -> bool {
         return true;
     }
 
+    // Map patterns like `Some(#{ "key": "value" })`
+    if content.peek(Token![#]) {
+        let fork = content.fork();
+        if fork.parse::<Token![#]>().is_ok() && fork.peek(syn::token::Brace) {
+            return true;
+        }
+    }
+
     // Check for indexed elements and method calls: `0:`, `1.method():`
     let fork = content.fork();
     if let Ok(_index_lit) = fork.parse::<syn::LitInt>() {
