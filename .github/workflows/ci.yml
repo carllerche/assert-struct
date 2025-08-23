@@ -14,6 +14,7 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     # Pin Rust version to ensure consistent compilation error messages across CI runs.
+    # Uses default profile (rustc, cargo, rustdoc) for comprehensive tooling support.
     # Compilation error message tests (trybuild) are sensitive to Rust version changes.
     # Updating the pinned version should be done in a dedicated PR that also fixes any error message tests.
     steps:
@@ -23,6 +24,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.89.0
+          components: rustc, cargo, rustdoc
       
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -67,6 +69,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.85.0  # MSRV - Minimum Supported Rust Version (2024 edition)
+          components: rustc, cargo
       
       - name: Cache cargo registry
         uses: actions/cache@v4
