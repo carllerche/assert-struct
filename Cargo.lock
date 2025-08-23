@@ -28,7 +28,7 @@ dependencies = [
 
 [[package]]
 name = "assert-struct"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "assert-struct-macros",
  "insta",
@@ -41,7 +41,7 @@ dependencies = [
 
 [[package]]
 name = "assert-struct-macros"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "assert-struct",
  "proc-macro2",
