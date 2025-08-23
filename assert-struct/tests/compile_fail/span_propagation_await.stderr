@@ -2,13 +2,11 @@ error[E0277]: `&i32` is not a future
   --> tests/compile_fail/span_propagation_await.rs:15:15
    |
 15 |         value.await: 42,
-   |               ^^^^^ `&i32` is not a future
+   |              -^^^^^
+   |              ||
+   |              |`&i32` is not a future
+   |              help: remove the `.await`
    |
    = help: the trait `Future` is not implemented for `&i32`
    = note: &i32 must be a future or must implement `IntoFuture` to be awaited
    = note: required for `&i32` to implement `IntoFuture`
-help: remove the `.await`
-   |
-15 -         value.await: 42,
-15 +         value: 42,
-   |
