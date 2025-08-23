@@ -412,8 +412,8 @@
 //! # use assert_struct::assert_struct;
 //! # use std::collections::HashMap;
 //! # #[derive(Debug)]
-//! # struct Data { 
-//! #     cache: HashMap<String, i32>, 
+//! # struct Data {
+//! #     cache: HashMap<String, i32>,
 //! #     config: HashMap<String, String>,
 //! # }
 //! # let mut config = HashMap::new();
