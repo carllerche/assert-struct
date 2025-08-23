@@ -37,7 +37,7 @@
 //!
 //! ```toml
 //! [dev-dependencies]
-//! assert-struct = "0.1"
+//! assert-struct = "0.2"
 //! ```
 //!
 //! Basic example:
@@ -406,16 +406,22 @@
 //! });
 //! ```
 //!
-//! Empty map matching:
+//! Empty and wildcard map matching:
 //!
 //! ```rust
 //! # use assert_struct::assert_struct;
 //! # use std::collections::HashMap;
 //! # #[derive(Debug)]
-//! # struct Data { cache: HashMap<String, i32> }
-//! # let data = Data { cache: HashMap::new() };
+//! # struct Data {
+//! #     cache: HashMap<String, i32>,
+//! #     config: HashMap<String, String>,
+//! # }
+//! # let mut config = HashMap::new();
+//! # config.insert("key".to_string(), "value".to_string());
+//! # let data = Data { cache: HashMap::new(), config };
 //! assert_struct!(data, Data {
-//!     cache: #{},             // Empty map
+//!     cache: #{},             // Exactly empty map (len() == 0)
+//!     config: #{ .. },        // Any map content (wildcard)
 //! });
 //! ```
 //!

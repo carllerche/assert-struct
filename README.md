@@ -48,6 +48,7 @@ assert_struct!(response, Response {
 
 - **Partial matching** with `..` - check only the fields you care about
 - **Deep nesting** - assert on nested structs without field access chains
+- **Map patterns** - `#{ "key": pattern }` for HashMap, BTreeMap, and custom map types
 - **Advanced matchers** - comparisons (`> 18`), ranges (`0..100`), regex (`=~ r"pattern"`)
 - **Method calls** - `field.len(): 5`, `field.is_some(): true`
 - **Collections** - element-wise patterns for `Vec` fields
@@ -61,7 +62,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dev-dependencies]
-assert-struct = "0.1"
+assert-struct = "0.2"
 ```
 
 Basic usage:
@@ -120,6 +121,17 @@ assert_struct!(company, Company {
 // Collections
 assert_struct!(response, Response {
     scores: [> 80.0, >= 90.0, < 100.0],
+    ..
+});
+
+// Map patterns (HashMap, BTreeMap, custom maps)
+assert_struct!(api_response, ApiResponse {
+    headers: #{
+        "content-type": "application/json",
+        "status": == 200,
+        ..  // Ignore other headers
+    },
+    metadata: #{},  // Exactly empty map
     ..
 });
 

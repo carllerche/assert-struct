@@ -14,46 +14,47 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     # Pin Rust version to ensure consistent compilation error messages across CI runs.
+    # Uses default profile (rustc, cargo, rustdoc) for comprehensive tooling support.
     # Compilation error message tests (trybuild) are sensitive to Rust version changes.
     # Updating the pinned version should be done in a dedicated PR that also fixes any error message tests.
     steps:
       - uses: actions/checkout@v5
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.89.0
-      
+
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-      
+
       - name: Cache cargo index
         uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-      
+
       - name: Cache cargo build
         uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-cargo-build-target-1.89.0-${{ hashFiles('**/Cargo.lock') }}
-      
+
       - name: Build
         run: cargo build --workspace --verbose
-      
+
       - name: Run tests
         run: cargo test --workspace --verbose
-      
+
       - name: Run tests with all features
         run: cargo test --workspace --all-features --verbose
-      
+
       - name: Run tests without default features
         run: cargo test --workspace --no-default-features --verbose
-      
+
       - name: Run doc tests
         run: cargo test --workspace --doc --verbose
 
@@ -62,36 +63,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      
+
       - name: Install Rust MSRV
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.85.0  # MSRV - Minimum Supported Rust Version (2024 edition)
-      
+          components: rustc, cargo
+
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-      
+
       - name: Cache cargo index
         uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-      
+
       - name: Cache cargo build
         uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-cargo-build-target-1.85.0-${{ hashFiles('**/Cargo.lock') }}
-      
+
       - name: Check with MSRV
         run: cargo check --workspace --verbose
-      
+
       - name: Check with all features
         run: cargo check --workspace --all-features --verbose
-      
+
       - name: Check without default features
         run: cargo check --workspace --no-default-features --verbose
 
@@ -100,12 +102,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
@@ -114,18 +116,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      
+
       - name: Run clippy
         run: cargo clippy --workspace -- -D warnings
-      
+
       - name: Run clippy with all features
         run: cargo clippy --workspace --all-features -- -D warnings
-      
+
       - name: Run clippy on tests
         run: cargo clippy --workspace --tests -- -D warnings
 
@@ -134,10 +136,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      
+
       - name: Check documentation
         run: cargo doc --workspace --no-deps --document-private-items
         env:
