@@ -18,7 +18,7 @@ jobs:
     # Compilation error message tests (trybuild) are sensitive to Rust version changes.
     # Updating the pinned version should be done in a dedicated PR that also fixes any error message tests.
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
@@ -62,7 +62,7 @@ jobs:
     name: MSRV Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Install Rust MSRV
         uses: dtolnay/rust-toolchain@master
@@ -101,7 +101,7 @@ jobs:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -115,7 +115,7 @@ jobs:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -135,7 +135,7 @@ jobs:
     name: Documentation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
