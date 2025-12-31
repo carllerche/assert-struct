@@ -1,7 +1,6 @@
 use crate::pattern::{
-    ComparisonOp, FieldAssertion, FieldOperation, Pattern, PatternClosure, PatternComparison,
-    PatternMap, PatternRange, PatternRest, PatternSimple, PatternSlice, PatternStruct,
-    PatternTuple, PatternWildcard, TupleElement,
+    FieldAssertion, FieldOperation, Pattern, PatternClosure, PatternMap, PatternRange, PatternRest,
+    PatternSimple, PatternSlice, PatternStruct, PatternTuple, PatternWildcard, TupleElement,
 };
 #[cfg(feature = "regex")]
 use crate::pattern::{PatternLike, PatternRegex};
@@ -13,7 +12,7 @@ thread_local! {
     static NODE_ID_COUNTER: Cell<usize> = const { Cell::new(0) };
 }
 
-fn next_node_id() -> usize {
+pub(crate) fn next_node_id() -> usize {
     NODE_ID_COUNTER.with(|counter| {
         let id = counter.get();
         counter.set(id + 1);
@@ -180,66 +179,11 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         }
     }
 
-    // Comparison operators are checked early to capture them before
-    // they could be parsed as part of an expression
-    // Examples:
-    //   `< 100`     -> less than 100
-    //   `>= 18`     -> greater than or equal to 18
-    //   `> compute_threshold()` -> comparison with function result
-    if input.peek(Token![<]) {
-        let _: Token![<] = input.parse()?;
-        if input.peek(Token![=]) {
-            let _: Token![=] = input.parse()?;
-            let value = input.parse()?;
-            return Ok(Pattern::Comparison(PatternComparison {
-                node_id: next_node_id(),
-                op: ComparisonOp::LessEqual,
-                expr: value,
-            }));
-        } else {
-            let value = input.parse()?;
-            return Ok(Pattern::Comparison(PatternComparison {
-                node_id: next_node_id(),
-                op: ComparisonOp::Less,
-                expr: value,
-            }));
-        }
-    }
-
-    if input.peek(Token![>]) {
-        let _: Token![>] = input.parse()?;
-        if input.peek(Token![=]) {
-            let _: Token![=] = input.parse()?;
-            let value = input.parse()?;
-            return Ok(Pattern::Comparison(PatternComparison {
-                node_id: next_node_id(),
-                op: ComparisonOp::GreaterEqual,
-                expr: value,
-            }));
-        } else {
-            let value = input.parse()?;
-            return Ok(Pattern::Comparison(PatternComparison {
-                node_id: next_node_id(),
-                op: ComparisonOp::Greater,
-                expr: value,
-            }));
-        }
-    }
-
-    // `!=` needs special handling because `!` could start other expressions
-    // Example: `!= "error"` vs `!flag` (not pattern vs boolean negation)
-    if input.peek(Token![!]) {
-        let fork = input.fork();
-        if fork.parse::<Token![!]>().is_ok() && fork.peek(Token![=]) {
-            let _: Token![!] = input.parse()?;
-            let _: Token![=] = input.parse()?;
-            let value = input.parse()?;
-            return Ok(Pattern::Comparison(PatternComparison {
-                node_id: next_node_id(),
-                op: ComparisonOp::NotEqual,
-                expr: value,
-            }));
-        }
+    // Try to parse as a comparison pattern (<, <=, >, >=, ==, !=)
+    // Use fork to check if this looks like a comparison without consuming tokens
+    if input.peek(Token![<]) || input.peek(Token![>]) || input.peek(Token![!]) {
+        // These always start comparisons, safe to parse directly
+        return Ok(Pattern::Comparison(input.parse()?));
     }
 
     // `=` could start `==` (equality) or `=~` (regex pattern)
@@ -247,16 +191,8 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         let fork = input.fork();
         if fork.parse::<Token![=]>().is_ok() {
             if fork.peek(Token![=]) {
-                // Explicit equality check
-                // Example: `status: == "ok"`
-                let _: Token![=] = input.parse()?;
-                let _: Token![=] = input.parse()?;
-                let value = input.parse()?;
-                return Ok(Pattern::Comparison(PatternComparison {
-                    node_id: next_node_id(),
-                    op: ComparisonOp::Equal,
-                    expr: value,
-                }));
+                // This is `==` - explicit equality comparison
+                return Ok(Pattern::Comparison(input.parse()?));
             }
             #[cfg(feature = "regex")]
             if fork.peek(Token![~]) {

@@ -3,6 +3,10 @@
 //! This module defines the various pattern types that can be used in assertions,
 //! along with helper types for field operations and tuple elements.
 
+mod comparison;
+
+pub(crate) use comparison::{ComparisonOp, PatternComparison};
+
 use std::fmt;
 use syn::{Token, punctuated::Punctuated};
 
@@ -56,14 +60,6 @@ pub(crate) struct PatternTuple {
 pub(crate) struct PatternSlice {
     pub node_id: usize,
     pub elements: Vec<Pattern>,
-}
-
-/// Comparison pattern: > 30, <= 100
-#[derive(Debug, Clone)]
-pub(crate) struct PatternComparison {
-    pub node_id: usize,
-    pub op: ComparisonOp,
-    pub expr: syn::Expr,
 }
 
 /// Range pattern: 10..20, 0..=100
@@ -193,29 +189,6 @@ pub(crate) enum TupleElement {
         operations: Option<FieldOperation>,
         pattern: Pattern,
     },
-}
-
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum ComparisonOp {
-    Less,
-    LessEqual,
-    Greater,
-    GreaterEqual,
-    Equal,
-    NotEqual,
-}
-
-impl fmt::Display for ComparisonOp {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ComparisonOp::Less => write!(f, "<"),
-            ComparisonOp::LessEqual => write!(f, "<="),
-            ComparisonOp::Greater => write!(f, ">"),
-            ComparisonOp::GreaterEqual => write!(f, ">="),
-            ComparisonOp::Equal => write!(f, "=="),
-            ComparisonOp::NotEqual => write!(f, "!="),
-        }
-    }
 }
 
 // Helper function to format syn expressions as strings
