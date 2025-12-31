@@ -33,7 +33,7 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
     quote! {
         {
             // Suppress clippy warnings that are expected in macro-generated code
-            #[allow(clippy::neg_cmp_op_on_partial_ord, clippy::op_ref, clippy::zero_prefixed_literal, clippy::bool_comparison)]
+            #[allow(unused_assignments, clippy::neg_cmp_op_on_partial_ord, clippy::op_ref, clippy::zero_prefixed_literal, clippy::bool_comparison)]
             let __assert_struct_result = {
                 // Generate all node constants
                 #(#node_constants)*
