@@ -22,14 +22,14 @@
 
 use proc_macro::TokenStream;
 use std::fmt;
-use syn::{Expr, Token, punctuated::Punctuated};
+use syn::{Token, punctuated::Punctuated};
 
 mod expand;
 mod parse;
 
 // Root-level struct that tracks the assertion
 struct AssertStruct {
-    value: Expr,
+    value: syn::Expr,
     pattern: Pattern,
 }
 
@@ -39,7 +39,7 @@ pub(crate) enum Pattern {
     // Simple value: 42, \"hello\", true
     Simple {
         node_id: usize,
-        expr: Expr,
+        expr: syn::Expr,
     },
     // Struct pattern: User { name: \"Alice\", age: 30, .. }
     // When path is None, it's a wildcard pattern: _ { name: \"Alice\", .. }
@@ -65,12 +65,12 @@ pub(crate) enum Pattern {
     Comparison {
         node_id: usize,
         op: ComparisonOp,
-        expr: Expr,
+        expr: syn::Expr,
     },
     // Range: 10..20, 0..=100
     Range {
         node_id: usize,
-        expr: Expr,
+        expr: syn::Expr,
     },
     // Regex: =~ "pattern" - string literal optimized at compile time
     #[cfg(feature = "regex")]
@@ -83,7 +83,7 @@ pub(crate) enum Pattern {
     #[cfg(feature = "regex")]
     Like {
         node_id: usize,
-        expr: Expr,
+        expr: syn::Expr,
     },
     // Rest pattern: .. for partial matching
     Rest {
@@ -107,18 +107,18 @@ pub(crate) enum Pattern {
 }
 
 // Helper function to format syn expressions as strings
-fn expr_to_string(expr: &Expr) -> String {
+fn expr_to_string(expr: &syn::Expr) -> String {
     // This is a simplified version - in production we'd want more complete handling
     match expr {
-        Expr::Lit(lit) => {
+        syn::Expr::Lit(lit) => {
             // Handle literals
             quote::quote! { #lit }.to_string()
         }
-        Expr::Path(path) => {
+        syn::Expr::Path(path) => {
             // Handle paths
             quote::quote! { #path }.to_string()
         }
-        Expr::Range(range) => {
+        syn::Expr::Range(range) => {
             // Handle ranges
             quote::quote! { #range }.to_string()
         }
@@ -485,7 +485,7 @@ impl fmt::Display for ComparisonOp {
 ///              | '_' '{' FieldPatternList '}'  // Wildcard pattern
 /// FieldPatternList ::= (FieldPattern ',')* ('..')?
 /// FieldPattern ::= FieldName ':' Pattern
-///              | FieldName FieldOperation ':' Pattern  
+///              | FieldName FieldOperation ':' Pattern
 /// FieldOperation ::= ('*')+ | ('.' Identifier '(' ArgumentList? ')')
 /// Pattern ::= Value | ComparisonPattern | RangePattern | RegexPattern
 ///          | EnumPattern | TuplePattern | SlicePattern | NestedPattern
@@ -502,7 +502,7 @@ impl fmt::Display for ComparisonOp {
 /// | **Explicit Equality** | `field: == value` | Same as exact value but explicit | Must implement `PartialEq` |
 /// | **Inequality** | `field: != value` | Not equal comparison | Must implement `PartialEq` |
 ///
-/// ## Comparison Patterns  
+/// ## Comparison Patterns
 ///
 /// | Pattern | Syntax | Description | Constraints |
 /// |---------|--------|-------------|-------------|
@@ -514,7 +514,7 @@ impl fmt::Display for ComparisonOp {
 /// ## Range Patterns
 ///
 /// | Pattern | Syntax | Description | Constraints |
-/// |---------|--------|-------------|-------------|  
+/// |---------|--------|-------------|-------------|
 /// | **Inclusive Range** | `field: start..=end` | Value in inclusive range | Must implement `PartialOrd` |
 /// | **Exclusive Range** | `field: start..end` | Value in exclusive range | Must implement `PartialOrd` |
 /// | **Range From** | `field: start..` | Value greater or equal to start | Must implement `PartialOrd` |
@@ -567,7 +567,7 @@ impl fmt::Display for ComparisonOp {
 /// | **Head and Tail** | `field: [pattern, .., pattern]` | Match first and last | `Vec<T>` or slice |
 /// | **Empty Slice** | `field: []` | Match empty collection | `Vec<T>` or slice |
 ///
-/// ## Tuple Patterns  
+/// ## Tuple Patterns
 ///
 /// | Pattern | Syntax | Description | Constraints |
 /// |---------|--------|-------------|-------------|
@@ -588,7 +588,7 @@ impl fmt::Display for ComparisonOp {
 ///
 /// - **Non-consuming**: The macro borrows the value, leaving it available after the assertion
 /// - **Expression evaluation**: The expression is evaluated exactly once before pattern matching
-/// - **Short-circuit evaluation**: Patterns are evaluated left-to-right, failing fast on first mismatch  
+/// - **Short-circuit evaluation**: Patterns are evaluated left-to-right, failing fast on first mismatch
 /// - **Field order independence**: Fields can be specified in any order in the pattern
 /// - **Type requirements**: All fields must have types compatible with their patterns
 ///
@@ -617,7 +617,7 @@ impl fmt::Display for ComparisonOp {
 ///
 /// ## Pattern Mismatches
 /// - **Value mismatch**: Expected value doesn't equal actual value
-/// - **Comparison failure**: Comparison operator condition fails (e.g., `>`, `<`)  
+/// - **Comparison failure**: Comparison operator condition fails (e.g., `>`, `<`)
 /// - **Range mismatch**: Value outside specified range
 /// - **Enum variant mismatch**: Different enum variant than expected
 /// - **Collection length mismatch**: Slice pattern length differs from actual length
@@ -639,7 +639,7 @@ impl fmt::Display for ComparisonOp {
 ///
 /// ## Field Validation
 /// - **Nonexistent field**: Field doesn't exist on the struct type
-/// - **Missing fields**: Required fields not specified (without `..`)  
+/// - **Missing fields**: Required fields not specified (without `..`)
 /// - **Duplicate fields**: Same field specified multiple times
 /// - **Invalid field operations**: Operations not supported by field type
 ///
@@ -649,7 +649,7 @@ impl fmt::Display for ComparisonOp {
 /// - **Method signatures**: Method doesn't exist or has incompatible signature
 /// - **Deref constraints**: Field type doesn't implement `Deref` for dereference operations
 ///
-/// ## Syntax Validation  
+/// ## Syntax Validation
 /// - **Invalid syntax**: Malformed pattern syntax
 /// - **Invalid operators**: Unsupported operator for field type
 /// - **Invalid ranges**: Malformed range expressions
@@ -679,7 +679,7 @@ impl fmt::Display for ComparisonOp {
 /// - **Ownership semantics**: Dereferencing borrows the pointed-to value
 ///
 /// ## Performance Considerations
-/// - **Compile time**: Complex nested patterns increase compilation time  
+/// - **Compile time**: Complex nested patterns increase compilation time
 /// - **Runtime overhead**: Pattern matching is zero-cost for simple patterns
 /// - **Error message generation**: Error formatting only occurs on failure
 ///
@@ -703,7 +703,7 @@ impl fmt::Display for ComparisonOp {
 /// ## Error Components
 /// - **Error type**: Specific failure category (value mismatch, comparison failure, etc.)
 /// - **Field path**: Complete path to the failing field (e.g., `response.user.profile.age`)
-/// - **Source location**: File name and line number of the assertion  
+/// - **Source location**: File name and line number of the assertion
 /// - **Actual value**: The value that was found
 /// - **Expected pattern**: The pattern that was expected to match
 /// - **Pattern context**: Visual representation showing where the failure occurred
@@ -749,7 +749,7 @@ impl fmt::Display for ComparisonOp {
 /// // Basic pattern matching
 /// assert_struct!(example, Example {
 ///     value: 42,                    // Exact equality
-///     name: != "other",             // Inequality  
+///     name: != "other",             // Inequality
 ///     items.len(): >= 2,            // Method call with comparison
 ///     ..                            // Partial matching
 /// });

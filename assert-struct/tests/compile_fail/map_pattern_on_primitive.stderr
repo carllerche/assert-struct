@@ -6,6 +6,9 @@ error[E0599]: no method named `len` found for reference `&u16` in the current sc
    |
 help: there is a method `le` with a similar name, but with different arguments
   --> $RUST/core/src/cmp.rs
+   |
+   |     fn le(&self, other: &Rhs) -> bool {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error[E0599]: no method named `get` found for reference `&u16` in the current scope
   --> tests/compile_fail/map_pattern_on_primitive.rs:15:18
