@@ -156,7 +156,7 @@ pub(crate) enum FieldOperation {
         span: proc_macro2::Span,
     },
 
-    /// Index operation: field[0], field[index], etc.
+    /// Index operation: field\[0\], field\[index\], etc.
     /// Stores the index expression to use
     Index {
         index: syn::Expr,
@@ -164,7 +164,7 @@ pub(crate) enum FieldOperation {
     },
 
     /// Combined operation: dereferencing followed by method/nested/index access
-    /// Example: *field.method(), **field.inner, *field[0], etc.
+    /// Example: *field.method(), **field.inner, *field\[0\], etc.
     Combined {
         deref_count: usize,
         operation: Box<FieldOperation>,
@@ -172,7 +172,7 @@ pub(crate) enum FieldOperation {
     },
 
     /// Chained operations: nested field followed by index or method
-    /// Example: field.nested[0], field.inner.method(), field.sub[1].len()
+    /// Example: field.nested\[0\], field.inner.method(), field.sub\[1\].len()
     Chained {
         operations: Vec<FieldOperation>,
         span: proc_macro2::Span,
