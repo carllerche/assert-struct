@@ -12,11 +12,7 @@ env:
 jobs:
   test:
     name: Test
-    runs-on: macos-latest
-    # Pin Rust version to ensure consistent compilation error messages across CI runs.
-    # Version is specified in rust-toolchain.toml to ensure local dev and CI use the same version.
-    # Compilation error message tests (trybuild) are sensitive to Rust version changes.
-    # Updating the pinned version should be done in a dedicated PR that also fixes any error message tests.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
 

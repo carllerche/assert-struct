@@ -10,6 +10,8 @@ error[E0277]: can't compare `String` with `{integer}`
              `String` implements `PartialEq<ByteStr>`
              `String` implements `PartialEq<ByteString>`
              `String` implements `PartialEq<Cow<'_, str>>`
+             `String` implements `PartialEq<Path>`
+             `String` implements `PartialEq<PathBuf>`
              `String` implements `PartialEq<str>`
              `String` implements `PartialEq`
    = note: required for `&String` to implement `PartialEq<&{integer}>`

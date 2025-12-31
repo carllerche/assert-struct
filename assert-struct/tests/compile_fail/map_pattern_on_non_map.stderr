@@ -8,5 +8,5 @@ error[E0277]: the type `str` cannot be indexed by `&String`
 note: required by a bound in `core::str::<impl str>::get`
   --> $RUST/core/src/str/mod.rs
    |
-   |     pub fn get<I: SliceIndex<str>>(&self, i: I) -> Option<&I::Output> {
-   |                   ^^^^^^^^^^^^^^^ required by this bound in `core::str::<impl str>::get`
+   |     pub const fn get<I: [const] SliceIndex<str>>(&self, i: I) -> Option<&I::Output> {
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `core::str::<impl str>::get`

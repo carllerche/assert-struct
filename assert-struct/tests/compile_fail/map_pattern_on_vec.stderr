@@ -8,8 +8,8 @@ error[E0277]: the type `[i32]` cannot be indexed by `&String`
 note: required by a bound in `core::slice::<impl [T]>::get`
   --> $RUST/core/src/slice/mod.rs
    |
-   |     pub fn get<I>(&self, index: I) -> Option<&I::Output>
-   |            --- required by a bound in this associated function
+   |     pub const fn get<I>(&self, index: I) -> Option<&I::Output>
+   |                  --- required by a bound in this associated function
    |     where
-   |         I: SliceIndex<Self>,
-   |            ^^^^^^^^^^^^^^^^ required by this bound in `core::slice::<impl [T]>::get`
+   |         I: [const] SliceIndex<Self>,
+   |            ^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `core::slice::<impl [T]>::get`
