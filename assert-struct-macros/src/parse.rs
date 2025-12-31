@@ -1,6 +1,11 @@
-use crate::{
-    AssertStruct, ComparisonOp, Expected, FieldAssertion, FieldOperation, Pattern, TupleElement,
+use crate::pattern::{
+    ComparisonOp, FieldAssertion, FieldOperation, Pattern, PatternClosure, PatternComparison,
+    PatternMap, PatternRange, PatternRest, PatternSimple, PatternSlice, PatternStruct,
+    PatternTuple, PatternWildcard, TupleElement,
 };
+#[cfg(feature = "regex")]
+use crate::pattern::{PatternLike, PatternRegex};
+use crate::{AssertStruct, Expected};
 use std::cell::Cell;
 use syn::{Result, Token, parse::Parse, parse::ParseStream, punctuated::Punctuated};
 
@@ -109,10 +114,10 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             ));
         }
 
-        return Ok(Pattern::Closure {
+        return Ok(Pattern::Closure(PatternClosure {
             node_id: next_node_id(),
             closure,
-        });
+        }));
     }
 
     // Wildcard pattern: _ for ignoring a value while asserting it exists
@@ -138,18 +143,18 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
                 ));
             }
 
-            return Ok(Pattern::Struct {
+            return Ok(Pattern::Struct(PatternStruct {
                 node_id: next_node_id(),
                 path: None, // None indicates wildcard
                 fields: expected.fields,
                 rest: expected.rest,
-            });
+            }));
         } else {
             // Regular wildcard pattern
             let _: Token![_] = input.parse()?;
-            return Ok(Pattern::Wildcard {
+            return Ok(Pattern::Wildcard(PatternWildcard {
                 node_id: next_node_id(),
-            });
+            }));
         }
     }
 
@@ -169,9 +174,9 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         } else {
             // This is a rest pattern for partial matching
             let _: Token![..] = input.parse()?;
-            return Ok(Pattern::Rest {
+            return Ok(Pattern::Rest(PatternRest {
                 node_id: next_node_id(),
-            });
+            }));
         }
     }
 
@@ -186,18 +191,18 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         if input.peek(Token![=]) {
             let _: Token![=] = input.parse()?;
             let value = input.parse()?;
-            return Ok(Pattern::Comparison {
+            return Ok(Pattern::Comparison(PatternComparison {
                 node_id: next_node_id(),
                 op: ComparisonOp::LessEqual,
                 expr: value,
-            });
+            }));
         } else {
             let value = input.parse()?;
-            return Ok(Pattern::Comparison {
+            return Ok(Pattern::Comparison(PatternComparison {
                 node_id: next_node_id(),
                 op: ComparisonOp::Less,
                 expr: value,
-            });
+            }));
         }
     }
 
@@ -206,18 +211,18 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         if input.peek(Token![=]) {
             let _: Token![=] = input.parse()?;
             let value = input.parse()?;
-            return Ok(Pattern::Comparison {
+            return Ok(Pattern::Comparison(PatternComparison {
                 node_id: next_node_id(),
                 op: ComparisonOp::GreaterEqual,
                 expr: value,
-            });
+            }));
         } else {
             let value = input.parse()?;
-            return Ok(Pattern::Comparison {
+            return Ok(Pattern::Comparison(PatternComparison {
                 node_id: next_node_id(),
                 op: ComparisonOp::Greater,
                 expr: value,
-            });
+            }));
         }
     }
 
@@ -229,11 +234,11 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             let _: Token![!] = input.parse()?;
             let _: Token![=] = input.parse()?;
             let value = input.parse()?;
-            return Ok(Pattern::Comparison {
+            return Ok(Pattern::Comparison(PatternComparison {
                 node_id: next_node_id(),
                 op: ComparisonOp::NotEqual,
                 expr: value,
-            });
+            }));
         }
     }
 
@@ -247,11 +252,11 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
                 let _: Token![=] = input.parse()?;
                 let _: Token![=] = input.parse()?;
                 let value = input.parse()?;
-                return Ok(Pattern::Comparison {
+                return Ok(Pattern::Comparison(PatternComparison {
                     node_id: next_node_id(),
                     op: ComparisonOp::Equal,
                     expr: value,
-                });
+                }));
             }
             #[cfg(feature = "regex")]
             if fork.peek(Token![~]) {
@@ -266,19 +271,19 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
                     // Example: `email: =~ r".*@example\.com"`
                     // Compiles regex at macro expansion, fails early if invalid
                     let parsed_lit = input.parse::<syn::LitStr>()?;
-                    return Ok(Pattern::Regex {
+                    return Ok(Pattern::Regex(PatternRegex {
                         node_id: next_node_id(),
                         pattern: lit.value(),
                         span: parsed_lit.span(),
-                    });
+                    }));
                 } else {
                     // Example: `email: =~ email_pattern` where email_pattern is a variable
                     // Uses Like trait for runtime pattern matching
                     let expr = input.parse::<syn::Expr>()?;
-                    return Ok(Pattern::Like {
+                    return Ok(Pattern::Like(PatternLike {
                         node_id: next_node_id(),
                         expr,
-                    });
+                    }));
                 }
             }
         }
@@ -292,11 +297,11 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             let content;
             syn::braced!(content in input);
             let (entries, rest) = parse_map_entries(&content)?;
-            return Ok(Pattern::Map {
+            return Ok(Pattern::Map(PatternMap {
                 node_id: next_node_id(),
                 entries,
                 rest,
-            });
+            }));
         } else {
             return Err(syn::Error::new(
                 input.span(),
@@ -311,10 +316,10 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         let content;
         syn::bracketed!(content in input);
         let elements = parse_pattern_list(&content)?;
-        return Ok(Pattern::Slice {
+        return Ok(Pattern::Slice(PatternSlice {
             node_id: next_node_id(),
             elements,
-        });
+        }));
     }
 
     // Standalone tuple pattern (no type prefix)
@@ -331,20 +336,20 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             // Contains pattern syntax like `>`, `==`, nested patterns
             // Example: `(> 10, < 30)`, `(== 5, != 10)`
             let elements = parse_tuple_elements(&content)?;
-            return Ok(Pattern::Tuple {
+            return Ok(Pattern::Tuple(PatternTuple {
                 node_id: next_node_id(),
                 path: None,
                 elements,
-            });
+            }));
         } else {
             // Simple expression without pattern syntax
             // Example: `(10, 20)`, `(expected_x, expected_y)`
             // Treat as a single simple expression
             let expr = content.parse()?;
-            return Ok(Pattern::Simple {
+            return Ok(Pattern::Simple(PatternSimple {
                 node_id: next_node_id(),
                 expr,
-            });
+            }));
         }
     }
 
@@ -359,12 +364,12 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             let content;
             syn::braced!(content in input);
             let expected: Expected = content.parse()?;
-            return Ok(Pattern::Struct {
+            return Ok(Pattern::Struct(PatternStruct {
                 node_id: next_node_id(),
                 path: Some(path),
                 fields: expected.fields,
                 rest: expected.rest,
-            });
+            }));
         }
 
         // Path followed by parens could be:
@@ -384,26 +389,26 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
                 // Contains pattern syntax like `>`, `==`, nested patterns
                 // Example: `Some(> 30)`, `Event::Click(>= 0, < 100)`
                 let elements = parse_tuple_elements(&content)?;
-                return Ok(Pattern::Tuple {
+                return Ok(Pattern::Tuple(PatternTuple {
                     node_id: next_node_id(),
                     path: Some(path),
                     elements,
-                });
+                }));
             } else {
                 // Simple expression without pattern syntax
                 // Example: `Some(expected_value)`, `Ok(result)`
                 // We treat the whole content as a single expression
                 let expr = content.parse()?;
-                return Ok(Pattern::Tuple {
+                return Ok(Pattern::Tuple(PatternTuple {
                     node_id: next_node_id(),
                     path: Some(path),
                     elements: vec![TupleElement::Positional {
-                        pattern: Pattern::Simple {
+                        pattern: Pattern::Simple(PatternSimple {
                             node_id: next_node_id(),
                             expr,
-                        },
+                        }),
                     }],
-                });
+                }));
             }
         }
 
@@ -414,11 +419,11 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             let name = segment.ident.to_string();
             if name.chars().next().is_some_and(|c| c.is_uppercase()) {
                 let path: syn::Path = input.parse()?;
-                return Ok(Pattern::Tuple {
+                return Ok(Pattern::Tuple(PatternTuple {
                     node_id: next_node_id(),
                     path: Some(path),
                     elements: vec![],
-                });
+                }));
             }
         }
     }
@@ -428,17 +433,17 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
 
     // Range expressions like `18..65` or `0.0..100.0`
     if matches!(expr, syn::Expr::Range(_)) {
-        Ok(Pattern::Range {
+        Ok(Pattern::Range(PatternRange {
             node_id: next_node_id(),
             expr,
-        })
+        }))
     } else {
         // Simple value or expression
         // Examples: `42`, `"hello"`, `my_variable`, `compute_value()`
-        Ok(Pattern::Simple {
+        Ok(Pattern::Simple(PatternSimple {
             node_id: next_node_id(),
             expr,
-        })
+        }))
     }
 }
 
