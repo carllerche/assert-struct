@@ -20,7 +20,7 @@ fn reset_node_counter() {
     NODE_ID_COUNTER.with(|counter| counter.set(0));
 }
 
-pub fn parse(input: proc_macro::TokenStream) -> syn::Result<AssertStruct> {
+pub(crate) fn parse(input: proc_macro::TokenStream) -> syn::Result<AssertStruct> {
     // Reset the counter for each macro invocation
     reset_node_counter();
     syn::parse(input)
