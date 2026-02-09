@@ -1,5 +1,5 @@
 use crate::pattern::{
-    FieldOperation, Pattern, PatternRange, PatternRest,
+    Pattern, PatternRange, PatternRest,
     PatternSimple, PatternStruct, PatternTuple, PatternWildcard, TupleElement,
 };
 use crate::{AssertStruct, Expected};
@@ -201,7 +201,7 @@ pub(crate) fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         if has_special {
             // Contains pattern syntax like `>`, `==`, nested patterns
             // Example: `(> 10, < 30)`, `(== 5, != 10)`
-            let elements = parse_tuple_elements(&content)?;
+            let elements = TupleElement::parse_comma_separated(&content)?;
             return Ok(Pattern::Tuple(PatternTuple {
                 node_id: next_node_id(),
                 path: None,
@@ -254,7 +254,7 @@ pub(crate) fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             if has_special {
                 // Contains pattern syntax like `>`, `==`, nested patterns
                 // Example: `Some(> 30)`, `Event::Click(>= 0, < 100)`
-                let elements = parse_tuple_elements(&content)?;
+                let elements = TupleElement::parse_comma_separated(&content)?;
                 return Ok(Pattern::Tuple(PatternTuple {
                     node_id: next_node_id(),
                     path: Some(path),
@@ -315,76 +315,6 @@ pub(crate) fn parse_pattern(input: ParseStream) -> Result<Pattern> {
 
 
 
-
-/// Parse a comma-separated list of tuple elements, supporting both positional and indexed syntax.
-/// Used inside tuple patterns to handle mixed syntax like ("foo", *1: "bar", "baz")
-fn parse_tuple_elements(input: ParseStream) -> Result<Vec<TupleElement>> {
-    let mut elements = Vec::new();
-    let mut position = 0;
-
-    while !input.is_empty() {
-        // First, try to parse operations (like * for deref)
-        let operations = FieldOperation::parse_option(input)?;
-
-        // Check if this is an indexed element by looking for number followed by colon or method call
-        let fork = input.fork();
-        let is_indexed = if let Ok(_index_lit) = fork.parse::<syn::LitInt>() {
-            fork.peek(Token![:]) || fork.peek(Token![.])
-        } else {
-            false
-        };
-
-        if is_indexed {
-            // Parse indexed element: index: pattern, *index: pattern, or index.method(): pattern
-            let index_lit: syn::LitInt = input.parse()?;
-            let index: usize = index_lit.base10_parse()?;
-
-            // Validate that index matches current position
-            if index != position {
-                return Err(syn::Error::new_spanned(
-                    index_lit,
-                    format!("Index {} must match position {} in tuple", index, position),
-                ));
-            }
-
-            // Check for method calls after the index: 0.len():
-            let final_operations = if input.peek(Token![.]) {
-                Some(FieldOperation::parse_chain(input, operations)?)
-            } else {
-                operations
-            };
-
-            let _: Token![:] = input.parse()?;
-            let pattern = parse_pattern(input)?;
-
-            elements.push(TupleElement::Indexed {
-                index,
-                operations: final_operations,
-                pattern,
-            });
-        } else {
-            // If we parsed operations but no index, this is an error
-            if operations.is_some() {
-                return Err(syn::Error::new(
-                    input.span(),
-                    "Operations like * can only be used with indexed elements (e.g., *0:, *1:)",
-                ));
-            }
-
-            // Parse positional element: just a pattern
-            let pattern = parse_pattern(input)?;
-            elements.push(TupleElement::Positional { pattern });
-        }
-
-        position += 1;
-
-        if !input.is_empty() {
-            let _: Token![,] = input.parse()?;
-        }
-    }
-
-    Ok(elements)
-}
 
 /// Critical disambiguation function that determines whether parenthesized content
 /// contains special pattern syntax or is just a simple expression.
