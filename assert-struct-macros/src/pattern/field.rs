@@ -3,7 +3,9 @@
 //! These types support field access patterns in struct and tuple matching.
 
 use std::fmt;
+use syn::{Token, parse::Parse};
 
+use crate::parse::{parse_field_operations, parse_pattern};
 use crate::pattern::Pattern;
 
 /// Field assertion - a field name paired with its expected pattern
@@ -109,5 +111,53 @@ impl fmt::Display for FieldOperation {
                 write!(f, "{}", operation)
             }
         }
+    }
+}
+
+impl Parse for FieldAssertion {
+    /// Parses a single field assertion within a struct pattern.
+    ///
+    /// # Example Input
+    /// ```text
+    /// name: "Alice"
+    /// age: >= 18
+    /// *boxed_value: 42
+    /// email: =~ r".*@example\.com"
+    /// ```
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        // Check if we have field operations (starting with * for deref)
+        let mut operations = None;
+        let mut deref_count = 0;
+        let span = input.span();
+
+        // Count leading * tokens for dereferencing
+        while input.peek(Token![*]) {
+            let _: Token![*] = input.parse()?;
+            deref_count += 1;
+        }
+
+        if deref_count > 0 {
+            operations = Some(FieldOperation::Deref {
+                count: deref_count,
+                span,
+            });
+        }
+
+        // Parse field name and potential chained operations
+        let field_name: syn::Ident = input.parse()?;
+
+        // Check for chained operations: field.method(), field.nested, field[index], etc.
+        if input.peek(Token![.]) || input.peek(syn::token::Bracket) {
+            operations = Some(parse_field_operations(input, operations)?);
+        }
+
+        let _: Token![:] = input.parse()?;
+        let pattern = parse_pattern(input)?;
+
+        Ok(FieldAssertion {
+            field_name,
+            operations,
+            pattern,
+        })
     }
 }

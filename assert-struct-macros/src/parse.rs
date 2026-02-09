@@ -1,5 +1,5 @@
 use crate::pattern::{
-    FieldAssertion, FieldOperation, Pattern, PatternMap, PatternRange, PatternRest,
+    FieldOperation, Pattern, PatternMap, PatternRange, PatternRest,
     PatternSimple, PatternSlice, PatternStruct, PatternTuple, PatternWildcard, TupleElement,
 };
 #[cfg(feature = "regex")]
@@ -99,7 +99,7 @@ impl Parse for Expected {
 ///
 /// This function handles all pattern types in a specific order to avoid ambiguity.
 /// The order matters because some patterns share prefixes (e.g., `..` vs `..n`).
-fn parse_pattern(input: ParseStream) -> Result<Pattern> {
+pub(crate) fn parse_pattern(input: ParseStream) -> Result<Pattern> {
     // Closure pattern: |x| expr or move |x| expr for custom validation (escape hatch)
     // Examples: `|x| x > 5`, `move |x| complex_logic(x)`, `|x| { x.len() > 0 }`
     if input.peek(Token![|]) || (input.peek(Token![move]) && input.peek2(Token![|])) {
@@ -410,7 +410,7 @@ fn parse_element_operations(input: ParseStream) -> Result<Option<FieldOperation>
 
 /// Parse field operations starting from the first field name
 /// Handles chained operations like .field, \[index\], .method(), .await, etc.
-fn parse_field_operations(
+pub(crate) fn parse_field_operations(
     input: ParseStream,
     existing_operations: Option<FieldOperation>,
 ) -> Result<FieldOperation> {
@@ -449,7 +449,7 @@ fn parse_field_operations(
 
 /// Parse a single operation: .await, .field, .method(), or \[index\]
 /// This function parses exactly one operation and returns it
-fn parse_single_operation(input: ParseStream) -> Result<FieldOperation> {
+pub(crate) fn parse_single_operation(input: ParseStream) -> Result<FieldOperation> {
     if input.peek(Token![.]) {
         let dot_span = input.span();
         let _: Token![.] = input.parse()?;
@@ -629,54 +629,6 @@ fn parse_tuple_elements(input: ParseStream) -> Result<Vec<TupleElement>> {
     }
 
     Ok(elements)
-}
-
-impl Parse for FieldAssertion {
-    /// Parses a single field assertion within a struct pattern.
-    ///
-    /// # Example Input
-    /// ```text
-    /// name: "Alice"
-    /// age: >= 18
-    /// *boxed_value: 42
-    /// email: =~ r".*@example\.com"
-    /// ```
-    fn parse(input: ParseStream) -> Result<Self> {
-        // Check if we have field operations (starting with * for deref)
-        let mut operations = None;
-        let mut deref_count = 0;
-        let span = input.span();
-
-        // Count leading * tokens for dereferencing
-        while input.peek(Token![*]) {
-            let _: Token![*] = input.parse()?;
-            deref_count += 1;
-        }
-
-        if deref_count > 0 {
-            operations = Some(FieldOperation::Deref {
-                count: deref_count,
-                span,
-            });
-        }
-
-        // Parse field name and potential chained operations
-        let field_name: syn::Ident = input.parse()?;
-
-        // Check for chained operations: field.method(), field.nested, field[index], etc.
-        if input.peek(Token![.]) || input.peek(syn::token::Bracket) {
-            operations = Some(parse_field_operations(input, operations)?);
-        }
-
-        let _: Token![:] = input.parse()?;
-        let pattern = parse_pattern(input)?;
-
-        Ok(FieldAssertion {
-            field_name,
-            operations,
-            pattern,
-        })
-    }
 }
 
 /// Critical disambiguation function that determines whether parenthesized content
