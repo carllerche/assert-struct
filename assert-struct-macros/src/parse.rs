@@ -1,6 +1,6 @@
 use crate::pattern::{
     FieldOperation, Pattern, PatternRange, PatternRest,
-    PatternSimple, PatternSlice, PatternStruct, PatternTuple, PatternWildcard, TupleElement,
+    PatternSimple, PatternStruct, PatternTuple, PatternWildcard, TupleElement,
 };
 use crate::{AssertStruct, Expected};
 use std::cell::Cell;
@@ -185,13 +185,7 @@ pub(crate) fn parse_pattern(input: ParseStream) -> Result<Pattern> {
     // Slice patterns for Vec/array matching
     // Example: `[1, 2, 3]` or `[> 0, < 10, == 5]`
     if input.peek(syn::token::Bracket) {
-        let content;
-        syn::bracketed!(content in input);
-        let elements = parse_pattern_list(&content)?;
-        return Ok(Pattern::Slice(PatternSlice {
-            node_id: next_node_id(),
-            elements,
-        }));
+        return Ok(Pattern::Slice(input.parse()?));
     }
 
     // Standalone tuple pattern (no type prefix)
@@ -319,21 +313,6 @@ pub(crate) fn parse_pattern(input: ParseStream) -> Result<Pattern> {
     }
 }
 
-/// Parse a comma-separated list of patterns.
-/// Used inside tuples, slices, and enum variants.
-fn parse_pattern_list(input: ParseStream) -> Result<Vec<Pattern>> {
-    let mut patterns = Vec::new();
-
-    while !input.is_empty() {
-        patterns.push(parse_pattern(input)?);
-
-        if !input.is_empty() {
-            let _: Token![,] = input.parse()?;
-        }
-    }
-
-    Ok(patterns)
-}
 
 /// Parse operations for tuple elements (currently just dereferencing)
 /// This is simpler than field operations since we only support * for now
