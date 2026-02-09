@@ -201,6 +201,31 @@ pub(crate) fn parse_field_operations(
     }
 }
 
+impl FieldOperation {
+    /// Parse optional operations for tuple elements (currently just dereferencing)
+    /// This is simpler than field operations since we only support * for now
+    /// Returns None if no operations are present
+    pub(crate) fn parse_option(input: syn::parse::ParseStream) -> syn::Result<Option<Self>> {
+        let mut deref_count = 0;
+        let span = input.span();
+
+        // Count leading * tokens for dereferencing
+        while input.peek(Token![*]) {
+            let _: Token![*] = input.parse()?;
+            deref_count += 1;
+        }
+
+        if deref_count > 0 {
+            Ok(Some(FieldOperation::Deref {
+                count: deref_count,
+                span,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
 impl Parse for FieldOperation {
     /// Parse a single operation: .await, .field, .method(), or [index]
     /// This parses exactly one operation and returns it

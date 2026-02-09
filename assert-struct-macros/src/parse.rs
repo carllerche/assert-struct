@@ -314,27 +314,6 @@ pub(crate) fn parse_pattern(input: ParseStream) -> Result<Pattern> {
 }
 
 
-/// Parse operations for tuple elements (currently just dereferencing)
-/// This is simpler than field operations since we only support * for now
-fn parse_element_operations(input: ParseStream) -> Result<Option<FieldOperation>> {
-    let mut deref_count = 0;
-    let span = input.span();
-
-    // Count leading * tokens for dereferencing
-    while input.peek(Token![*]) {
-        let _: Token![*] = input.parse()?;
-        deref_count += 1;
-    }
-
-    if deref_count > 0 {
-        Ok(Some(FieldOperation::Deref {
-            count: deref_count,
-            span,
-        }))
-    } else {
-        Ok(None)
-    }
-}
 
 /// Parse a chain of operations: .method().await\[0\].field, etc.
 /// Returns a FieldOperation with appropriate chaining
@@ -384,7 +363,7 @@ fn parse_tuple_elements(input: ParseStream) -> Result<Vec<TupleElement>> {
 
     while !input.is_empty() {
         // First, try to parse operations (like * for deref)
-        let operations = parse_element_operations(input)?;
+        let operations = FieldOperation::parse_option(input)?;
 
         // Check if this is an indexed element by looking for number followed by colon or method call
         let fork = input.fork();
