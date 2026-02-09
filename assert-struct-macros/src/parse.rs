@@ -1,5 +1,5 @@
 use crate::pattern::{
-    FieldAssertion, FieldOperation, Pattern, PatternClosure, PatternMap, PatternRange, PatternRest,
+    FieldAssertion, FieldOperation, Pattern, PatternMap, PatternRange, PatternRest,
     PatternSimple, PatternSlice, PatternStruct, PatternTuple, PatternWildcard, TupleElement,
 };
 #[cfg(feature = "regex")]
@@ -103,20 +103,7 @@ fn parse_pattern(input: ParseStream) -> Result<Pattern> {
     // Closure pattern: |x| expr or move |x| expr for custom validation (escape hatch)
     // Examples: `|x| x > 5`, `move |x| complex_logic(x)`, `|x| { x.len() > 0 }`
     if input.peek(Token![|]) || (input.peek(Token![move]) && input.peek2(Token![|])) {
-        let closure: syn::ExprClosure = input.parse()?;
-
-        // Validate: exactly one parameter
-        if closure.inputs.len() != 1 {
-            return Err(syn::Error::new_spanned(
-                &closure.inputs,
-                "Closure must have exactly one parameter",
-            ));
-        }
-
-        return Ok(Pattern::Closure(PatternClosure {
-            node_id: next_node_id(),
-            closure,
-        }));
+        return Ok(Pattern::Closure(input.parse()?));
     }
 
     // Wildcard pattern: _ for ignoring a value while asserting it exists
