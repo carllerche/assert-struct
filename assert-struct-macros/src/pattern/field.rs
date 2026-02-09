@@ -224,6 +224,46 @@ impl FieldOperation {
             Ok(None)
         }
     }
+
+    /// Parse a chain of operations: .method().await[0].field, etc.
+    /// Returns a FieldOperation with appropriate chaining
+    pub(crate) fn parse_chain(
+        input: syn::parse::ParseStream,
+        existing_operations: Option<Self>,
+    ) -> syn::Result<Self> {
+        let span = input.span();
+        let mut operations = vec![];
+
+        // Parse the first operation (which should start with . or [)
+        operations.push(input.parse()?);
+
+        // Continue parsing while we see . or [
+        while input.peek(Token![.]) || input.peek(syn::token::Bracket) {
+            operations.push(input.parse()?);
+        }
+
+        // Build the final operation
+        let final_operation = if operations.len() == 1 {
+            operations.into_iter().next().unwrap()
+        } else {
+            FieldOperation::Chained { operations, span }
+        };
+
+        // Combine with existing operations if present
+        if let Some(FieldOperation::Deref {
+            count,
+            span: deref_span,
+        }) = existing_operations
+        {
+            Ok(FieldOperation::Combined {
+                deref_count: count,
+                operation: Box::new(final_operation),
+                span: deref_span,
+            })
+        } else {
+            Ok(final_operation)
+        }
+    }
 }
 
 impl Parse for FieldOperation {
