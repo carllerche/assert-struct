@@ -5,7 +5,7 @@
 use std::fmt;
 use syn::{Token, parse::Parse};
 
-use crate::parse::{parse_field_operations, parse_pattern};
+use crate::parse::parse_pattern;
 use crate::pattern::Pattern;
 
 /// Field assertion - a field name paired with its expected pattern
@@ -159,5 +159,120 @@ impl Parse for FieldAssertion {
             operations,
             pattern,
         })
+    }
+}
+
+/// Parse field operations starting from the first field name
+/// Handles chained operations like .field, [index], .method(), .await, etc.
+pub(crate) fn parse_field_operations(
+    input: syn::parse::ParseStream,
+    existing_operations: Option<FieldOperation>,
+) -> syn::Result<FieldOperation> {
+    let span = input.span();
+    let mut operations = vec![];
+
+    // Continue parsing operations in the chain using the helper
+    while input.peek(Token![.]) || input.peek(syn::token::Bracket) {
+        operations.push(input.parse()?);
+    }
+
+    // Build the final operation
+    let final_operation = if operations.len() == 1 {
+        operations.into_iter().next().unwrap()
+    } else if operations.is_empty() {
+        return Err(syn::Error::new(input.span(), "Expected field operations"));
+    } else {
+        FieldOperation::Chained { operations, span }
+    };
+
+    // Combine with existing operations if present
+    if let Some(FieldOperation::Deref {
+        count,
+        span: deref_span,
+    }) = existing_operations
+    {
+        Ok(FieldOperation::Combined {
+            deref_count: count,
+            operation: Box::new(final_operation),
+            span: deref_span,
+        })
+    } else {
+        Ok(final_operation)
+    }
+}
+
+impl Parse for FieldOperation {
+    /// Parse a single operation: .await, .field, .method(), or [index]
+    /// This parses exactly one operation and returns it
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        if input.peek(Token![.]) {
+            let dot_span = input.span();
+            let _: Token![.] = input.parse()?;
+
+            if input.peek(Token![await]) {
+                let await_span = input.span();
+                let _: Token![await] = input.parse()?;
+                Ok(FieldOperation::Await { span: await_span })
+            } else {
+                let ident: syn::Ident = input.parse()?;
+                let method_span = ident.span();
+
+                if input.peek(syn::token::Paren) {
+                    // Method call with args
+                    let args_content;
+                    syn::parenthesized!(args_content in input);
+
+                    let mut args = Vec::new();
+                    while !args_content.is_empty() {
+                        let arg: syn::Expr = args_content.parse()?;
+                        args.push(arg);
+
+                        if !args_content.peek(Token![,]) {
+                            break;
+                        }
+                        let _: Token![,] = args_content.parse()?;
+                    }
+
+                    Ok(FieldOperation::Method {
+                        name: ident,
+                        args,
+                        span: method_span,
+                    })
+                } else {
+                    // Field access - might be chained like .field.nested.deep
+                    let mut fields = vec![ident];
+
+                    // Continue parsing consecutive field accesses
+                    while input.peek(Token![.])
+                        && !input.peek2(Token![await])
+                        && !input.peek2(syn::token::Paren)
+                        && !input.peek2(syn::token::Bracket)
+                    {
+                        let _: Token![.] = input.parse()?;
+                        let field: syn::Ident = input.parse()?;
+                        fields.push(field);
+                    }
+
+                    Ok(FieldOperation::Nested {
+                        fields,
+                        span: dot_span,
+                    })
+                }
+            }
+        } else if input.peek(syn::token::Bracket) {
+            // Index operation - need to capture the span that encompasses the bracket
+            let content;
+            let bracket_token = syn::bracketed!(content in input);
+            let index: syn::Expr = content.parse()?;
+            Ok(FieldOperation::Index {
+                index,
+                span: bracket_token.span.open(),
+            })
+        } else {
+            Err(syn::Error::new(
+                input.span(),
+                "Expected field operation (.field, .method(), .await, or [index])",
+            ))
+        }
     }
 }
