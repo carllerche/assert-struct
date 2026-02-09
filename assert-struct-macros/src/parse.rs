@@ -2,8 +2,6 @@ use crate::pattern::{
     FieldOperation, Pattern, PatternMap, PatternRange, PatternRest,
     PatternSimple, PatternSlice, PatternStruct, PatternTuple, PatternWildcard, TupleElement,
 };
-#[cfg(feature = "regex")]
-use crate::pattern::{PatternLike, PatternRegex};
 use crate::{AssertStruct, Expected};
 use std::cell::Cell;
 use syn::{Result, Token, parse::Parse, parse::ParseStream, punctuated::Punctuated};
@@ -175,41 +173,7 @@ pub(crate) fn parse_pattern(input: ParseStream) -> Result<Pattern> {
 
     // `=` could start `==` (equality) or `=~` (regex pattern)
     if input.peek(Token![=]) {
-        let fork = input.fork();
-        if fork.parse::<Token![=]>().is_ok() {
-            if fork.peek(Token![=]) {
-                // This is `==` - explicit equality comparison
-                return Ok(Pattern::Comparison(input.parse()?));
-            }
-            #[cfg(feature = "regex")]
-            if fork.peek(Token![~]) {
-                // Regex pattern matching with dual-path optimization
-                let _: Token![=] = input.parse()?;
-                let _: Token![~] = input.parse()?;
-
-                // PERFORMANCE OPTIMIZATION: String literals are compiled at macro expansion time
-                // This avoids runtime regex compilation for the common case
-                let fork = input.fork();
-                if let Ok(lit) = fork.parse::<syn::LitStr>() {
-                    // Example: `email: =~ r".*@example\.com"`
-                    // Compiles regex at macro expansion, fails early if invalid
-                    let parsed_lit = input.parse::<syn::LitStr>()?;
-                    return Ok(Pattern::Regex(PatternRegex {
-                        node_id: next_node_id(),
-                        pattern: lit.value(),
-                        span: parsed_lit.span(),
-                    }));
-                } else {
-                    // Example: `email: =~ email_pattern` where email_pattern is a variable
-                    // Uses Like trait for runtime pattern matching
-                    let expr = input.parse::<syn::Expr>()?;
-                    return Ok(Pattern::Like(PatternLike {
-                        node_id: next_node_id(),
-                        expr,
-                    }));
-                }
-            }
-        }
+        return crate::pattern::parse_eq_or_like(input);
     }
 
     // Map patterns for map-like structures using duck typing
