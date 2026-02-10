@@ -14,7 +14,7 @@
 //! # Key Design Decisions
 //!
 //! - **Pattern enum**: Unified abstraction for all pattern types (struct, tuple, slice, etc.)
-//! - **Disambiguation**: `check_for_special_syntax` solves `Some(> 30)` vs `Some(my_var)`
+//! - **Explicit patterns**: Require explicit operators (e.g., `Some(== my_var)` not `Some(my_var)`)
 //! - **Dual-path optimization**: String literal regexes compile at expansion time
 //! - **Native Rust syntax**: Use match expressions for ranges, slices, and enums
 //!

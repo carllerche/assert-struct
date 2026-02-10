@@ -2,11 +2,11 @@
 source: assert-struct/tests/tuples.rs
 expression: message
 ---
-assert_struct! failed:
+assert_struct! failed: 3 mismatches
 
    | Container {
 mismatch:
-  --> `container.value.Some` (line 21)
-   |     value: Some((100, "other".to_string(), true)),
-   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ actual: (75, "test", false)
+  --> `container.value.Some.0` (line 21)
+   |     value: Some(<complex>),
+   |                 ^^^^^^^^^ actual: 75
    | }

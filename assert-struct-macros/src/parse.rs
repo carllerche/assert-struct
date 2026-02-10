@@ -1,8 +1,5 @@
-use crate::pattern::{
-    Pattern, PatternRange,
-    PatternSimple, PatternTuple, TupleElement,
-};
 use crate::AssertStruct;
+use crate::pattern::{Pattern, PatternRange, PatternSimple, PatternTuple, TupleElement};
 use std::cell::Cell;
 use syn::{Result, Token, parse::Parse, parse::ParseStream};
 
@@ -102,29 +99,14 @@ pub(crate) fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         let content;
         syn::parenthesized!(content in input);
 
-        // Check for special syntax to distinguish patterns from simple expressions
-        let fork = content.fork();
-        let has_special = check_for_special_syntax(&fork);
-
-        if has_special {
-            // Contains pattern syntax like `>`, `==`, nested patterns
-            // Example: `(> 10, < 30)`, `(== 5, != 10)`
-            let elements = TupleElement::parse_comma_separated(&content)?;
-            return Ok(Pattern::Tuple(PatternTuple {
-                node_id: next_node_id(),
-                path: None,
-                elements,
-            }));
-        } else {
-            // Simple expression without pattern syntax
-            // Example: `(10, 20)`, `(expected_x, expected_y)`
-            // Treat as a single simple expression
-            let expr = content.parse()?;
-            return Ok(Pattern::Simple(PatternSimple {
-                node_id: next_node_id(),
-                expr,
-            }));
-        }
+        // Parse as tuple pattern with element-wise matching
+        // Example: `(> 10, < 30)`, `(== 5, != 10)`
+        let elements = TupleElement::parse_comma_separated(&content)?;
+        return Ok(Pattern::Tuple(PatternTuple {
+            node_id: next_node_id(),
+            path: None,
+            elements,
+        }));
     }
 
     // Complex path-based patterns: structs, enums, tuple variants
@@ -137,44 +119,21 @@ pub(crate) fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             return Ok(Pattern::Struct(input.parse()?));
         }
 
-        // Path followed by parens could be:
-        // 1. Enum with patterns: `Some(> 30)` - needs special parsing
-        // 2. Simple expression: `Some(value)` - parse as single expression
+        // Path followed by parens is an enum/tuple variant with patterns
+        // Example: `Some(> 30)`, `Event::Click(>= 0, < 100)`
         if fork.peek(syn::token::Paren) {
             let path: syn::Path = input.parse()?;
             let content;
             syn::parenthesized!(content in input);
 
-            // CRITICAL DISAMBIGUATION: Is this `Some(> 30)` or `Some(my_var)`?
-            // We need to check if the content has special pattern syntax
-            let fork = content.fork();
-            let has_special = check_for_special_syntax(&fork);
-
-            if has_special {
-                // Contains pattern syntax like `>`, `==`, nested patterns
-                // Example: `Some(> 30)`, `Event::Click(>= 0, < 100)`
-                let elements = TupleElement::parse_comma_separated(&content)?;
-                return Ok(Pattern::Tuple(PatternTuple {
-                    node_id: next_node_id(),
-                    path: Some(path),
-                    elements,
-                }));
-            } else {
-                // Simple expression without pattern syntax
-                // Example: `Some(expected_value)`, `Ok(result)`
-                // We treat the whole content as a single expression
-                let expr = content.parse()?;
-                return Ok(Pattern::Tuple(PatternTuple {
-                    node_id: next_node_id(),
-                    path: Some(path),
-                    elements: vec![TupleElement::Positional {
-                        pattern: Pattern::Simple(PatternSimple {
-                            node_id: next_node_id(),
-                            expr,
-                        }),
-                    }],
-                }));
-            }
+            // Parse tuple elements with pattern syntax
+            // Example: `Some(> 30)`, `Event::Click(>= 0, < 100)`
+            let elements = TupleElement::parse_comma_separated(&content)?;
+            return Ok(Pattern::Tuple(PatternTuple {
+                node_id: next_node_id(),
+                path: Some(path),
+                elements,
+            }));
         }
 
         // Unit variants (no parens or braces)
@@ -210,78 +169,5 @@ pub(crate) fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             expr,
         }))
     }
-}
-
-
-
-
-/// Critical disambiguation function that determines whether parenthesized content
-/// contains special pattern syntax or is just a simple expression.
-///
-/// This solves the ambiguity between:
-/// - `Some(> 30)` - contains pattern syntax, needs special parsing
-/// - `Some(my_var)` - simple expression, parse as-is
-/// - `Some((true, false))` - tuple expression, parse as-is
-/// - `Event::Click(>= 0, < 100)` - multiple patterns, needs special parsing
-///
-/// The fork-and-peek pattern is essential here - we look ahead without
-/// consuming tokens to make the decision.
-fn check_for_special_syntax(content: ParseStream) -> bool {
-    // Wildcard pattern
-    if content.peek(Token![_]) {
-        return true;
-    }
-
-    // Comparison operators indicate pattern syntax
-    if content.peek(Token![<]) || content.peek(Token![>]) {
-        return true;
-    }
-
-    // Check for != operator (but not just ! which could be boolean negation)
-    if content.peek(Token![!]) {
-        let fork = content.fork();
-        if fork.parse::<Token![!]>().is_ok() && fork.peek(Token![=]) {
-            return true;
-        }
-    }
-
-    // Check for == or =~ operators
-    if content.peek(Token![=]) {
-        let fork = content.fork();
-        if fork.parse::<Token![=]>().is_ok() && (fork.peek(Token![=]) || fork.peek(Token![~])) {
-            return true;
-        }
-    }
-
-    // Nested slice patterns like `Some([1, 2, 3])`
-    if content.peek(syn::token::Bracket) {
-        return true;
-    }
-
-    // Check for indexed elements and method calls: `0:`, `1.method():`
-    let fork = content.fork();
-    if let Ok(_index_lit) = fork.parse::<syn::LitInt>() {
-        if fork.peek(Token![:]) || fork.peek(Token![.]) {
-            return true;
-        }
-    }
-
-    // Nested struct/enum patterns like `Some(User { ... })`
-    let fork = content.fork();
-    if let Ok(_path) = fork.parse::<syn::Path>() {
-        if fork.peek(syn::token::Brace) || fork.peek(syn::token::Paren) {
-            return true;
-        }
-    }
-
-    // Multiple comma-separated elements indicate tuple pattern
-    // BUT: Be careful! `(true, false)` is a valid tuple expression
-    // We only treat it as special if it would contain patterns
-    let fork = content.fork();
-    if fork.parse::<syn::Expr>().is_ok() && fork.peek(Token![,]) {
-        return true;
-    }
-
-    false
 }
 
