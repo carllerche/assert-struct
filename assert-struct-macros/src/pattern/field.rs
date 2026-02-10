@@ -46,7 +46,7 @@ pub(crate) enum FieldOperation {
         span: proc_macro2::Span,
     },
 
-    /// Index operation: field[0], field[index], etc.
+    /// Index operation: field\[0\], field\[index\], etc.
     /// Stores the index expression to use
     Index {
         index: syn::Expr,
@@ -54,7 +54,7 @@ pub(crate) enum FieldOperation {
     },
 
     /// Combined operation: dereferencing followed by method/nested/index access
-    /// Example: *field.method(), **field.inner, *field[0], etc.
+    /// Example: *field.method(), **field.inner, *field\[0\], etc.
     Combined {
         deref_count: usize,
         operation: Box<FieldOperation>,
@@ -62,7 +62,7 @@ pub(crate) enum FieldOperation {
     },
 
     /// Chained operations: nested field followed by index or method
-    /// Example: field.nested[0], field.inner.method(), field.sub[1].len()
+    /// Example: field.nested\[0\], field.inner.method(), field.sub\[1\].len()
     Chained {
         operations: Vec<FieldOperation>,
         span: proc_macro2::Span,
@@ -162,7 +162,7 @@ impl Parse for FieldAssertion {
 }
 
 /// Parse field operations starting from the first field name
-/// Handles chained operations like .field, [index], .method(), .await, etc.
+/// Handles chained operations like .field, \[index\], .method(), .await, etc.
 pub(crate) fn parse_field_operations(
     input: syn::parse::ParseStream,
     existing_operations: Option<FieldOperation>,
@@ -224,7 +224,7 @@ impl FieldOperation {
         }
     }
 
-    /// Parse a chain of operations: .method().await[0].field, etc.
+    /// Parse a chain of operations: .method().await\[0\].field, etc.
     /// Returns a FieldOperation with appropriate chaining
     pub(crate) fn parse_chain(
         input: syn::parse::ParseStream,
@@ -266,7 +266,7 @@ impl FieldOperation {
 }
 
 impl Parse for FieldOperation {
-    /// Parse a single operation: .await, .field, .method(), or [index]
+    /// Parse a single operation: .await, .field, .method(), or \[index\]
     /// This parses exactly one operation and returns it
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         if input.peek(Token![.]) {
