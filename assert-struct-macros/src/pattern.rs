@@ -33,7 +33,6 @@ pub(crate) use wildcard::PatternWildcard;
 pub(crate) use regex::{PatternLike, PatternRegex};
 
 use std::fmt;
-use syn::{Token, parse::ParseStream};
 
 /// Unified pattern type that can represent any pattern
 #[derive(Debug, Clone)]
@@ -78,38 +77,6 @@ pub(crate) fn expr_to_string(expr: &syn::Expr) -> String {
 
 pub(crate) fn path_to_string(path: &syn::Path) -> String {
     quote::quote! { #path }.to_string()
-}
-
-/// Parse patterns that start with `=` token: `==` (equality) or `=~` (regex/like).
-///
-/// This utility handles the disambiguation and parsing of:
-/// - `==` - Explicit equality comparison pattern (e.g., `== 42`)
-/// - `=~` - Regex or Like pattern matching (e.g., `=~ r"pattern"` or `=~ expr`)
-///
-/// # Context
-/// Called from `parse_pattern` after the caller has created a fork and verified
-/// that the next token sequence starts with `=`. The caller creates the fork
-/// (as that's the caller's responsibility), then this function performs the
-/// lookahead to determine `==` vs `=~` and does the actual parsing.
-///
-/// # Performance Note
-/// For `=~` patterns with string literals, the regex is compiled at macro
-/// expansion time for better performance. Expression-based patterns use the
-/// Like trait for runtime matching.
-pub(crate) fn parse_eq_or_like(input: ParseStream) -> syn::Result<Pattern> {
-    // Use peek2 to look ahead without forking (caller's fork verified we start with `=`)
-    if input.peek2(Token![=]) {
-        // This is `==` - explicit equality comparison
-        return Ok(Pattern::Comparison(input.parse()?));
-    }
-
-    #[cfg(feature = "regex")]
-    if input.peek2(Token![~]) {
-        let pattern: PatternLike = input.parse()?;
-        return Ok(pattern.into_pattern());
-    }
-
-    Err(input.error("expected `==` or `=~` pattern"))
 }
 
 impl fmt::Display for Pattern {

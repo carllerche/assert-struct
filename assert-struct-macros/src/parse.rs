@@ -78,7 +78,19 @@ pub(crate) fn parse_pattern(input: ParseStream) -> Result<Pattern> {
 
     // `=` could start `==` (equality) or `=~` (regex pattern)
     if input.peek(Token![=]) {
-        return crate::pattern::parse_eq_or_like(input);
+        if input.peek2(Token![=]) {
+            // This is `==` - explicit equality comparison
+            return Ok(Pattern::Comparison(input.parse()?));
+        }
+
+        #[cfg(feature = "regex")]
+        if input.peek2(Token![~]) {
+            // This is `=~` - regex/like pattern
+            let pattern: crate::pattern::PatternLike = input.parse()?;
+            return Ok(pattern.into_pattern());
+        }
+
+        return Err(input.error("expected `==` or `=~` pattern"));
     }
 
     // Map patterns for map-like structures using duck typing
