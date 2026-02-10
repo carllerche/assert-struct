@@ -1,7 +1,7 @@
 use crate::AssertStruct;
 use crate::pattern::{
     ComparisonOp, FieldAssertion, FieldOperation, Pattern, PatternClosure, PatternComparison,
-    PatternMap, PatternRange, PatternRest, PatternSimple, PatternSlice, PatternStruct,
+    PatternMap, PatternRange, PatternSimple, PatternSlice, PatternStruct,
     PatternTuple, PatternWildcard, TupleElement,
 };
 #[cfg(feature = "regex")]
@@ -72,7 +72,6 @@ fn get_pattern_node_ident(pattern: &Pattern) -> Ident {
         | Pattern::Slice(PatternSlice { node_id, .. })
         | Pattern::Comparison(PatternComparison { node_id, .. })
         | Pattern::Range(PatternRange { node_id, .. })
-        | Pattern::Rest(PatternRest { node_id })
         | Pattern::Wildcard(PatternWildcard { node_id })
         | Pattern::Closure(PatternClosure { node_id, .. })
         | Pattern::Map(PatternMap { node_id, .. }) => *node_id,
@@ -96,7 +95,6 @@ fn get_pattern_span(pattern: &Pattern) -> Option<Span> {
         Pattern::Struct(PatternStruct { path, .. }) => path.as_ref().map(|p| p.span()),
         Pattern::Tuple(PatternTuple { path, .. }) => path.as_ref().map(|p| p.span()),
         Pattern::Slice(PatternSlice { .. })
-        | Pattern::Rest(PatternRest { .. })
         | Pattern::Wildcard(PatternWildcard { .. })
         | Pattern::Map(PatternMap { .. }) => None,
         Pattern::Closure(PatternClosure { closure, .. }) => Some(closure.span()),
@@ -116,7 +114,6 @@ fn generate_pattern_nodes(
         | Pattern::Slice(PatternSlice { node_id, .. })
         | Pattern::Comparison(PatternComparison { node_id, .. })
         | Pattern::Range(PatternRange { node_id, .. })
-        | Pattern::Rest(PatternRest { node_id })
         | Pattern::Wildcard(PatternWildcard { node_id })
         | Pattern::Closure(PatternClosure { node_id, .. })
         | Pattern::Map(PatternMap { node_id, .. }) => *node_id,
@@ -185,11 +182,6 @@ fn generate_pattern_nodes(
                 ::assert_struct::__macro_support::PatternNode::Like {
                     expr: #expr_str,
                 }
-            }
-        }
-        Pattern::Rest(PatternRest { .. }) => {
-            quote! {
-                ::assert_struct::__macro_support::PatternNode::Rest
             }
         }
         Pattern::Wildcard(PatternWildcard { .. }) => {
@@ -493,10 +485,6 @@ fn generate_pattern_assertion_with_collection(
                 &node_ident,
                 map_span,
             )
-        }
-        Pattern::Rest(PatternRest { .. }) => {
-            // Rest patterns should only appear inside slices and are handled there
-            panic!("Internal error: Rest pattern used outside of slice context")
         }
     }
 }
@@ -1000,7 +988,6 @@ fn pattern_to_string(pattern: &Pattern) -> String {
         Pattern::Regex(PatternRegex { pattern, .. }) => format!("=~ r\"{}\"", pattern),
         #[cfg(feature = "regex")]
         Pattern::Like(PatternLike { expr, .. }) => format!("=~ {}", quote! { #expr }),
-        Pattern::Rest(PatternRest { .. }) => "..".to_string(),
         Pattern::Wildcard(PatternWildcard { .. }) => "_".to_string(),
         Pattern::Closure(PatternClosure { closure, .. }) => quote! { #closure }.to_string(),
         Pattern::Struct(PatternStruct { path, .. }) => {
@@ -1406,8 +1393,8 @@ fn generate_slice_assertion_with_collection(
 
     for (i, elem) in elements.iter().enumerate() {
         match elem {
-            Pattern::Rest(PatternRest { .. }) => {
-                // Rest pattern allows variable-length matching
+            Pattern::Range(PatternRange { expr: syn::Expr::Range(r), .. }) if r.start.is_none() && r.end.is_none() => {
+                // RangeFull (..) in slice context is a rest pattern
                 pattern_parts.push(quote! { .. });
             }
             Pattern::Wildcard(PatternWildcard { .. }) => {

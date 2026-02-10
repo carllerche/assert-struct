@@ -72,29 +72,6 @@ pub(crate) fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         }
     }
 
-    // AMBIGUITY: `..` could be a rest pattern OR start of a range like `..10`
-    // Example inputs:
-    //   `..`        -> rest pattern (partial matching)
-    //   `..10`      -> range pattern (exclusive upper bound)
-    //   `..=10`     -> range pattern (inclusive upper bound)
-    if input.peek(Token![..]) {
-        // Quick check: if followed by `=`, it's definitely a range pattern (..=)
-        if input.peek2(Token![=]) {
-            // Range pattern: ..=N, fall through to expression parsing
-        } else {
-            // Could be rest pattern (..) or range pattern (..N)
-            // Need to check if followed by comma or end of input
-            let fork = input.fork();
-            let _: Token![..] = fork.parse()?;
-
-            if fork.is_empty() || fork.peek(Token![,]) {
-                // Rest pattern: .. alone or .. followed by comma
-                return Ok(Pattern::Rest(input.parse()?));
-            }
-            // Otherwise it's a range pattern (..N), fall through to expression parsing
-        }
-    }
-
     // Try to parse as a comparison pattern (<, <=, >, >=, ==, !=)
     // Use fork to check if this looks like a comparison without consuming tokens
     if input.peek(Token![<]) || input.peek(Token![>]) || input.peek(Token![!]) {

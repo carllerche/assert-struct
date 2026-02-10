@@ -8,7 +8,6 @@ mod comparison;
 mod field;
 mod map;
 mod range;
-mod rest;
 mod simple;
 mod slice;
 mod struct_pattern;
@@ -24,7 +23,6 @@ pub(crate) use comparison::{ComparisonOp, PatternComparison};
 pub(crate) use field::{FieldAssertion, FieldOperation};
 pub(crate) use map::PatternMap;
 pub(crate) use range::PatternRange;
-pub(crate) use rest::PatternRest;
 pub(crate) use simple::PatternSimple;
 pub(crate) use slice::PatternSlice;
 pub(crate) use struct_pattern::PatternStruct;
@@ -50,7 +48,6 @@ pub(crate) enum Pattern {
     Regex(PatternRegex),
     #[cfg(feature = "regex")]
     Like(PatternLike),
-    Rest(PatternRest),
     Wildcard(PatternWildcard),
     Closure(PatternClosure),
     Map(PatternMap),
@@ -151,7 +148,6 @@ impl fmt::Display for Pattern {
             Pattern::Regex(p) => write!(f, "{}", p),
             #[cfg(feature = "regex")]
             Pattern::Like(p) => write!(f, "{}", p),
-            Pattern::Rest(p) => write!(f, "{}", p),
             Pattern::Wildcard(p) => write!(f, "{}", p),
             Pattern::Closure(p) => write!(f, "{}", p),
             Pattern::Map(p) => write!(f, "{}", p),
