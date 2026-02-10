@@ -105,31 +105,8 @@ pub(crate) fn parse_eq_or_like(input: ParseStream) -> syn::Result<Pattern> {
 
     #[cfg(feature = "regex")]
     if input.peek2(Token![~]) {
-        // Regex pattern matching with dual-path optimization
-        let _: Token![=] = input.parse()?;
-        let _: Token![~] = input.parse()?;
-
-        // PERFORMANCE OPTIMIZATION: String literals are compiled at macro expansion time
-        // This avoids runtime regex compilation for the common case
-        let fork = input.fork();
-        if let Ok(lit) = fork.parse::<syn::LitStr>() {
-            // Example: `email: =~ r".*@example\.com"`
-            // Compiles regex at macro expansion, fails early if invalid
-            let parsed_lit = input.parse::<syn::LitStr>()?;
-            return Ok(Pattern::Regex(PatternRegex {
-                node_id: crate::parse::next_node_id(),
-                pattern: lit.value(),
-                span: parsed_lit.span(),
-            }));
-        } else {
-            // Example: `email: =~ email_pattern` where email_pattern is a variable
-            // Uses Like trait for runtime pattern matching
-            let expr = input.parse::<syn::Expr>()?;
-            return Ok(Pattern::Like(PatternLike {
-                node_id: crate::parse::next_node_id(),
-                expr,
-            }));
-        }
+        let pattern: PatternLike = input.parse()?;
+        return Ok(pattern.into_pattern());
     }
 
     Err(input.error("expected `==` or `=~` pattern"))
