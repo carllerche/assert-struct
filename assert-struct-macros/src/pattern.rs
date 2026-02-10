@@ -139,6 +139,7 @@ impl Parse for Pattern {
                 return Ok(Pattern::Tuple(PatternTuple::parse_with_path_prefix(input)?));
             }
 
+            // TODO: remove this once Pattern::Simple expansion is fixed to remove hax
             let path: syn::Path = input.parse()?;
             return Ok(Pattern::Tuple(PatternTuple {
                 node_id: crate::parse::next_node_id(),
