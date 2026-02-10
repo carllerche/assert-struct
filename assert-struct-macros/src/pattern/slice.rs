@@ -5,7 +5,7 @@
 use std::fmt;
 use syn::{Token, parse::Parse};
 
-use crate::parse::{next_node_id, parse_pattern};
+use crate::parse::next_node_id;
 use crate::pattern::Pattern;
 
 /// Slice pattern: [1, 2, 3] or [1, .., 5]
@@ -56,7 +56,7 @@ fn parse_pattern_list(input: syn::parse::ParseStream) -> syn::Result<Vec<Pattern
     let mut patterns = Vec::new();
 
     while !input.is_empty() {
-        patterns.push(parse_pattern(input)?);
+        patterns.push(input.parse()?);
 
         if !input.is_empty() {
             let _: Token![,] = input.parse()?;

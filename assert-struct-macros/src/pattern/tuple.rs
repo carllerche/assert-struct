@@ -5,7 +5,7 @@
 use std::fmt;
 use syn::{Token, parse::{Parse, ParseStream}};
 
-use crate::parse::{next_node_id, parse_pattern};
+use crate::parse::next_node_id;
 use crate::pattern::{FieldOperation, Pattern, path_to_string};
 
 /// Tuple pattern: (10, 20) or Some(42) or None
@@ -100,7 +100,7 @@ impl TupleElement {
                 };
 
                 let _: Token![:] = input.parse()?;
-                let pattern = parse_pattern(input)?;
+                let pattern = input.parse()?;
 
                 elements.push(TupleElement::Indexed {
                     index,
@@ -117,7 +117,7 @@ impl TupleElement {
                 }
 
                 // Parse positional element: just a pattern
-                let pattern = parse_pattern(input)?;
+                let pattern = input.parse()?;
                 elements.push(TupleElement::Positional { pattern });
             }
 

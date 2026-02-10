@@ -5,7 +5,6 @@
 use std::fmt;
 use syn::{Token, parse::Parse};
 
-use crate::parse::parse_pattern;
 use crate::pattern::Pattern;
 
 /// Field assertion - a field name paired with its expected pattern
@@ -152,7 +151,7 @@ impl Parse for FieldAssertion {
         }
 
         let _: Token![:] = input.parse()?;
-        let pattern = parse_pattern(input)?;
+        let pattern = input.parse()?;
 
         Ok(FieldAssertion {
             field_name,

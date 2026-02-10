@@ -330,7 +330,7 @@ struct AssertStruct {
 #[proc_macro]
 pub fn assert_struct(input: TokenStream) -> TokenStream {
     // Parse the input
-    let assert = match parse::parse(input) {
+    let assert = match syn::parse(input) {
         Ok(assert) => assert,
         Err(err) => return TokenStream::from(err.to_compile_error()),
     };

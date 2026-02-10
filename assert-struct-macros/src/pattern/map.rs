@@ -5,7 +5,7 @@
 use std::fmt;
 use syn::{Token, parse::Parse};
 
-use crate::parse::{next_node_id, parse_pattern};
+use crate::parse::next_node_id;
 use crate::pattern::{Pattern, expr_to_string};
 
 /// Map pattern: #{ "key": pattern, .. } for map-like structures
@@ -83,7 +83,7 @@ fn parse_map_entries(input: syn::parse::ParseStream) -> syn::Result<(Vec<(syn::E
         let _: Token![:] = input.parse()?;
 
         // Parse value pattern
-        let value = parse_pattern(input)?;
+        let value = input.parse()?;
 
         entries.push((key, value));
 
