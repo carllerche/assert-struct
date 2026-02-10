@@ -26,17 +26,12 @@ mod expand;
 mod parse;
 mod pattern;
 
-use pattern::{FieldAssertion, Pattern};
+use pattern::Pattern;
 
 // Root-level struct that tracks the assertion
 struct AssertStruct {
     value: syn::Expr,
     pattern: Pattern,
-}
-
-struct Expected {
-    fields: syn::punctuated::Punctuated<FieldAssertion, syn::Token![,]>,
-    rest: bool, // true if ".." was present
 }
 
 /// Structural assertion macro for testing complex data structures.

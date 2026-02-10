@@ -1,10 +1,10 @@
 use crate::pattern::{
     Pattern, PatternRange, PatternRest,
-    PatternSimple, PatternStruct, PatternTuple, PatternWildcard, TupleElement,
+    PatternSimple, PatternTuple, PatternWildcard, TupleElement,
 };
-use crate::{AssertStruct, Expected};
+use crate::AssertStruct;
 use std::cell::Cell;
-use syn::{Result, Token, parse::Parse, parse::ParseStream, punctuated::Punctuated};
+use syn::{Result, Token, parse::Parse, parse::ParseStream};
 
 thread_local! {
     static NODE_ID_COUNTER: Cell<usize> = const { Cell::new(0) };
@@ -48,51 +48,6 @@ impl Parse for AssertStruct {
     }
 }
 
-impl Parse for Expected {
-    /// Parses struct field patterns inside braces.
-    ///
-    /// # Example Input
-    /// ```text
-    /// // Inside: User { ... }
-    /// name: "Alice", age: 30, ..
-    /// name: "Bob", age: >= 18
-    /// email: =~ r".*@example\.com", ..
-    /// ```
-    ///
-    /// The `..` token enables partial matching - only specified fields are checked.
-    fn parse(input: ParseStream) -> Result<Self> {
-        let mut fields = Punctuated::new();
-        let mut rest = false;
-
-        while !input.is_empty() {
-            // Check for rest pattern (..) which allows partial matching
-            if input.peek(Token![..]) {
-                let _: Token![..] = input.parse()?;
-                rest = true;
-                break;
-            }
-
-            fields.push_value(input.parse()?);
-
-            if input.is_empty() {
-                break;
-            }
-
-            let comma: Token![,] = input.parse()?;
-            fields.push_punct(comma);
-
-            // Rest pattern can appear after a comma
-            if input.peek(Token![..]) {
-                let _: Token![..] = input.parse()?;
-                rest = true;
-                break;
-            }
-        }
-
-        Ok(Expected { fields, rest })
-    }
-}
-
 /// Parse any pattern at any level - the heart of the macro's flexibility.
 ///
 /// This function handles all pattern types in a specific order to avoid ambiguity.
@@ -113,26 +68,7 @@ pub(crate) fn parse_pattern(input: ParseStream) -> Result<Pattern> {
 
         // Check if this is a wildcard struct pattern: `_ { ... }`
         if fork.peek(syn::token::Brace) {
-            let underscore_token: Token![_] = input.parse()?;
-            let content;
-            syn::braced!(content in input);
-            let expected: Expected = content.parse()?;
-
-            // Wildcard struct patterns must use rest pattern (..)
-            // to indicate partial matching
-            if !expected.rest {
-                return Err(syn::Error::new_spanned(
-                    underscore_token,
-                    "Wildcard struct patterns must use '..' for partial matching",
-                ));
-            }
-
-            return Ok(Pattern::Struct(PatternStruct {
-                node_id: next_node_id(),
-                path: None, // None indicates wildcard
-                fields: expected.fields,
-                rest: expected.rest,
-            }));
+            return Ok(Pattern::Struct(input.parse()?));
         } else {
             // Regular wildcard pattern
             let _: Token![_] = input.parse()?;
@@ -226,16 +162,7 @@ pub(crate) fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         // Path followed by braces is a struct pattern
         // Example: `User { name: "Alice", age: 30 }`
         if fork.peek(syn::token::Brace) {
-            let path: syn::Path = input.parse()?;
-            let content;
-            syn::braced!(content in input);
-            let expected: Expected = content.parse()?;
-            return Ok(Pattern::Struct(PatternStruct {
-                node_id: next_node_id(),
-                path: Some(path),
-                fields: expected.fields,
-                rest: expected.rest,
-            }));
+            return Ok(Pattern::Struct(input.parse()?));
         }
 
         // Path followed by parens could be:
