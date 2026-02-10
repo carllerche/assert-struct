@@ -1,5 +1,5 @@
 use crate::AssertStruct;
-use crate::pattern::{Pattern, PatternRange, PatternSimple, PatternTuple, TupleElement};
+use crate::pattern::{Pattern, PatternRange, PatternTuple, TupleElement};
 use std::cell::Cell;
 use syn::{Result, Token, parse::Parse, parse::ParseStream};
 
@@ -154,22 +154,16 @@ pub(crate) fn parse_pattern(input: ParseStream) -> Result<Pattern> {
         }
     }
 
-    // Everything else is either a simple expression or range
-    let expr: syn::Expr = input.parse()?;
-
-    // Range expressions like `18..65` or `0.0..100.0`
-    if matches!(expr, syn::Expr::Range(_)) {
-        Ok(Pattern::Range(PatternRange {
-            node_id: next_node_id(),
-            expr,
-        }))
+    // Everything else is either a range or simple expression
+    // Try range first, then fallback to simple
+    let fork = input.fork();
+    if fork.parse::<PatternRange>().is_ok() {
+        // Range expressions like `18..65` or `0.0..100.0`
+        Ok(Pattern::Range(input.parse()?))
     } else {
         // Simple value or expression
         // Examples: `42`, `"hello"`, `my_variable`, `compute_value()`
-        Ok(Pattern::Simple(PatternSimple {
-            node_id: next_node_id(),
-            expr,
-        }))
+        Ok(Pattern::Simple(input.parse()?))
     }
 }
 
