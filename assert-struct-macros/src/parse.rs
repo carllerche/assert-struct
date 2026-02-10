@@ -63,11 +63,8 @@ pub(crate) fn parse_pattern(input: ParseStream) -> Result<Pattern> {
     // Example: `Some(_)`, `field: _`, `[1, _, 3]`
     // Special case: `_ { ... }` for wildcard struct patterns
     if input.peek(Token![_]) {
-        let fork = input.fork();
-        let _: Token![_] = fork.parse()?;
-
         // Check if this is a wildcard struct pattern: `_ { ... }`
-        if fork.peek(syn::token::Brace) {
+        if input.peek2(syn::token::Brace) {
             return Ok(Pattern::Struct(input.parse()?));
         } else {
             // Regular wildcard pattern
