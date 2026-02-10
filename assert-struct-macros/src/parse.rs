@@ -1,6 +1,6 @@
 use crate::pattern::{
     Pattern, PatternRange, PatternRest,
-    PatternSimple, PatternTuple, PatternWildcard, TupleElement,
+    PatternSimple, PatternTuple, TupleElement,
 };
 use crate::AssertStruct;
 use std::cell::Cell;
@@ -68,10 +68,7 @@ pub(crate) fn parse_pattern(input: ParseStream) -> Result<Pattern> {
             return Ok(Pattern::Struct(input.parse()?));
         } else {
             // Regular wildcard pattern
-            let _: Token![_] = input.parse()?;
-            return Ok(Pattern::Wildcard(PatternWildcard {
-                node_id: next_node_id(),
-            }));
+            return Ok(Pattern::Wildcard(input.parse()?));
         }
     }
 
