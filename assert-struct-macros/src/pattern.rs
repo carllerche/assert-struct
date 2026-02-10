@@ -133,18 +133,7 @@ impl Parse for Pattern {
             // Path followed by parens is an enum/tuple variant with patterns
             // Example: `Some(> 30)`, `Event::Click(>= 0, < 100)`
             if fork.peek(syn::token::Paren) {
-                let path: syn::Path = input.parse()?;
-                let content;
-                syn::parenthesized!(content in input);
-
-                // Parse tuple elements with pattern syntax
-                // Example: `Some(> 30)`, `Event::Click(>= 0, < 100)`
-                let elements = TupleElement::parse_comma_separated(&content)?;
-                return Ok(Pattern::Tuple(PatternTuple {
-                    node_id: crate::parse::next_node_id(),
-                    path: Some(path),
-                    elements,
-                }));
+                return Ok(Pattern::Tuple(PatternTuple::parse_with_path_prefix(input)?));
             }
 
             // Unit variants (no parens or braces)

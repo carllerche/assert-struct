@@ -17,6 +17,32 @@ pub(crate) struct PatternTuple {
     pub elements: Vec<TupleElement>,
 }
 
+impl PatternTuple {
+    /// Parses a tuple pattern with a required path prefix.
+    ///
+    /// # Example Input
+    /// ```text
+    /// Some(> 30)
+    /// Event::Click(>= 0, < 100)
+    /// Ok(== 42)
+    /// ```
+    ///
+    /// This assumes the input starts with a path followed by parenthesized content.
+    pub(crate) fn parse_with_path_prefix(input: ParseStream) -> syn::Result<Self> {
+        let path: syn::Path = input.parse()?;
+        let content;
+        syn::parenthesized!(content in input);
+
+        let elements = TupleElement::parse_comma_separated(&content)?;
+
+        Ok(PatternTuple {
+            node_id: next_node_id(),
+            path: Some(path),
+            elements,
+        })
+    }
+}
+
 impl Parse for PatternTuple {
     /// Parses a standalone tuple pattern without a path prefix.
     ///
@@ -28,8 +54,7 @@ impl Parse for PatternTuple {
     /// ```
     ///
     /// This parses parenthesized tuple elements. For enum/tuple variants
-    /// with a path prefix (e.g., `Some(> 30)`), the path is parsed separately
-    /// in `parse_pattern` and this is called with just the parenthesized content.
+    /// with a path prefix (e.g., `Some(> 30)`), use `parse_with_path_prefix` instead.
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let content;
         syn::parenthesized!(content in input);
