@@ -3,7 +3,10 @@
 //! Handles tuple patterns including enum variants: Some(42), Event::Click(>= 0, < 100)
 
 use std::fmt;
-use syn::{Token, parse::{Parse, ParseStream}};
+use syn::{
+    Token,
+    parse::{Parse, ParseStream},
+};
 
 use crate::parse::next_node_id;
 use crate::pattern::{FieldOperation, Pattern, path_to_string};

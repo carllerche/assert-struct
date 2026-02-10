@@ -64,7 +64,9 @@ impl Parse for PatternMap {
 
 /// Parse map entries: comma-separated key-value pairs with optional rest pattern
 /// Supports syntax like: "key1": pattern1, "key2": pattern2, ..
-fn parse_map_entries(input: syn::parse::ParseStream) -> syn::Result<(Vec<(syn::Expr, Pattern)>, bool)> {
+fn parse_map_entries(
+    input: syn::parse::ParseStream,
+) -> syn::Result<(Vec<(syn::Expr, Pattern)>, bool)> {
     let mut entries = Vec::new();
     let mut rest = false;
 

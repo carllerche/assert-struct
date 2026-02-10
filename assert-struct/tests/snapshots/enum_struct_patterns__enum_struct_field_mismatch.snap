@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | Request { ... Query {
 mismatch:
-  --> `request.statement.Query.0.name` (line 33)
+  --> `request.statement.Query.0.name` (line 35)
    |     name: "get_items",
    |           ^^^^^^^^^^^ actual: "select_users"
    | } ... }

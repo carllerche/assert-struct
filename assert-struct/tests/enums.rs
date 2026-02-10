@@ -217,7 +217,7 @@ fn test_tuple_enum_multiple_fields() {
     assert_struct!(
         msg,
         MessageQueue {
-            current: Message::Data("metadata", vec![1, 2, 3]),
+            current: Message::Data("metadata", [1, 2, 3]),
             priority: 2,
         }
     );
@@ -303,7 +303,7 @@ fn test_mixed_enum_struct_fields() {
         resp,
         ApiResponse {
             response: Response::Data {
-                payload: vec![65, 66, 67],
+                payload: [65, 66, 67],
                 content_type: "text/plain",
             },
             timestamp: 1234567892,
@@ -321,7 +321,7 @@ fn test_mixed_enum_multi_tuple() {
     assert_struct!(
         resp,
         ApiResponse {
-            response: Response::MultiPart("boundary", vec![1, 2], false),
+            response: Response::MultiPart("boundary", [1, 2], false),
             timestamp: 1234567893,
         }
     );

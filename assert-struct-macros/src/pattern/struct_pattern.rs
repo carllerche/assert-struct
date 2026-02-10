@@ -34,7 +34,7 @@ impl Parse for PatternStruct {
         // Check if this is a wildcard struct pattern: _ { ... }
         let (path, wildcard_span) = if input.peek(Token![_]) {
             let underscore: Token![_] = input.parse()?;
-            (None, Some(underscore.span))  // wildcard has no path
+            (None, Some(underscore.span)) // wildcard has no path
         } else {
             // Named struct pattern: TypeName { ... }
             (Some(input.parse::<syn::Path>()?), None)

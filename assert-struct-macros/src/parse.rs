@@ -40,5 +40,3 @@ impl Parse for AssertStruct {
         Ok(AssertStruct { value, pattern })
     }
 }
-
-

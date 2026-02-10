@@ -220,14 +220,14 @@ fn test_slice_with_nested_structs() {
     assert_struct!(
         inventory,
         Inventory {
-            items: vec![
+            items: [
                 Item {
                     id: 1,
-                    value: "sword".to_string()
+                    value: "sword"
                 },
                 Item {
                     id: 2,
-                    value: "shield".to_string()
+                    value: "shield"
                 },
             ],
         }
@@ -384,7 +384,7 @@ fn test_option_vec_some_workaround() {
     assert_struct!(
         config,
         Config {
-            values: Some(vec![1, 2, 3]),
+            values: Some([1, 2, 3]),
         }
     );
 }

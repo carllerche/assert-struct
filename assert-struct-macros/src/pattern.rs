@@ -34,7 +34,10 @@ pub(crate) use regex::{PatternLike, PatternRegex};
 
 use std::fmt;
 
-use syn::{Token, parse::{Parse, ParseStream}};
+use syn::{
+    Token,
+    parse::{Parse, ParseStream},
+};
 
 /// Unified pattern type that can represent any pattern
 #[derive(Debug, Clone)]
@@ -123,7 +126,7 @@ impl Parse for Pattern {
         // Complex path-based patterns: structs, enums, tuple variants
         // This is where disambiguation becomes critical
         let fork = input.fork();
-        if let Ok(path) = fork.parse::<syn::Path>() {
+        if fork.parse::<syn::Path>().is_ok() {
             // Path followed by braces is a struct pattern
             // Example: `User { name: "Alice", age: 30 }`
             if fork.peek(syn::token::Brace) {
@@ -136,20 +139,12 @@ impl Parse for Pattern {
                 return Ok(Pattern::Tuple(PatternTuple::parse_with_path_prefix(input)?));
             }
 
-            // Unit variants (no parens or braces)
-            // Heuristic: If it starts with uppercase, likely an enum variant
-            // Examples: `None`, `Status::Active`, `Color::Red`
-            if let Some(segment) = path.segments.last() {
-                let name = segment.ident.to_string();
-                if name.chars().next().is_some_and(|c| c.is_uppercase()) {
-                    let path: syn::Path = input.parse()?;
-                    return Ok(Pattern::Tuple(PatternTuple {
-                        node_id: crate::parse::next_node_id(),
-                        path: Some(path),
-                        elements: vec![],
-                    }));
-                }
-            }
+            let path: syn::Path = input.parse()?;
+            return Ok(Pattern::Tuple(PatternTuple {
+                node_id: crate::parse::next_node_id(),
+                path: Some(path),
+                elements: vec![],
+            }));
         }
 
         // Everything else is either a range or simple expression

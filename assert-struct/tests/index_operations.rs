@@ -146,7 +146,7 @@ fn test_index_with_variables() {
     let expected = 20;
 
     assert_struct!(data, Data {
-        values[index]: expected,
+        values[index]: == expected,
         ..
     });
 }

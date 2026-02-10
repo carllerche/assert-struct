@@ -1,8 +1,8 @@
 use crate::AssertStruct;
 use crate::pattern::{
     ComparisonOp, FieldAssertion, FieldOperation, Pattern, PatternClosure, PatternComparison,
-    PatternMap, PatternRange, PatternSimple, PatternSlice, PatternStruct,
-    PatternTuple, PatternWildcard, TupleElement,
+    PatternMap, PatternRange, PatternSimple, PatternSlice, PatternStruct, PatternTuple,
+    PatternWildcard, TupleElement,
 };
 #[cfg(feature = "regex")]
 use crate::pattern::{PatternLike, PatternRegex};
@@ -1393,7 +1393,10 @@ fn generate_slice_assertion_with_collection(
 
     for (i, elem) in elements.iter().enumerate() {
         match elem {
-            Pattern::Range(PatternRange { expr: syn::Expr::Range(r), .. }) if r.start.is_none() && r.end.is_none() => {
+            Pattern::Range(PatternRange {
+                expr: syn::Expr::Range(r),
+                ..
+            }) if r.start.is_none() && r.end.is_none() => {
                 // RangeFull (..) in slice context is a rest pattern
                 pattern_parts.push(quote! { .. });
             }
