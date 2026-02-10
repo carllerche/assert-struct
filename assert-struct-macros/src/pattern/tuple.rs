@@ -3,9 +3,9 @@
 //! Handles tuple patterns including enum variants: Some(42), Event::Click(>= 0, < 100)
 
 use std::fmt;
-use syn::{Token, parse::ParseStream};
+use syn::{Token, parse::{Parse, ParseStream}};
 
-use crate::parse::parse_pattern;
+use crate::parse::{next_node_id, parse_pattern};
 use crate::pattern::{FieldOperation, Pattern, path_to_string};
 
 /// Tuple pattern: (10, 20) or Some(42) or None
@@ -15,6 +15,33 @@ pub(crate) struct PatternTuple {
     pub node_id: usize,
     pub path: Option<syn::Path>,
     pub elements: Vec<TupleElement>,
+}
+
+impl Parse for PatternTuple {
+    /// Parses a standalone tuple pattern without a path prefix.
+    ///
+    /// # Example Input
+    /// ```text
+    /// (10, 20)
+    /// (> 10, < 30)
+    /// (== 5, != 10)
+    /// ```
+    ///
+    /// This parses parenthesized tuple elements. For enum/tuple variants
+    /// with a path prefix (e.g., `Some(> 30)`), the path is parsed separately
+    /// in `parse_pattern` and this is called with just the parenthesized content.
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let content;
+        syn::parenthesized!(content in input);
+
+        let elements = TupleElement::parse_comma_separated(&content)?;
+
+        Ok(PatternTuple {
+            node_id: next_node_id(),
+            path: None,
+            elements,
+        })
+    }
 }
 
 /// Represents an element in a tuple pattern, supporting both positional and indexed syntax

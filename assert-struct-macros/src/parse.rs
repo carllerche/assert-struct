@@ -96,17 +96,7 @@ pub(crate) fn parse_pattern(input: ParseStream) -> Result<Pattern> {
     // Standalone tuple pattern (no type prefix)
     // Example: `(10, 20)` or `(> 10, < 30)`
     if input.peek(syn::token::Paren) {
-        let content;
-        syn::parenthesized!(content in input);
-
-        // Parse as tuple pattern with element-wise matching
-        // Example: `(> 10, < 30)`, `(== 5, != 10)`
-        let elements = TupleElement::parse_comma_separated(&content)?;
-        return Ok(Pattern::Tuple(PatternTuple {
-            node_id: next_node_id(),
-            path: None,
-            elements,
-        }));
+        return Ok(Pattern::Tuple(input.parse()?));
     }
 
     // Complex path-based patterns: structs, enums, tuple variants
