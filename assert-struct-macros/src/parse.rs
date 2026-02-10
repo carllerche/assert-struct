@@ -1,5 +1,5 @@
 use crate::pattern::{
-    Pattern, PatternRange, PatternRest,
+    Pattern, PatternRange,
     PatternSimple, PatternTuple, TupleElement,
 };
 use crate::AssertStruct;
@@ -78,19 +78,20 @@ pub(crate) fn parse_pattern(input: ParseStream) -> Result<Pattern> {
     //   `..10`      -> range pattern (exclusive upper bound)
     //   `..=10`     -> range pattern (inclusive upper bound)
     if input.peek(Token![..]) {
-        let fork = input.fork();
-        let _: Token![..] = fork.parse()?;
-
-        // Distinguish by looking ahead after the `..`
-        if fork.peek(Token![=]) || (!fork.is_empty() && !fork.peek(Token![,])) {
-            // This is a range pattern like `..10` or `..=10`
-            // Fall through to parse as expression later
+        // Quick check: if followed by `=`, it's definitely a range pattern (..=)
+        if input.peek2(Token![=]) {
+            // Range pattern: ..=N, fall through to expression parsing
         } else {
-            // This is a rest pattern for partial matching
-            let _: Token![..] = input.parse()?;
-            return Ok(Pattern::Rest(PatternRest {
-                node_id: next_node_id(),
-            }));
+            // Could be rest pattern (..) or range pattern (..N)
+            // Need to check if followed by comma or end of input
+            let fork = input.fork();
+            let _: Token![..] = fork.parse()?;
+
+            if fork.is_empty() || fork.peek(Token![,]) {
+                // Rest pattern: .. alone or .. followed by comma
+                return Ok(Pattern::Rest(input.parse()?));
+            }
+            // Otherwise it's a range pattern (..N), fall through to expression parsing
         }
     }
 
