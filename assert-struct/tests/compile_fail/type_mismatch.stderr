@@ -1,10 +1,10 @@
-error[E0277]: can't compare `u32` with `String`
+error[E0277]: can't compare `u32` with `&str`
   --> tests/compile_fail/type_mismatch.rs:18:14
    |
 18 |         age: "thirty",
-   |              ^^^^^^^^ no implementation for `u32 == String`
+   |              ^^^^^^^^ no implementation for `u32 == &str`
    |
-   = help: the trait `PartialEq<String>` is not implemented for `u32`
+   = help: the trait `PartialEq<&str>` is not implemented for `u32`
            but trait `PartialEq<u32>` is implemented for it
-   = help: for that trait implementation, expected `u32`, found `String`
-   = note: required for `&u32` to implement `PartialEq<&String>`
+   = help: for that trait implementation, expected `u32`, found `&str`
+   = note: required for `&u32` to implement `PartialEq<&&str>`

@@ -944,28 +944,6 @@ fn generate_plain_tuple_assertion_with_collection(
     }
 }
 
-/// Transform expected values for better ergonomics.
-///
-/// WHY: This allows users to write `name: "Alice"` instead of `name: "Alice".to_string()`
-/// when comparing against String fields. The macro automatically adds `.to_string()`
-/// to string literals, making the syntax cleaner.
-///
-/// # Example
-/// ```text
-/// // User writes: name: "Alice"
-/// // We transform to: name: "Alice".to_string()
-/// // So it can compare with String fields
-/// ```
-fn transform_expected_value(expr: &Expr) -> Expr {
-    match expr {
-        Expr::Lit(lit) if matches!(lit.lit, syn::Lit::Str(_)) => {
-            // Transform string literal to String for comparison
-            syn::parse_quote! { #expr.to_string() }
-        }
-        _ => expr.clone(),
-    }
-}
-
 // Check if a path refers to Option::Some
 
 /// Convert a pattern to its string representation for error messages
@@ -1304,8 +1282,6 @@ fn generate_simple_assertion_with_collection(
     path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
-    // Transform string literals for String comparison
-    let transformed = transform_expected_value(expected);
     let field_path_str = path.join(".");
     let expected_str = quote! { #expected }.to_string();
 
@@ -1319,7 +1295,7 @@ fn generate_simple_assertion_with_collection(
     if is_index_operation {
         // For index operations, avoid references on both sides to fix type inference
         quote_spanned! {span=>
-            if #value_expr != #transformed {
+            if #value_expr != #expected {
                 let __line = line!();
                 let __file = file!();
                 let __error = ::assert_struct::__macro_support::ErrorContext {
@@ -1339,7 +1315,7 @@ fn generate_simple_assertion_with_collection(
         }
     } else if is_ref {
         quote_spanned! {span=>
-            if #value_expr != &(#transformed) {
+            if #value_expr != &(#expected) {
                 let __line = line!();
                 let __file = file!();
                 let __error = ::assert_struct::__macro_support::ErrorContext {
@@ -1359,7 +1335,7 @@ fn generate_simple_assertion_with_collection(
         }
     } else {
         quote_spanned! {span=>
-            if &#value_expr != &(#transformed) {
+            if &#value_expr != &(#expected) {
                 let __line = line!();
                 let __file = file!();
                 let __error = ::assert_struct::__macro_support::ErrorContext {
