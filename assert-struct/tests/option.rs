@@ -133,8 +133,8 @@ fn test_nested_option_struct() {
             bio: Some("Software developer"),
             website: Some("https://example.com"),
             location: Some(Location {
-                city: "Boston".to_string(), // Nested structs still need .to_string()
-                country: "USA".to_string(),
+                city: "Boston", // Nested structs still need .to_string()
+                country: "USA",
             }),
         }
     );
