@@ -350,11 +350,10 @@ fn test_nested_enum_tuple_variant() {
         outer: OuterEnum::Wrapper(InnerEnum::A("nested".to_string())),
     };
 
-    // Note: For nested enum tuples, we currently need .to_string() for string literals
     assert_struct!(
         nested,
         NestedEnumStruct {
-            outer: OuterEnum::Wrapper(InnerEnum::A("nested".to_string())),
+            outer: OuterEnum::Wrapper(InnerEnum::A("nested")),
         }
     );
 }

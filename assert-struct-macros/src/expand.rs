@@ -42,6 +42,8 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
             // Suppress clippy warnings that are expected in macro-generated code
             #[allow(unused_assignments, clippy::neg_cmp_op_on_partial_ord, clippy::op_ref, clippy::zero_prefixed_literal, clippy::bool_comparison)]
             let __assert_struct_result = {
+                use std::convert::AsRef;
+
                 // Generate all node constants
                 #(#node_constants)*
 
@@ -1285,6 +1287,16 @@ fn generate_simple_assertion_with_collection(
     let field_path_str = path.join(".");
     let expected_str = quote! { #expected }.to_string();
 
+    let actual = match expected {
+        syn::Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Str(_),
+            ..
+        }) => {
+            quote!((#value_expr).as_ref())
+        }
+        _ => quote!(#value_expr),
+    };
+
     // Check if this is an index operation by looking at the path
     // Exclude slice patterns which start with [
     let is_index_operation = path
@@ -1295,7 +1307,7 @@ fn generate_simple_assertion_with_collection(
     if is_index_operation {
         // For index operations, avoid references on both sides to fix type inference
         quote_spanned! {span=>
-            if #value_expr != #expected {
+            if !matches!(#actual, #expected) {
                 let __line = line!();
                 let __file = file!();
                 let __error = ::assert_struct::__macro_support::ErrorContext {
@@ -1315,7 +1327,7 @@ fn generate_simple_assertion_with_collection(
         }
     } else if is_ref {
         quote_spanned! {span=>
-            if #value_expr != &(#expected) {
+            if !matches!(#actual, #expected) {
                 let __line = line!();
                 let __file = file!();
                 let __error = ::assert_struct::__macro_support::ErrorContext {
@@ -1335,7 +1347,7 @@ fn generate_simple_assertion_with_collection(
         }
     } else {
         quote_spanned! {span=>
-            if &#value_expr != &(#expected) {
+            if !matches!(#actual, #expected) {
                 let __line = line!();
                 let __file = file!();
                 let __error = ::assert_struct::__macro_support::ErrorContext {

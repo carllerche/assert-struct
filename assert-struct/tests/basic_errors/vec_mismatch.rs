@@ -16,7 +16,7 @@ pub fn test_case() {
     assert_struct!(
         data,
         DataHolder {
-            values: &[1, 2, 4], // Wrong last element
+            values: [1, 2, 4], // Wrong last element
             name: "test",
         }
     );
