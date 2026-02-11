@@ -56,7 +56,7 @@ fn test_enum_tuple_with_struct_full_match() {
         Request {
             statement: Statement::Query(Query {
                 name: "select_users",
-                params: vec!["id", "name"],
+                params: ["id", "name"],
                 limit: None,
             })
         }

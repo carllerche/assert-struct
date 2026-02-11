@@ -30,7 +30,7 @@ pub fn test_case() {
     assert_struct!(request, Request {
         statement: Statement::Query(Query {
             name: "get_items",  // This will fail
-            params: vec!["name", "age"],  // This will also fail (wrong length)
+            params: ["name", "age"],  // This will also fail (wrong length)
             limit: Some(> 50),  // This will also fail
         })
     });

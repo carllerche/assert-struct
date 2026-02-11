@@ -177,7 +177,7 @@ fn test_option_with_collections() {
     assert_struct!(
         settings,
         Settings {
-            notifications: Some(vec!["email".to_string(), "sms".to_string()]),
+            notifications: Some(["email", "sms"]),
             max_items: Some(100),
             flags: Some((true, false)),
         }

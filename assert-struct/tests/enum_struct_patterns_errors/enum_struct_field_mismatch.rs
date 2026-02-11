@@ -28,11 +28,14 @@ pub fn test_case() {
         }),
     };
 
-    assert_struct!(request, Request {
-        statement: Statement::Query(Query {
-            name: "get_items",  // This will fail
-            params: vec!["id", "name"],
-            limit: Some(50),
-        })
-    });
+    assert_struct!(
+        request,
+        Request {
+            statement: Statement::Query(Query {
+                name: "get_items", // This will fail
+                params: ["id", "name"],
+                limit: Some(50),
+            })
+        }
+    );
 }

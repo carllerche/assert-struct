@@ -25,7 +25,7 @@ pub fn test_case() {
             query: Query {
                 name: "update_user".to_string(),
                 params: vec!["age".to_string()],
-            }
+            },
         },
     };
 
@@ -34,7 +34,7 @@ pub fn test_case() {
             id: > 10,
             query: Query {
                 name: "delete_user",  // This will fail
-                params: vec!["age"],
+                params: ["age"],
             }
         }
     });

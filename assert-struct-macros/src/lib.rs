@@ -14,7 +14,7 @@
 //! # Key Design Decisions
 //!
 //! - **Pattern enum**: Unified abstraction for all pattern types (struct, tuple, slice, etc.)
-//! - **Disambiguation**: `check_for_special_syntax` solves `Some(> 30)` vs `Some(my_var)`
+//! - **Explicit patterns**: Require explicit operators (e.g., `Some(== my_var)` not `Some(my_var)`)
 //! - **Dual-path optimization**: String literal regexes compile at expansion time
 //! - **Native Rust syntax**: Use match expressions for ranges, slices, and enums
 //!
@@ -26,17 +26,12 @@ mod expand;
 mod parse;
 mod pattern;
 
-use pattern::{FieldAssertion, Pattern};
+use pattern::Pattern;
 
 // Root-level struct that tracks the assertion
 struct AssertStruct {
     value: syn::Expr,
     pattern: Pattern,
-}
-
-struct Expected {
-    fields: syn::punctuated::Punctuated<FieldAssertion, syn::Token![,]>,
-    rest: bool, // true if ".." was present
 }
 
 /// Structural assertion macro for testing complex data structures.
@@ -335,7 +330,7 @@ struct Expected {
 #[proc_macro]
 pub fn assert_struct(input: TokenStream) -> TokenStream {
     // Parse the input
-    let assert = match parse::parse(input) {
+    let assert = match syn::parse(input) {
         Ok(assert) => assert,
         Err(err) => return TokenStream::from(err.to_compile_error()),
     };
