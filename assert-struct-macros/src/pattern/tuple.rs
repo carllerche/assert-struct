@@ -72,20 +72,27 @@ impl Parse for PatternTuple {
     }
 }
 
+/// Positional tuple element: just a pattern in sequence
+/// Example: "foo", > 10, Some(42)
+#[derive(Debug, Clone)]
+pub(crate) struct TupleElementPositional {
+    pub pattern: Pattern,
+}
+
+/// Indexed tuple element: explicit index with optional operations
+/// Example: 0: "foo", *1: "bar", 2.len(): 5
+#[derive(Debug, Clone)]
+pub(crate) struct TupleElementIndexed {
+    pub index: usize,
+    pub operations: Option<FieldOperation>,
+    pub pattern: Pattern,
+}
+
 /// Represents an element in a tuple pattern, supporting both positional and indexed syntax
 #[derive(Debug, Clone)]
 pub(crate) enum TupleElement {
-    /// Positional element: just a pattern in sequence
-    /// Example: "foo", > 10, Some(42)
-    Positional { pattern: Pattern },
-
-    /// Indexed element: explicit index with optional operations
-    /// Example: 0: "foo", *1: "bar", 2.len(): 5
-    Indexed {
-        index: usize,
-        operations: Option<FieldOperation>,
-        pattern: Pattern,
-    },
+    Positional(TupleElementPositional),
+    Indexed(TupleElementIndexed),
 }
 
 impl TupleElement {
@@ -130,11 +137,11 @@ impl TupleElement {
                 let _: Token![:] = input.parse()?;
                 let pattern = input.parse()?;
 
-                elements.push(TupleElement::Indexed {
+                elements.push(TupleElement::Indexed(TupleElementIndexed {
                     index,
                     operations: final_operations,
                     pattern,
-                });
+                }));
             } else {
                 // If we parsed operations but no index, this is an error
                 if operations.is_some() {
@@ -146,7 +153,7 @@ impl TupleElement {
 
                 // Parse positional element: just a pattern
                 let pattern = input.parse()?;
-                elements.push(TupleElement::Positional { pattern });
+                elements.push(TupleElement::Positional(TupleElementPositional { pattern }));
             }
 
             position += 1;
@@ -179,14 +186,13 @@ impl fmt::Display for PatternTuple {
 impl fmt::Display for TupleElement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TupleElement::Positional { pattern } => {
-                write!(f, "{}", pattern)
+            TupleElement::Positional(elem) => {
+                write!(f, "{}", elem.pattern)
             }
-            TupleElement::Indexed {
-                index,
-                operations,
-                pattern,
-            } => {
+            TupleElement::Indexed(elem) => {
+                let index = elem.index;
+                let operations = &elem.operations;
+                let pattern = &elem.pattern;
                 if let Some(ops) = operations {
                     match ops {
                         FieldOperation::Deref { count, .. } => {

@@ -204,8 +204,8 @@ fn generate_pattern_nodes(
                 .iter()
                 .map(|elem| {
                     let pattern = match elem {
-                        TupleElement::Positional { pattern } => pattern,
-                        TupleElement::Indexed { pattern, .. } => pattern,
+                        TupleElement::Positional(elem) => &elem.pattern,
+                        TupleElement::Indexed(elem) => &elem.pattern,
                     };
                     generate_pattern_nodes(pattern, node_defs)
                 })
@@ -848,12 +848,8 @@ fn process_tuple_elements(
 
     for (i, tuple_element) in elements.iter().enumerate() {
         let (pattern, operations) = match tuple_element {
-            TupleElement::Positional { pattern } => (pattern, &None),
-            TupleElement::Indexed {
-                pattern,
-                operations,
-                ..
-            } => (pattern, operations),
+            TupleElement::Positional(elem) => (&elem.pattern, &None),
+            TupleElement::Indexed(elem) => (&elem.pattern, &elem.operations),
         };
 
         match pattern {
