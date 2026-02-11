@@ -40,6 +40,37 @@ impl quote::ToTokens for FieldName {
     }
 }
 
+impl Parse for FieldName {
+    /// Parses a field name, which can be either an identifier or a numeric index.
+    ///
+    /// # Examples
+    /// - `name` → `FieldName::Ident("name")`
+    /// - `0` → `FieldName::Index(0)`
+    /// - `42` → `FieldName::Index(42)`
+    ///
+    /// # Note on consecutive indices
+    /// Due to proc macro tokenization, consecutive numeric indices like `.0.0`
+    /// are tokenized as a float literal after the first dot is consumed.
+    /// This is a known limitation - use tuple destructuring syntax instead.
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        // Try to parse as a numeric literal first using fork
+        let fork = input.fork();
+        if let Ok(lit) = fork.parse::<syn::LitInt>() {
+            // Successfully parsed as number, consume from real input
+            let _: syn::LitInt = input.parse()?;
+            let index = lit.base10_parse()?;
+            Ok(FieldName::Index(index))
+        } else {
+            // Try parsing as identifier
+            input.parse::<syn::Ident>().map(FieldName::Ident)
+                .map_err(|_| syn::Error::new(
+                    input.span(),
+                    "expected field name (identifier or numeric index)"
+                ))
+        }
+    }
+}
+
 /// Field assertion - a field name paired with its expected pattern
 /// Supports operations like dereferencing, method calls, and nested access
 #[derive(Debug, Clone)]
@@ -72,10 +103,17 @@ pub(crate) enum FieldOperation {
     /// For async futures that need to be awaited
     Await { span: proc_macro2::Span },
 
-    /// Nested field access: field.nested, field.inner.value, etc.
-    /// Stores the chain of field names to access
-    Nested {
-        fields: Vec<syn::Ident>,
+    /// Named field access: field.name, field.inner, etc.
+    /// A single step in a field chain accessing a named field
+    NamedField {
+        name: syn::Ident,
+        span: proc_macro2::Span,
+    },
+
+    /// Unnamed field access: field.0, field.1, etc.
+    /// A single step in a field chain accessing a tuple element
+    UnnamedField {
+        index: usize,
         span: proc_macro2::Span,
     },
 
@@ -117,11 +155,11 @@ impl fmt::Display for FieldOperation {
             FieldOperation::Await { .. } => {
                 write!(f, ".await")
             }
-            FieldOperation::Nested { fields, .. } => {
-                for field in fields {
-                    write!(f, ".{}", field)?;
-                }
-                Ok(())
+            FieldOperation::NamedField { name, .. } => {
+                write!(f, ".{}", name)
+            }
+            FieldOperation::UnnamedField { index, .. } => {
+                write!(f, ".{}", index)
             }
             FieldOperation::Index { index, .. } => {
                 write!(f, "[{}]", quote::quote! { #index })
@@ -175,9 +213,8 @@ impl Parse for FieldAssertion {
             });
         }
 
-        // Parse field name and potential chained operations
-        let ident: syn::Ident = input.parse()?;
-        let field_name = FieldName::Ident(ident);
+        // Parse field name (can be identifier or numeric index)
+        let field_name: FieldName = input.parse()?;
 
         // Check for chained operations: field.method(), field.nested, field[index], etc.
         if input.peek(Token![.]) || input.peek(syn::token::Bracket) {
@@ -312,11 +349,45 @@ impl Parse for FieldOperation {
                 let _: Token![await] = input.parse()?;
                 Ok(FieldOperation::Await { span: await_span })
             } else {
-                let ident: syn::Ident = input.parse()?;
-                let method_span = ident.span();
+                // Try to parse as integer first (for tuple indices)
+                let fork = input.fork();
+                if let Ok(lit_int) = fork.parse::<syn::LitInt>() {
+                    // It's a tuple index like .0 or .1
+                    let _: syn::LitInt = input.parse()?;
+                    let index: usize = lit_int.base10_parse()?;
+                    return Ok(FieldOperation::UnnamedField {
+                        index,
+                        span: dot_span,
+                    });
+                }
 
+                // Try to parse as float (handles .0.0 tokenized as 0.0)
+                let fork = input.fork();
+                if let Ok(lit_float) = fork.parse::<syn::LitFloat>() {
+                    // Parse float like "0.0" and split into two UnnamedField operations
+                    let float_str = lit_float.to_string();
+                    if let Some((first, second)) = float_str.split_once('.') {
+                        if let (Ok(first_idx), Ok(second_idx)) = (first.parse::<usize>(), second.parse::<usize>()) {
+                            // Consume the float from real input
+                            let _: syn::LitFloat = input.parse()?;
+
+                            // Create two chained UnnamedField operations
+                            return Ok(FieldOperation::Chained {
+                                operations: vec![
+                                    FieldOperation::UnnamedField { index: first_idx, span: dot_span },
+                                    FieldOperation::UnnamedField { index: second_idx, span: dot_span },
+                                ],
+                                span: dot_span,
+                            });
+                        }
+                    }
+                }
+
+                // Parse as identifier for named field
+                let ident: syn::Ident = input.parse()?;
+
+                // Check if this is a method call
                 if input.peek(syn::token::Paren) {
-                    // Method call with args
                     let args_content;
                     syn::parenthesized!(args_content in input);
 
@@ -334,25 +405,12 @@ impl Parse for FieldOperation {
                     Ok(FieldOperation::Method {
                         name: ident,
                         args,
-                        span: method_span,
+                        span: dot_span,
                     })
                 } else {
-                    // Field access - might be chained like .field.nested.deep
-                    let mut fields = vec![ident];
-
-                    // Continue parsing consecutive field accesses
-                    while input.peek(Token![.])
-                        && !input.peek2(Token![await])
-                        && !input.peek2(syn::token::Paren)
-                        && !input.peek2(syn::token::Bracket)
-                    {
-                        let _: Token![.] = input.parse()?;
-                        let field: syn::Ident = input.parse()?;
-                        fields.push(field);
-                    }
-
-                    Ok(FieldOperation::Nested {
-                        fields,
+                    // Single named field access
+                    Ok(FieldOperation::NamedField {
+                        name: ident,
                         span: dot_span,
                     })
                 }

@@ -217,13 +217,13 @@ impl fmt::Display for TupleElement {
                             // Show await after the index: 0.await:
                             write!(f, "{}.await: {}", index, pattern)
                         }
-                        FieldOperation::Nested { fields, .. } => {
-                            // Show nested access after the index: 0.field:
-                            write!(f, "{}", index)?;
-                            for field in fields {
-                                write!(f, ".{}", field)?;
-                            }
-                            write!(f, ": {}", pattern)
+                        FieldOperation::NamedField { name, .. } => {
+                            // Show named field access after the index: 0.field:
+                            write!(f, "{}.{}: {}", index, name, pattern)
+                        }
+                        FieldOperation::UnnamedField { index: field_idx, .. } => {
+                            // Show unnamed field access after the index: 0.1:
+                            write!(f, "{}.{}: {}", index, field_idx, pattern)
                         }
                         FieldOperation::Index { index: idx, .. } => {
                             // Show index access after the tuple index: 0[1]:
@@ -234,10 +234,11 @@ impl fmt::Display for TupleElement {
                             write!(f, "{}", index)?;
                             for op in operations {
                                 match op {
-                                    FieldOperation::Nested { fields, .. } => {
-                                        for field in fields {
-                                            write!(f, ".{}", field)?;
-                                        }
+                                    FieldOperation::NamedField { name, .. } => {
+                                        write!(f, ".{}", name)?;
+                                    }
+                                    FieldOperation::UnnamedField { index, .. } => {
+                                        write!(f, ".{}", index)?;
                                     }
                                     FieldOperation::Method { name, .. } => {
                                         write!(f, ".{}()", name)?;

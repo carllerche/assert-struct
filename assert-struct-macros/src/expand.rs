@@ -701,13 +701,11 @@ fn generate_field_operation_path(base_field: String, operation: &FieldOperation)
         FieldOperation::Await { .. } => {
             format!("{}.await", base_field)
         }
-        FieldOperation::Nested { fields, .. } => {
-            let nested = fields
-                .iter()
-                .map(|f| f.to_string())
-                .collect::<Vec<_>>()
-                .join(".");
-            format!("{}.{}", base_field, nested)
+        FieldOperation::NamedField { name, .. } => {
+            format!("{}.{}", base_field, name)
+        }
+        FieldOperation::UnnamedField { index, .. } => {
+            format!("{}.{}", base_field, index)
         }
         FieldOperation::Index { index, .. } => {
             format!("{}[{}]", base_field, quote! { #index })
@@ -763,12 +761,12 @@ fn apply_field_operations(
         FieldOperation::Await { span } => {
             quote_spanned! { *span=> #base_expr.await }
         }
-        FieldOperation::Nested { fields, span } => {
-            let mut expr = base_expr.clone();
-            for field in fields {
-                expr = quote_spanned! { *span=> #expr.#field };
-            }
-            expr
+        FieldOperation::NamedField { name, span } => {
+            quote_spanned! { *span=> #base_expr.#name }
+        }
+        FieldOperation::UnnamedField { index, span } => {
+            let idx = syn::Index::from(*index);
+            quote_spanned! { *span=> #base_expr.#idx }
         }
         FieldOperation::Index { index, span } => {
             quote_spanned! { *span=> #base_expr[#index] }
@@ -807,7 +805,8 @@ fn field_operation_returns_reference(operation: &FieldOperation) -> bool {
         FieldOperation::Deref { .. } => false, // Dereferencing removes reference level
         FieldOperation::Method { .. } => false, // Method calls return owned values
         FieldOperation::Await { .. } => false, // Await returns owned values
-        FieldOperation::Nested { .. } => false, // Nested field access auto-derefs to get field value
+        FieldOperation::NamedField { .. } => false, // Field access auto-derefs to get field value
+        FieldOperation::UnnamedField { .. } => false, // Tuple field access auto-derefs to get field value
         FieldOperation::Index { .. } => true,   // Index operations return references to elements
         FieldOperation::Combined { .. } => false, // Combined with deref also removes reference level
         FieldOperation::Chained { operations, .. } => {
