@@ -7,11 +7,44 @@ use syn::{Token, parse::Parse};
 
 use crate::pattern::Pattern;
 
+/// Represents a field name which can be either an identifier (for structs)
+/// or an index (for tuples)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) enum FieldName {
+    /// Named field: user.name, response.status
+    Ident(syn::Ident),
+
+    /// Indexed field: tuple.0, tuple.1
+    Index(usize),
+}
+
+impl fmt::Display for FieldName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FieldName::Ident(ident) => write!(f, "{}", ident),
+            FieldName::Index(index) => write!(f, "{}", index),
+        }
+    }
+}
+
+impl quote::ToTokens for FieldName {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        match self {
+            FieldName::Ident(ident) => ident.to_tokens(tokens),
+            FieldName::Index(index) => {
+                // Convert index to a syn::Index for proper token generation
+                let idx = syn::Index::from(*index);
+                idx.to_tokens(tokens);
+            }
+        }
+    }
+}
+
 /// Field assertion - a field name paired with its expected pattern
 /// Supports operations like dereferencing, method calls, and nested access
 #[derive(Debug, Clone)]
 pub(crate) struct FieldAssertion {
-    pub field_name: syn::Ident,
+    pub field_name: FieldName,
     pub operations: Option<FieldOperation>,
     pub pattern: Pattern,
 }
@@ -143,7 +176,8 @@ impl Parse for FieldAssertion {
         }
 
         // Parse field name and potential chained operations
-        let field_name: syn::Ident = input.parse()?;
+        let ident: syn::Ident = input.parse()?;
+        let field_name = FieldName::Ident(ident);
 
         // Check for chained operations: field.method(), field.nested, field[index], etc.
         if input.peek(Token![.]) || input.peek(syn::token::Bracket) {
