@@ -9,7 +9,7 @@ use syn::{
 };
 
 use crate::parse::next_node_id;
-use crate::pattern::{FieldAssertion, FieldName, FieldOperation, Pattern, path_to_string};
+use crate::pattern::{FieldAssertion, FieldOperation, Pattern, path_to_string};
 
 /// Tuple pattern: (10, 20) or Some(42) or None
 /// Supports mixed positional and indexed elements
@@ -127,14 +127,25 @@ impl TupleElement {
                     ));
                 }
 
-                // Use the numeric index directly as a FieldName
-                let field_name = FieldName::Index(index);
+                let span = index_lit.span();
+
+                // Build the operation chain starting with UnnamedField for the index
+                let mut index_operation = FieldOperation::UnnamedField { index, span };
 
                 // Parse remaining operations (method calls, field access, etc.)
-                let final_operations = if input.peek(Token![.]) || input.peek(syn::token::Bracket) {
-                    Some(FieldOperation::parse_chain(input, operations)?)
+                if input.peek(Token![.]) || input.peek(syn::token::Bracket) {
+                    index_operation = FieldOperation::parse_chain(input, Some(index_operation))?;
+                }
+
+                // Apply deref operations if present
+                let final_operations = if let Some(FieldOperation::Deref { count, span: deref_span }) = operations {
+                    FieldOperation::Combined {
+                        deref_count: count,
+                        operation: Box::new(index_operation),
+                        span: deref_span,
+                    }
                 } else {
-                    operations
+                    index_operation
                 };
 
                 let _: Token![:] = input.parse()?;
@@ -142,7 +153,6 @@ impl TupleElement {
 
                 // Build a FieldAssertion - tuples are just structs with numeric field names!
                 elements.push(TupleElement::Indexed(Box::new(FieldAssertion {
-                    field_name,
                     operations: final_operations,
                     pattern,
                 })));
@@ -195,87 +205,12 @@ impl fmt::Display for TupleElement {
             }
             TupleElement::Indexed(boxed_field_assertion) => {
                 let field_assertion = boxed_field_assertion.as_ref();
-                // field_name is a FieldName::Index for tuple elements
-                let index = &field_assertion.field_name;
                 let operations = &field_assertion.operations;
                 let pattern = &field_assertion.pattern;
 
-                if let Some(ops) = operations {
-                    match ops {
-                        FieldOperation::Deref { count, .. } => {
-                            // Show deref operations before the index: *0:
-                            for _ in 0..*count {
-                                write!(f, "*")?;
-                            }
-                            write!(f, "{}: {}", index, pattern)
-                        }
-                        FieldOperation::Method { name, .. } => {
-                            // Show method calls after the index: 0.len():
-                            write!(f, "{}.{}(): {}", index, name, pattern)
-                        }
-                        FieldOperation::Await { .. } => {
-                            // Show await after the index: 0.await:
-                            write!(f, "{}.await: {}", index, pattern)
-                        }
-                        FieldOperation::NamedField { name, .. } => {
-                            // Show named field access after the index: 0.field:
-                            write!(f, "{}.{}: {}", index, name, pattern)
-                        }
-                        FieldOperation::UnnamedField { index: field_idx, .. } => {
-                            // Show unnamed field access after the index: 0.1:
-                            write!(f, "{}.{}: {}", index, field_idx, pattern)
-                        }
-                        FieldOperation::Index { index: idx, .. } => {
-                            // Show index access after the tuple index: 0[1]:
-                            write!(f, "{}[{}]: {}", index, quote::quote! { #idx }, pattern)
-                        }
-                        FieldOperation::Chained { operations, .. } => {
-                            // Show chained operations after the tuple index: 0.field[1]:
-                            write!(f, "{}", index)?;
-                            for op in operations {
-                                match op {
-                                    FieldOperation::NamedField { name, .. } => {
-                                        write!(f, ".{}", name)?;
-                                    }
-                                    FieldOperation::UnnamedField { index, .. } => {
-                                        write!(f, ".{}", index)?;
-                                    }
-                                    FieldOperation::Method { name, .. } => {
-                                        write!(f, ".{}()", name)?;
-                                    }
-                                    FieldOperation::Await { .. } => {
-                                        write!(f, ".await")?;
-                                    }
-                                    FieldOperation::Index { index, .. } => {
-                                        write!(f, "[{}]", quote::quote! { #index })?;
-                                    }
-                                    _ => write!(f, "{}", op)?,
-                                }
-                            }
-                            write!(f, ": {}", pattern)
-                        }
-                        FieldOperation::Combined {
-                            deref_count,
-                            operation,
-                            ..
-                        } => {
-                            // Show combined operations: *0.len():
-                            for _ in 0..*deref_count {
-                                write!(f, "*")?;
-                            }
-                            match operation.as_ref() {
-                                FieldOperation::Method { name, .. } => {
-                                    write!(f, "{}.{}(): {}", index, name, pattern)
-                                }
-                                _ => {
-                                    write!(f, "{}{}: {}", index, operation, pattern)
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    write!(f, "{}: {}", index, pattern)
-                }
+                // For indexed tuple elements, just display the operations followed by the pattern
+                // The operations will include the index (as UnnamedField or in a chain)
+                write!(f, "{}: {}", operations, pattern)
             }
         }
     }

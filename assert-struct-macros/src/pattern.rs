@@ -20,7 +20,7 @@ mod regex;
 // Re-export all pattern types
 pub(crate) use closure::PatternClosure;
 pub(crate) use comparison::{ComparisonOp, PatternComparison};
-pub(crate) use field::{FieldAssertion, FieldName, FieldOperation};
+pub(crate) use field::{FieldAssertion, FieldOperation};
 pub(crate) use map::PatternMap;
 pub(crate) use range::PatternRange;
 pub(crate) use simple::PatternSimple;

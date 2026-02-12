@@ -71,12 +71,11 @@ impl Parse for FieldName {
     }
 }
 
-/// Field assertion - a field name paired with its expected pattern
-/// Supports operations like dereferencing, method calls, and nested access
+/// Field assertion - field operations paired with an expected pattern
+/// The operations represent the full path to the field (e.g., `.name`, `.0.field`, `*field.method()`)
 #[derive(Debug, Clone)]
 pub(crate) struct FieldAssertion {
-    pub field_name: FieldName,
-    pub operations: Option<FieldOperation>,
+    pub operations: FieldOperation,
     pub pattern: Pattern,
 }
 
@@ -195,37 +194,40 @@ impl Parse for FieldAssertion {
     /// email: =~ r".*@example\.com"
     /// ```
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        // Check if we have field operations (starting with * for deref)
-        let mut operations = None;
-        let mut deref_count = 0;
         let span = input.span();
 
         // Count leading * tokens for dereferencing
+        let mut deref_count = 0;
         while input.peek(Token![*]) {
             let _: Token![*] = input.parse()?;
             deref_count += 1;
         }
 
-        if deref_count > 0 {
-            operations = Some(FieldOperation::Deref {
-                count: deref_count,
-                span,
-            });
+        // Parse the field name as a FieldOperation (NamedField or UnnamedField)
+        let field_name: FieldName = input.parse()?;
+        let mut operations = match field_name {
+            FieldName::Ident(ident) => FieldOperation::NamedField { name: ident, span },
+            FieldName::Index(index) => FieldOperation::UnnamedField { index, span },
+        };
+
+        // Check for additional operations: .method(), .nested, [index], etc.
+        if input.peek(Token![.]) || input.peek(syn::token::Bracket) {
+            operations = parse_field_operations(input, Some(operations))?;
         }
 
-        // Parse field name (can be identifier or numeric index)
-        let field_name: FieldName = input.parse()?;
-
-        // Check for chained operations: field.method(), field.nested, field[index], etc.
-        if input.peek(Token![.]) || input.peek(syn::token::Bracket) {
-            operations = Some(parse_field_operations(input, operations)?);
+        // Apply deref if present
+        if deref_count > 0 {
+            operations = FieldOperation::Combined {
+                deref_count,
+                operation: Box::new(operations),
+                span,
+            };
         }
 
         let _: Token![:] = input.parse()?;
         let pattern = input.parse()?;
 
         Ok(FieldAssertion {
-            field_name,
             operations,
             pattern,
         })
@@ -241,33 +243,21 @@ pub(crate) fn parse_field_operations(
     let span = input.span();
     let mut operations = vec![];
 
-    // Continue parsing operations in the chain using the helper
+    // Prepend existing operation if present
+    if let Some(existing) = existing_operations {
+        operations.push(existing);
+    }
+
+    // Continue parsing operations in the chain
     while input.peek(Token![.]) || input.peek(syn::token::Bracket) {
         operations.push(input.parse()?);
     }
 
     // Build the final operation
-    let final_operation = if operations.len() == 1 {
-        operations.into_iter().next().unwrap()
-    } else if operations.is_empty() {
-        return Err(syn::Error::new(input.span(), "Expected field operations"));
-    } else {
-        FieldOperation::Chained { operations, span }
-    };
-
-    // Combine with existing operations if present
-    if let Some(FieldOperation::Deref {
-        count,
-        span: deref_span,
-    }) = existing_operations
-    {
-        Ok(FieldOperation::Combined {
-            deref_count: count,
-            operation: Box::new(final_operation),
-            span: deref_span,
-        })
-    } else {
-        Ok(final_operation)
+    match operations.len() {
+        0 => Err(syn::Error::new(input.span(), "Expected field operations")),
+        1 => Ok(operations.into_iter().next().unwrap()),
+        _ => Ok(FieldOperation::Chained { operations, span }),
     }
 }
 
@@ -304,34 +294,103 @@ impl FieldOperation {
         let span = input.span();
         let mut operations = vec![];
 
-        // Parse the first operation (which should start with . or [)
-        operations.push(input.parse()?);
+        // Prepend existing operation if present
+        if let Some(existing) = existing_operations {
+            operations.push(existing);
+        }
 
-        // Continue parsing while we see . or [
+        // Parse additional operations
         while input.peek(Token![.]) || input.peek(syn::token::Bracket) {
             operations.push(input.parse()?);
         }
 
         // Build the final operation
-        let final_operation = if operations.len() == 1 {
-            operations.into_iter().next().unwrap()
-        } else {
-            FieldOperation::Chained { operations, span }
-        };
+        match operations.len() {
+            0 => Err(syn::Error::new(input.span(), "Expected field operations")),
+            1 => Ok(operations.into_iter().next().unwrap()),
+            _ => Ok(FieldOperation::Chained { operations, span }),
+        }
+    }
 
-        // Combine with existing operations if present
-        if let Some(FieldOperation::Deref {
-            count,
-            span: deref_span,
-        }) = existing_operations
-        {
-            Ok(FieldOperation::Combined {
-                deref_count: count,
-                operation: Box::new(final_operation),
-                span: deref_span,
-            })
-        } else {
-            Ok(final_operation)
+    /// Get the root field name from this operation
+    /// For NamedField/UnnamedField, returns that name
+    /// For Combined/Chained, recursively finds the first field access
+    pub(crate) fn root_field_name(&self) -> FieldName {
+        match self {
+            FieldOperation::NamedField { name, .. } => FieldName::Ident(name.clone()),
+            FieldOperation::UnnamedField { index, .. } => FieldName::Index(*index),
+            FieldOperation::Combined { operation, .. } => operation.root_field_name(),
+            FieldOperation::Chained { operations, .. } => {
+                operations.first().unwrap().root_field_name()
+            }
+            _ => panic!("Cannot extract root field name from {:?}", self),
+        }
+    }
+
+    /// Get operations after the root field access (tail operations)
+    /// For NamedField/UnnamedField alone, returns None (no additional operations)
+    /// For Chained, returns the operations after the first one
+    /// For Combined, unwraps to get the inner operation's tail
+    pub(crate) fn tail_operations(&self) -> Option<Self> {
+        match self {
+            FieldOperation::NamedField { .. } | FieldOperation::UnnamedField { .. } => {
+                // Just a field access, no additional operations
+                None
+            }
+            FieldOperation::Chained { operations, span } => {
+                // Return all operations after the first one
+                if operations.len() > 1 {
+                    let tail_ops: Vec<_> = operations[1..].to_vec();
+                    if tail_ops.len() == 1 {
+                        Some(tail_ops.into_iter().next().unwrap())
+                    } else {
+                        Some(FieldOperation::Chained {
+                            operations: tail_ops,
+                            span: *span
+                        })
+                    }
+                } else {
+                    None
+                }
+            }
+            FieldOperation::Combined { deref_count, operation, span } => {
+                match operation.as_ref() {
+                    // If the inner operation is just a field access, return only the deref
+                    FieldOperation::NamedField { .. } | FieldOperation::UnnamedField { .. } => {
+                        Some(FieldOperation::Deref {
+                            count: *deref_count,
+                            span: *span,
+                        })
+                    }
+                    // If it's a chained operation, get its tail and wrap in Combined
+                    FieldOperation::Chained { .. } => {
+                        if let Some(tail) = operation.tail_operations() {
+                            Some(FieldOperation::Combined {
+                                deref_count: *deref_count,
+                                operation: Box::new(tail),
+                                span: *span,
+                            })
+                        } else {
+                            // Tail is empty, just return deref
+                            Some(FieldOperation::Deref {
+                                count: *deref_count,
+                                span: *span,
+                            })
+                        }
+                    }
+                    // For other operations (Method, Await, Index), they're already tail operations
+                    // Wrap them in Combined with the deref
+                    _ => Some(FieldOperation::Combined {
+                        deref_count: *deref_count,
+                        operation: operation.clone(),
+                        span: *span,
+                    }),
+                }
+            }
+            // For other operation types (Method, Await, Index, Deref), they don't have a root field to strip
+            // These should not appear at the root level of a FieldAssertion, but if they do,
+            // return None to indicate no tail
+            _ => None,
         }
     }
 }

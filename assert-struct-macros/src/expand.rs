@@ -254,7 +254,7 @@ fn generate_pattern_nodes(
             let field_entries: Vec<TokenStream> = fields
                 .iter()
                 .map(|field| {
-                    let field_name = field.field_name.to_string();
+                    let field_name = field.operations.root_field_name().to_string();
                     let child_ref = generate_pattern_nodes(&field.pattern, node_defs);
                     quote! {
                         (#field_name, &#child_ref)
@@ -502,36 +502,35 @@ fn generate_wildcard_struct_assertion_with_collection(
     let field_assertions: Vec<_> = fields
         .iter()
         .map(|f| {
-            let field_name = &f.field_name;
+            let field_name = f.operations.root_field_name();
             let field_pattern = &f.pattern;
             let field_operations = &f.operations;
 
-            // Build path for this field
+            // Build path for this field - include full operations for error messages
             let mut new_path = field_path.to_vec();
-            new_path.push(field_name.to_string());
+            let field_path_str = if let Some(tail_ops) = field_operations.tail_operations() {
+                generate_field_operation_path(field_name.to_string(), &tail_ops)
+            } else {
+                field_name.to_string()
+            };
+            new_path.push(field_path_str);
 
-            // Apply operations if any and determine reference level
-            let (accessed_value, is_ref_after) = if let Some(ops) = field_operations {
-                // For method calls, we need to access the field without taking a reference
-                // since the method call will operate on the field directly
-                let base_field_access = quote! { (#value_expr).#field_name };
+            // Access the field and apply tail operations
+            let base_field_access = quote! { (#value_expr).#field_name };
 
-                // Apply operations - pass false for in_ref_context since we're not taking a reference
-                let expr = apply_field_operations(&base_field_access, ops, false);
-
-                // Operations change the reference level based on their type
-                let is_ref = field_operation_returns_reference(ops);
+            let (expr, is_ref_after) = if let Some(tail_ops) = field_operations.tail_operations() {
+                // Apply remaining operations after the field access
+                let expr = apply_field_operations(&base_field_access, &tail_ops, false);
+                let is_ref = field_operation_returns_reference(&tail_ops);
                 (expr, is_ref)
             } else {
-                // No operations - we need a reference to the field for comparison
-                let field_access = quote! { &(#value_expr).#field_name };
-                // field_access is already a reference, so is_ref = true
-                (field_access, true)
+                // No additional operations, take a reference to the field for comparison
+                (quote! { &#base_field_access }, true)
             };
 
             // Recursively expand the pattern for this field
             generate_pattern_assertion_with_collection(
-                &accessed_value,
+                &expr,
                 field_pattern,
                 is_ref_after,
                 &new_path,
@@ -569,8 +568,9 @@ fn generate_struct_match_assertion_with_collection(
     let field_names: Vec<_> = fields
         .iter()
         .filter_map(|f| {
-            if unique_field_names.insert(f.field_name.clone()) {
-                Some(&f.field_name)
+            let field_name = f.operations.root_field_name();
+            if unique_field_names.insert(field_name.clone()) {
+                Some(field_name)
             } else {
                 None
             }
@@ -588,34 +588,35 @@ fn generate_struct_match_assertion_with_collection(
     let field_assertions: Vec<_> = fields
         .iter()
         .map(|f| {
-            let field_name = &f.field_name;
+            let field_name = f.operations.root_field_name();
             let field_pattern = &f.pattern;
             let field_operations = &f.operations;
 
-            // Build path for this field - include operations if present
+            // Build path for this field - include operations in path for better error messages
             let mut new_path = field_path.to_vec();
-            let field_path_str = if let Some(ops) = field_operations {
-                // Include operation in path for better error messages
-                generate_field_operation_path(field_name.to_string(), ops)
+            let field_path_str = if let Some(tail_ops) = field_operations.tail_operations() {
+                generate_field_operation_path(field_name.to_string(), &tail_ops)
             } else {
                 field_name.to_string()
             };
             new_path.push(field_path_str);
 
             // Generate the value expression with operations applied
-            let (value_expr, is_ref_after_operations) = if let Some(ops) = field_operations {
-                // We're always in a reference context for struct destructuring (match &value)
-                let expr = apply_field_operations(&quote! { #field_name }, ops, true);
-                // Operations change the reference level based on their type
-                let is_ref = field_operation_returns_reference(ops);
+            // The field is already bound by the match pattern, so we only apply tail operations
+            let (expr, is_ref_after_operations) = if let Some(tail_ops) = field_operations.tail_operations() {
+                // Apply remaining operations after the field access
+                // We're in a reference context for struct destructuring (match &value)
+                let expr = apply_field_operations(&quote! { #field_name }, &tail_ops, true);
+                let is_ref = field_operation_returns_reference(&tail_ops);
                 (expr, is_ref)
             } else {
+                // No additional operations, just use the bound field name
                 (quote! { #field_name }, true)
             };
 
             // Generate assertion with appropriate reference handling
             let assertion = generate_pattern_assertion_with_collection(
-                &value_expr,
+                &expr,
                 field_pattern,
                 is_ref_after_operations,
                 &new_path,
@@ -846,56 +847,81 @@ fn process_tuple_elements(
     let mut assertions = Vec::new();
 
     for (i, tuple_element) in elements.iter().enumerate() {
-        let (pattern, operations) = match tuple_element {
-            TupleElement::Positional(elem) => (&elem.pattern, &None),
-            TupleElement::Indexed(boxed_elem) => (&boxed_elem.pattern, &boxed_elem.operations),
-        };
+        match tuple_element {
+            TupleElement::Positional(elem) => {
+                let pattern = &elem.pattern;
 
-        match pattern {
-            Pattern::Wildcard(PatternWildcard { .. }) => {
-                // Wildcard patterns use `_` in the match pattern.
-                // No assertion is generated because wildcards only verify
-                // that the element exists (handled by the match itself).
-                match_patterns.push(quote! { _ });
+                match pattern {
+                    Pattern::Wildcard(PatternWildcard { .. }) => {
+                        // Wildcard patterns use `_` in the match pattern
+                        match_patterns.push(quote! { _ });
+                    }
+                    _ => {
+                        // Non-wildcard patterns need a binding and assertion
+                        let name = quote::format_ident!("{}{}", prefix, i);
+                        match_patterns.push(quote! { #name });
+
+                        // Build path for error messages
+                        let mut elem_path = field_path.to_vec();
+                        elem_path.push(i.to_string());
+
+                        // Generate assertion with error collection
+                        let assertion = generate_pattern_assertion_with_collection(
+                            &quote! { #name },
+                            pattern,
+                            is_ref,
+                            &elem_path,
+                        );
+                        assertions.push(assertion);
+                    }
+                }
             }
-            _ => {
-                // Non-wildcard patterns need a binding and assertion
-                let name = quote::format_ident!("{}{}", prefix, i);
-                match_patterns.push(quote! { #name });
+            TupleElement::Indexed(boxed_elem) => {
+                let pattern = &boxed_elem.pattern;
+                let operations = &boxed_elem.operations;
 
-                // Build path for error messages - include operations if present
-                let mut elem_path = field_path.to_vec();
-                let elem_path_str = if let Some(ops) = operations {
-                    // Include operation in path for better error messages
-                    generate_field_operation_path(i.to_string(), ops)
-                } else {
-                    i.to_string()
-                };
-                elem_path.push(elem_path_str);
+                match pattern {
+                    Pattern::Wildcard(PatternWildcard { .. }) => {
+                        // Wildcard patterns use `_` in the match pattern
+                        match_patterns.push(quote! { _ });
+                    }
+                    _ => {
+                        // Non-wildcard patterns need a binding and assertion
+                        let name = quote::format_ident!("{}{}", prefix, i);
+                        match_patterns.push(quote! { #name });
 
-                // Generate the value expression with operations applied
-                let value_expr = if let Some(ops) = operations {
-                    // Tuple elements are in reference context when destructured
-                    apply_field_operations(&quote! { #name }, ops, true)
-                } else {
-                    quote! { #name }
-                };
+                        // Build path for error messages - include operations
+                        let mut elem_path = field_path.to_vec();
+                        let elem_path_str = if let Some(tail_ops) = operations.tail_operations() {
+                            generate_field_operation_path(i.to_string(), &tail_ops)
+                        } else {
+                            i.to_string()
+                        };
+                        elem_path.push(elem_path_str);
 
-                // Apply the same reference level logic as for struct fields
-                let is_ref_after_operations = if let Some(ops) = operations {
-                    field_operation_returns_reference(ops)
-                } else {
-                    is_ref
-                };
+                        // Generate the value expression with operations applied
+                        // The element is already bound by the match pattern, so we only apply tail operations
+                        let (value_expr, is_ref_after_operations) = if let Some(tail_ops) = operations.tail_operations() {
+                            // Apply remaining operations after the element access
+                            // Tuple elements are in reference context when destructured
+                            let expr = apply_field_operations(&quote! { #name }, &tail_ops, true);
+                            let is_ref = field_operation_returns_reference(&tail_ops);
+                            (expr, is_ref)
+                        } else {
+                            // No additional operations, just use the bound element name
+                            (quote! { #name }, is_ref)
+                        };
 
-                // Generate assertion with error collection
-                let assertion = generate_pattern_assertion_with_collection(
-                    &value_expr,
-                    pattern,
-                    is_ref_after_operations,
-                    &elem_path,
-                );
-                assertions.push(assertion);
+                        // Generate assertion with error collection
+                        let assertion = generate_pattern_assertion_with_collection(
+                            &value_expr,
+                            pattern,
+                            is_ref_after_operations,
+                            &elem_path,
+                        );
+                        assertions.push(assertion);
+                    }
+                }
             }
         }
     }
