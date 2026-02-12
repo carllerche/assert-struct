@@ -38,6 +38,14 @@ impl Parse for PatternSimple {
     }
 }
 
+impl PatternSimple {
+    /// Convert this pattern to a string for error context
+    pub(crate) fn to_error_context_string(&self) -> String {
+        let expr = &self.expr;
+        quote::quote! { #expr }.to_string()
+    }
+}
+
 impl fmt::Display for PatternSimple {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", expr_to_string(&self.expr))

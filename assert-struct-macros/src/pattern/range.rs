@@ -15,6 +15,14 @@ pub(crate) struct PatternRange {
     pub expr: syn::Expr,
 }
 
+impl PatternRange {
+    /// Convert this pattern to a string for error context
+    pub(crate) fn to_error_context_string(&self) -> String {
+        let expr = &self.expr;
+        quote::quote! { #expr }.to_string()
+    }
+}
+
 impl Parse for PatternRange {
     /// Parses a range pattern expression.
     ///

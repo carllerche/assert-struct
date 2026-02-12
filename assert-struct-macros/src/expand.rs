@@ -9,7 +9,7 @@ use crate::pattern::{PatternLike, PatternRegex};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, quote_spanned};
 use std::collections::HashSet;
-use syn::{Expr, Token, punctuated::Punctuated, spanned::Spanned};
+use syn::{Token, punctuated::Punctuated, spanned::Spanned};
 
 pub fn expand(assert: &AssertStruct) -> TokenStream {
     let value = &assert.value;
@@ -444,18 +444,15 @@ fn generate_pattern_assertion_with_collection(
                 regex_pattern,
                 is_ref,
                 path,
-                pattern,
                 &node_ident,
             )
         }
         #[cfg(feature = "regex")]
-        Pattern::Like(PatternLike {
-            expr: pattern_expr, ..
-        }) => {
+        Pattern::Like(like_pattern) => {
             // Generate Like trait assertion with error collection
             generate_like_assertion_with_collection(
                 value_expr,
-                pattern_expr,
+                like_pattern,
                 is_ref,
                 path,
                 &node_ident,
@@ -971,58 +968,6 @@ fn generate_plain_tuple_assertion_with_collection(
 
 // Check if a path refers to Option::Some
 
-/// Convert a pattern to its string representation for error messages
-fn pattern_to_string(pattern: &Pattern) -> String {
-    match pattern {
-        Pattern::Simple(PatternSimple { expr, .. }) => quote! { #expr }.to_string(),
-        Pattern::String(PatternString { lit, .. }) => format!("\"{}\"", lit.value()),
-        Pattern::Comparison(PatternComparison { op, expr, .. }) => {
-            let op_str = match op {
-                ComparisonOp::Less => "<",
-                ComparisonOp::LessEqual => "<=",
-                ComparisonOp::Greater => ">",
-                ComparisonOp::GreaterEqual => ">=",
-                ComparisonOp::Equal => "==",
-                ComparisonOp::NotEqual => "!=",
-            };
-            format!("{} {}", op_str, quote! { #expr })
-        }
-        Pattern::Range(PatternRange { expr: range, .. }) => quote! { #range }.to_string(),
-        #[cfg(feature = "regex")]
-        Pattern::Regex(PatternRegex { pattern, .. }) => format!("=~ r\"{}\"", pattern),
-        #[cfg(feature = "regex")]
-        Pattern::Like(PatternLike { expr, .. }) => format!("=~ {}", quote! { #expr }),
-        Pattern::Wildcard(PatternWildcard { .. }) => "_".to_string(),
-        Pattern::Closure(PatternClosure { closure, .. }) => quote! { #closure }.to_string(),
-        Pattern::Struct(PatternStruct { path, .. }) => {
-            if let Some(p) = path {
-                quote! { #p { .. } }.to_string()
-            } else {
-                "_ { .. }".to_string()
-            }
-        }
-        Pattern::Tuple(PatternTuple { path, elements, .. }) => {
-            if let Some(p) = path {
-                if elements.is_empty() {
-                    quote! { #p }.to_string()
-                } else {
-                    format!("{}(...)", quote! { #p })
-                }
-            } else {
-                format!("({} elements)", elements.len())
-            }
-        }
-        Pattern::Map(PatternMap { entries, rest, .. }) => {
-            if *rest {
-                format!("#{{ {} entries, .. }}", entries.len())
-            } else {
-                format!("#{{ {} entries }}", entries.len())
-            }
-        }
-        Pattern::Slice(PatternSlice { elements, .. }) => format!("[{} elements]", elements.len()),
-    }
-}
-
 /// Generate comparison assertion with error collection
 fn generate_comparison_assertion_with_collection(
     value_expr: &TokenStream,
@@ -1092,10 +1037,10 @@ fn generate_comparison_assertion_with_collection(
         None
     };
 
-    let pattern = Pattern::Comparison(comparison_pattern.clone());
+    let pattern_str = comparison_pattern.to_error_context_string();
     let error_push = generate_error_push(
         &field_path,
-        &pattern,
+        &pattern_str,
         &actual_expr,
         error_type_path,
         expected_value.as_deref(),
@@ -1262,10 +1207,10 @@ fn generate_range_assertion_with_collection(
     };
 
     let span = range.span();
-    let pattern = Pattern::Range(range_pattern.clone());
+    let pattern_str = range_pattern.to_error_context_string();
     let error_push = generate_error_push(
         &field_path,
-        &pattern,
+        &pattern_str,
         &match_expr,
         quote!(::assert_struct::__macro_support::ErrorType::Range),
         None,
@@ -1288,14 +1233,12 @@ fn generate_range_assertion_with_collection(
 /// Assumes __line and __file variables are already defined in scope
 fn generate_error_push(
     field_path_str: &str,
-    pattern: &Pattern,
+    pattern_str: &str,
     actual_value_expr: &TokenStream,
     error_type_path: TokenStream,
     expected_value: Option<&str>,
     node_ident: &Ident,
 ) -> TokenStream {
-    let pattern_str = pattern_to_string(pattern);
-
     let expected_value_expr = if let Some(val) = expected_value {
         quote!(Some(#val.to_string()))
     } else {
@@ -1331,10 +1274,10 @@ fn generate_string_assertion_with_collection(
     // String patterns always use .as_ref() to handle String/&str matching
     let actual = quote!((#value_expr).as_ref());
     let span = lit.span();
-    let pattern = Pattern::String(string_pattern.clone());
+    let pattern_str = string_pattern.to_error_context_string();
     let error_push = generate_error_push(
         &field_path_str,
-        &pattern,
+        &pattern_str,
         &quote!(actual),
         quote!(::assert_struct::__macro_support::ErrorType::Value),
         None,
@@ -1377,10 +1320,10 @@ fn generate_simple_assertion_with_collection(
     } else {
         quote!(&#value_expr)
     };
-    let pattern = Pattern::Simple(simple_pattern.clone());
+    let pattern_str = simple_pattern.to_error_context_string();
     let error_push = generate_error_push(
         &field_path_str,
-        &pattern,
+        &pattern_str,
         &actual_value_expr,
         quote!(::assert_struct::__macro_support::ErrorType::Value),
         None,
@@ -1476,13 +1419,12 @@ fn generate_regex_assertion_with_collection(
     regex_pattern: &PatternRegex,
     is_ref: bool,
     path: &[String],
-    full_pattern: &Pattern,
     node_ident: &Ident,
 ) -> TokenStream {
     let field_path_str = path.join(".");
     let pattern_str = &regex_pattern.pattern;
     let span = regex_pattern.span;
-    let full_pattern_str = pattern_to_string(full_pattern);
+    let full_pattern_str = regex_pattern.to_error_context_string();
 
     if is_ref {
         quote_spanned! {span=>
@@ -1539,13 +1481,14 @@ fn generate_regex_assertion_with_collection(
 /// Generate Like trait assertion with error collection
 fn generate_like_assertion_with_collection(
     value_expr: &TokenStream,
-    pattern_expr: &syn::Expr,
+    like_pattern: &PatternLike,
     is_ref: bool,
     path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
     let field_path_str = path.join(".");
-    let pattern_str = format!("=~ {}", quote! { #pattern_expr });
+    let pattern_expr = &like_pattern.expr;
+    let pattern_str = like_pattern.to_error_context_string();
 
     let span = pattern_expr.span();
     if is_ref {

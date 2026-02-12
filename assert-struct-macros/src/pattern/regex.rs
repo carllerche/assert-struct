@@ -17,6 +17,14 @@ pub(crate) struct PatternRegex {
     pub span: proc_macro2::Span,
 }
 
+#[cfg(feature = "regex")]
+impl PatternRegex {
+    /// Convert this pattern to a string for error context
+    pub(crate) fn to_error_context_string(&self) -> String {
+        format!("=~ r\"{}\"", self.pattern)
+    }
+}
+
 /// Like pattern: =~ expr - arbitrary expression using Like trait
 #[cfg(feature = "regex")]
 #[derive(Debug, Clone)]
@@ -27,6 +35,11 @@ pub(crate) struct PatternLike {
 
 #[cfg(feature = "regex")]
 impl PatternLike {
+    /// Convert this pattern to a string for error context
+    pub(crate) fn to_error_context_string(&self) -> String {
+        let expr = &self.expr;
+        format!("=~ {}", quote::quote! { #expr })
+    }
     /// Convert this PatternLike into a Pattern, optimizing string literals to PatternRegex.
     ///
     /// If the expression is a string literal, it will be converted to PatternRegex for
