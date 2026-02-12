@@ -335,24 +335,21 @@ fn generate_pattern_assertion_with_collection(
     is_ref: bool,
     path: &[String],
 ) -> TokenStream {
-    // Capture pattern string representation for error messages
-    let pattern_str = pattern_to_string(pattern);
-
     // Get the node identifier for this pattern
     let node_ident = get_pattern_node_ident(pattern);
 
     match pattern {
-        Pattern::Simple(PatternSimple { expr: expected, .. }) => {
+        Pattern::Simple(simple_pattern) => {
             generate_simple_assertion_with_collection(
                 value_expr,
-                expected,
+                simple_pattern,
                 is_ref,
                 path,
                 &node_ident,
             )
         }
-        Pattern::String(PatternString { lit, .. }) => {
-            generate_string_assertion_with_collection(value_expr, lit, path, &node_ident)
+        Pattern::String(string_pattern) => {
+            generate_string_assertion_with_collection(value_expr, string_pattern, path, &node_ident)
         }
         Pattern::Struct(PatternStruct {
             path: struct_path,
@@ -368,15 +365,11 @@ fn generate_pattern_assertion_with_collection(
             path,
             &node_ident,
         ),
-        Pattern::Comparison(PatternComparison {
-            op, expr: expected, ..
-        }) => generate_comparison_assertion_with_collection(
+        Pattern::Comparison(comparison_pattern) => generate_comparison_assertion_with_collection(
             value_expr,
-            op,
-            expected,
+            comparison_pattern,
             is_ref,
             path,
-            &pattern_str,
             &node_ident,
         ),
         Pattern::Tuple(PatternTuple {
@@ -423,14 +416,13 @@ fn generate_pattern_assertion_with_collection(
             // which is already handled by the struct/tuple destructuring
             quote! {}
         }
-        Pattern::Range(PatternRange { expr: range, .. }) => {
+        Pattern::Range(range_pattern) => {
             // Generate improved range assertion with error collection
             generate_range_assertion_with_collection(
                 value_expr,
-                range,
+                range_pattern,
                 is_ref,
                 path,
-                &pattern_str,
                 &node_ident,
             )
         }
@@ -445,19 +437,14 @@ fn generate_pattern_assertion_with_collection(
             )
         }
         #[cfg(feature = "regex")]
-        Pattern::Regex(PatternRegex {
-            pattern: regex_str,
-            span,
-            ..
-        }) => {
+        Pattern::Regex(regex_pattern) => {
             // Generate regex assertion with error collection
             generate_regex_assertion_with_collection(
                 value_expr,
-                regex_str,
-                *span,
+                regex_pattern,
                 is_ref,
                 path,
-                &pattern_str,
+                pattern,
                 &node_ident,
             )
         }
@@ -1039,14 +1026,14 @@ fn pattern_to_string(pattern: &Pattern) -> String {
 /// Generate comparison assertion with error collection
 fn generate_comparison_assertion_with_collection(
     value_expr: &TokenStream,
-    op: &ComparisonOp,
-    expected: &Expr,
+    comparison_pattern: &PatternComparison,
     is_ref: bool,
     path: &[String],
-    pattern_str: &str,
     node_ident: &Ident,
 ) -> TokenStream {
     let field_path = path.join(".");
+    let op = &comparison_pattern.op;
+    let expected = &comparison_pattern.expr;
 
     // Check if this is an index operation by looking at the path
     // Exclude slice patterns which start with [
@@ -1105,9 +1092,10 @@ fn generate_comparison_assertion_with_collection(
         None
     };
 
+    let pattern = Pattern::Comparison(comparison_pattern.clone());
     let error_push = generate_error_push(
         &field_path,
-        pattern_str,
+        &pattern,
         &actual_expr,
         error_type_path,
         expected_value.as_deref(),
@@ -1260,13 +1248,13 @@ fn generate_enum_tuple_assertion_with_collection(
 /// Generate range assertion with error collection
 fn generate_range_assertion_with_collection(
     value_expr: &TokenStream,
-    range: &syn::Expr,
+    range_pattern: &PatternRange,
     is_ref: bool,
     path: &[String],
-    pattern_str: &str,
     node_ident: &Ident,
 ) -> TokenStream {
     let field_path = path.join(".");
+    let range = &range_pattern.expr;
     let match_expr = if is_ref {
         quote! { #value_expr }
     } else {
@@ -1274,9 +1262,10 @@ fn generate_range_assertion_with_collection(
     };
 
     let span = range.span();
+    let pattern = Pattern::Range(range_pattern.clone());
     let error_push = generate_error_push(
         &field_path,
-        pattern_str,
+        &pattern,
         &match_expr,
         quote!(::assert_struct::__macro_support::ErrorType::Range),
         None,
@@ -1299,12 +1288,14 @@ fn generate_range_assertion_with_collection(
 /// Assumes __line and __file variables are already defined in scope
 fn generate_error_push(
     field_path_str: &str,
-    pattern_str: &str,
+    pattern: &Pattern,
     actual_value_expr: &TokenStream,
     error_type_path: TokenStream,
     expected_value: Option<&str>,
     node_ident: &Ident,
 ) -> TokenStream {
+    let pattern_str = pattern_to_string(pattern);
+
     let expected_value_expr = if let Some(val) = expected_value {
         quote!(Some(#val.to_string()))
     } else {
@@ -1330,19 +1321,20 @@ fn generate_error_push(
 /// String literals always use .as_ref() to handle String/&str matching
 fn generate_string_assertion_with_collection(
     value_expr: &TokenStream,
-    lit: &syn::LitStr,
+    string_pattern: &PatternString,
     path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
     let field_path_str = path.join(".");
-    let expected_str = format!("\"{}\"", lit.value());
+    let lit = &string_pattern.lit;
 
     // String patterns always use .as_ref() to handle String/&str matching
     let actual = quote!((#value_expr).as_ref());
     let span = lit.span();
+    let pattern = Pattern::String(string_pattern.clone());
     let error_push = generate_error_push(
         &field_path_str,
-        &expected_str,
+        &pattern,
         &quote!(actual),
         quote!(::assert_struct::__macro_support::ErrorType::Value),
         None,
@@ -1362,13 +1354,13 @@ fn generate_string_assertion_with_collection(
 /// Generate simple assertion with error collection
 fn generate_simple_assertion_with_collection(
     value_expr: &TokenStream,
-    expected: &syn::Expr,
+    simple_pattern: &PatternSimple,
     is_ref: bool,
     path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
     let field_path_str = path.join(".");
-    let expected_str = quote! { #expected }.to_string();
+    let expected = &simple_pattern.expr;
 
     // No special handling needed - string literals are handled by Pattern::String
     let actual = value_expr;
@@ -1385,9 +1377,10 @@ fn generate_simple_assertion_with_collection(
     } else {
         quote!(&#value_expr)
     };
+    let pattern = Pattern::Simple(simple_pattern.clone());
     let error_push = generate_error_push(
         &field_path_str,
-        &expected_str,
+        &pattern,
         &actual_value_expr,
         quote!(::assert_struct::__macro_support::ErrorType::Value),
         None,
@@ -1480,14 +1473,16 @@ fn generate_slice_assertion_with_collection(
 /// Generate regex assertion with error collection
 fn generate_regex_assertion_with_collection(
     value_expr: &TokenStream,
-    pattern_str: &str,
-    span: proc_macro2::Span,
+    regex_pattern: &PatternRegex,
     is_ref: bool,
     path: &[String],
-    full_pattern_str: &str,
+    full_pattern: &Pattern,
     node_ident: &Ident,
 ) -> TokenStream {
     let field_path_str = path.join(".");
+    let pattern_str = &regex_pattern.pattern;
+    let span = regex_pattern.span;
+    let full_pattern_str = pattern_to_string(full_pattern);
 
     if is_ref {
         quote_spanned! {span=>
