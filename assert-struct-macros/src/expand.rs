@@ -1,8 +1,8 @@
 use crate::AssertStruct;
 use crate::pattern::{
     ComparisonOp, FieldAssertion, FieldOperation, Pattern, PatternClosure, PatternComparison,
-    PatternMap, PatternRange, PatternSimple, PatternSlice, PatternStruct, PatternTuple,
-    PatternWildcard, TupleElement,
+    PatternMap, PatternRange, PatternSimple, PatternSlice, PatternString, PatternStruct,
+    PatternTuple, PatternWildcard, TupleElement,
 };
 #[cfg(feature = "regex")]
 use crate::pattern::{PatternLike, PatternRegex};
@@ -69,6 +69,7 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
 fn get_pattern_node_ident(pattern: &Pattern) -> Ident {
     let node_id = match pattern {
         Pattern::Simple(PatternSimple { node_id, .. })
+        | Pattern::String(PatternString { node_id, .. })
         | Pattern::Struct(PatternStruct { node_id, .. })
         | Pattern::Tuple(PatternTuple { node_id, .. })
         | Pattern::Slice(PatternSlice { node_id, .. })
@@ -88,6 +89,7 @@ fn get_pattern_node_ident(pattern: &Pattern) -> Ident {
 fn get_pattern_span(pattern: &Pattern) -> Option<Span> {
     match pattern {
         Pattern::Simple(PatternSimple { expr, .. }) => Some(expr.span()),
+        Pattern::String(PatternString { lit, .. }) => Some(lit.span()),
         Pattern::Comparison(PatternComparison { expr, .. }) => Some(expr.span()),
         Pattern::Range(PatternRange { expr, .. }) => Some(expr.span()),
         #[cfg(feature = "regex")]
@@ -111,6 +113,7 @@ fn generate_pattern_nodes(
     // Get the node_id from the pattern itself
     let node_id = match pattern {
         Pattern::Simple(PatternSimple { node_id, .. })
+        | Pattern::String(PatternString { node_id, .. })
         | Pattern::Struct(PatternStruct { node_id, .. })
         | Pattern::Tuple(PatternTuple { node_id, .. })
         | Pattern::Slice(PatternSlice { node_id, .. })
@@ -137,6 +140,14 @@ fn generate_pattern_nodes(
     let node_def = match pattern {
         Pattern::Simple(PatternSimple { expr, .. }) => {
             let value_str = quote! { #expr }.to_string();
+            quote! {
+                ::assert_struct::__macro_support::PatternNode::Simple {
+                    value: #value_str,
+                }
+            }
+        }
+        Pattern::String(PatternString { lit, .. }) => {
+            let value_str = format!("\"{}\"", lit.value());
             quote! {
                 ::assert_struct::__macro_support::PatternNode::Simple {
                     value: #value_str,
@@ -335,6 +346,15 @@ fn generate_pattern_assertion_with_collection(
             generate_simple_assertion_with_collection(
                 value_expr,
                 expected,
+                is_ref,
+                path,
+                &node_ident,
+            )
+        }
+        Pattern::String(PatternString { lit, .. }) => {
+            generate_string_assertion_with_collection(
+                value_expr,
+                lit,
                 is_ref,
                 path,
                 &node_ident,
@@ -972,6 +992,7 @@ fn generate_plain_tuple_assertion_with_collection(
 fn pattern_to_string(pattern: &Pattern) -> String {
     match pattern {
         Pattern::Simple(PatternSimple { expr, .. }) => quote! { #expr }.to_string(),
+        Pattern::String(PatternString { lit, .. }) => format!("\"{}\"", lit.value()),
         Pattern::Comparison(PatternComparison { op, expr, .. }) => {
             let op_str = match op {
                 ComparisonOp::Less => "<",
@@ -1296,6 +1317,86 @@ fn generate_range_assertion_with_collection(
     }
 }
 
+/// Generate string literal assertion with error collection
+/// String literals always use .as_ref() to handle String/&str matching
+fn generate_string_assertion_with_collection(
+    value_expr: &TokenStream,
+    lit: &syn::LitStr,
+    is_ref: bool,
+    path: &[String],
+    node_ident: &Ident,
+) -> TokenStream {
+    let field_path_str = path.join(".");
+    let expected_str = format!("\"{}\"", lit.value());
+
+    // String patterns always use .as_ref() to handle String/&str matching
+    let actual = quote!((#value_expr).as_ref());
+
+    // Check if this is an index operation by looking at the path
+    // Exclude slice patterns which start with [
+    let is_index_operation = path
+        .iter()
+        .any(|segment| segment.contains("[") && !segment.starts_with("["));
+
+    let span = lit.span();
+    if is_index_operation {
+        // For index operations, avoid references on both sides to fix type inference
+        quote_spanned! {span=>
+            if !matches!(#actual, #lit) {
+                let __line = line!();
+                let __file = file!();
+                let __error = ::assert_struct::__macro_support::ErrorContext {
+                    field_path: #field_path_str.to_string(),
+                    pattern_str: #expected_str.to_string(),
+                    actual_value: format!("{:?}", #value_expr),
+                    line_number: __line,
+                    file_name: __file,
+                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
+                    expected_value: None,
+                    error_node: Some(&#node_ident),
+                };
+                __errors.push(__error);
+            }
+        }
+    } else if is_ref {
+        quote_spanned! {span=>
+            if !matches!(#actual, #lit) {
+                let __line = line!();
+                let __file = file!();
+                let __error = ::assert_struct::__macro_support::ErrorContext {
+                    field_path: #field_path_str.to_string(),
+                    pattern_str: #expected_str.to_string(),
+                    actual_value: format!("{:?}", #value_expr),
+                    line_number: __line,
+                    file_name: __file,
+                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
+                    expected_value: None,
+                    error_node: Some(&#node_ident),
+                };
+                __errors.push(__error);
+            }
+        }
+    } else {
+        quote_spanned! {span=>
+            if !matches!(#actual, #lit) {
+                let __line = line!();
+                let __file = file!();
+                let __error = ::assert_struct::__macro_support::ErrorContext {
+                    field_path: #field_path_str.to_string(),
+                    pattern_str: #expected_str.to_string(),
+                    actual_value: format!("{:?}", &#value_expr),
+                    line_number: __line,
+                    file_name: __file,
+                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
+                    expected_value: None,
+                    error_node: Some(&#node_ident),
+                };
+                __errors.push(__error);
+            }
+        }
+    }
+}
+
 /// Generate simple assertion with error collection
 fn generate_simple_assertion_with_collection(
     value_expr: &TokenStream,
@@ -1307,15 +1408,8 @@ fn generate_simple_assertion_with_collection(
     let field_path_str = path.join(".");
     let expected_str = quote! { #expected }.to_string();
 
-    let actual = match expected {
-        syn::Expr::Lit(syn::ExprLit {
-            lit: syn::Lit::Str(_),
-            ..
-        }) => {
-            quote!((#value_expr).as_ref())
-        }
-        _ => quote!(#value_expr),
-    };
+    // No special handling needed - string literals are handled by Pattern::String
+    let actual = value_expr;
 
     // Check if this is an index operation by looking at the path
     // Exclude slice patterns which start with [

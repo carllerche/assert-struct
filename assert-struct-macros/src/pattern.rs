@@ -10,6 +10,7 @@ mod map;
 mod range;
 mod simple;
 mod slice;
+mod string;
 mod struct_pattern;
 mod tuple;
 mod wildcard;
@@ -25,6 +26,7 @@ pub(crate) use map::PatternMap;
 pub(crate) use range::PatternRange;
 pub(crate) use simple::PatternSimple;
 pub(crate) use slice::PatternSlice;
+pub(crate) use string::PatternString;
 pub(crate) use struct_pattern::PatternStruct;
 pub(crate) use tuple::{PatternTuple, TupleElement};
 pub(crate) use wildcard::PatternWildcard;
@@ -43,6 +45,7 @@ use syn::{
 #[derive(Debug, Clone)]
 pub(crate) enum Pattern {
     Simple(PatternSimple),
+    String(PatternString),
     Struct(PatternStruct),
     Tuple(PatternTuple),
     Slice(PatternSlice),
@@ -148,15 +151,18 @@ impl Parse for Pattern {
             }));
         }
 
-        // Everything else is either a range or simple expression
-        // Try range first, then fallback to simple
+        // Everything else is either a range, string literal, or simple expression
+        // Try range first, then string literal, then fallback to simple
         let fork = input.fork();
         if fork.parse::<PatternRange>().is_ok() {
             // Range expressions like `18..65` or `0.0..100.0`
             Ok(Pattern::Range(input.parse()?))
+        } else if input.peek(syn::LitStr) {
+            // String literal: "hello", "world"
+            Ok(Pattern::String(PatternString::new(input.parse()?)))
         } else {
             // Simple value or expression
-            // Examples: `42`, `"hello"`, `my_variable`, `compute_value()`
+            // Examples: `42`, `true`, `my_variable`, `compute_value()`
             Ok(Pattern::Simple(input.parse()?))
         }
     }
@@ -193,6 +199,7 @@ impl fmt::Display for Pattern {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Pattern::Simple(p) => write!(f, "{}", p),
+            Pattern::String(p) => write!(f, "{}", p),
             Pattern::Struct(p) => write!(f, "{}", p),
             Pattern::Tuple(p) => write!(f, "{}", p),
             Pattern::Slice(p) => write!(f, "{}", p),
