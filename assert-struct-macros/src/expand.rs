@@ -1398,10 +1398,25 @@ fn generate_regex_assertion_with_collection(
     path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
-    let field_path_str = path.join(".");
     let pattern_str = &regex_pattern.pattern;
     let span = regex_pattern.span;
     let full_pattern_str = regex_pattern.to_error_context_string();
+
+    let actual_value = if is_ref {
+        quote!(format!("{:?}", #value_expr))
+    } else {
+        quote!(format!("{:?}", &#value_expr))
+    };
+
+    let error_push = generate_error_push(
+        span,
+        path,
+        &full_pattern_str,
+        actual_value,
+        quote!(::assert_struct::__macro_support::ErrorType::Regex),
+        quote!(None),
+        node_ident,
+    );
 
     if is_ref {
         quote_spanned! {span=>
@@ -1410,20 +1425,7 @@ fn generate_regex_assertion_with_collection(
                 let re = ::assert_struct::__macro_support::Regex::new(#pattern_str)
                     .expect(concat!("Invalid regex pattern: ", #pattern_str));
                 if !#value_expr.like(&re) {
-                    let __line = line!();
-                    let __file = file!();
-                    let __error = ::assert_struct::__macro_support::ErrorContext {
-                        field_path: #field_path_str.to_string(),
-                        pattern_str: #full_pattern_str.to_string(),
-                        actual_value: format!("{:?}", #value_expr),
-                        line_number: __line,
-                        file_name: __file,
-                        error_type: ::assert_struct::__macro_support::ErrorType::Regex,
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
-                    };
-                    __errors.push(__error);
+                    #error_push
                 }
             }
         }
@@ -1434,20 +1436,7 @@ fn generate_regex_assertion_with_collection(
                 let re = ::assert_struct::__macro_support::Regex::new(#pattern_str)
                     .expect(concat!("Invalid regex pattern: ", #pattern_str));
                 if !(&#value_expr).like(&re) {
-                    let __line = line!();
-                    let __file = file!();
-                    let __error = ::assert_struct::__macro_support::ErrorContext {
-                        field_path: #field_path_str.to_string(),
-                        pattern_str: #full_pattern_str.to_string(),
-                        actual_value: format!("{:?}", &#value_expr),
-                        line_number: __line,
-                        file_name: __file,
-                        error_type: ::assert_struct::__macro_support::ErrorType::Regex,
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
-                    };
-                    __errors.push(__error);
+                    #error_push
                 }
             }
         }
