@@ -1019,9 +1019,9 @@ fn generate_comparison_assertion_with_collection(
 
     let expected_value = if matches!(op, ComparisonOp::Equal) {
         let expected_str = quote! { #expected }.to_string();
-        Some(expected_str)
+        quote!(Some(#expected_str.to_string()))
     } else {
-        None
+        quote!(None)
     };
 
     let pattern_str = comparison_pattern.to_error_context_string();
@@ -1029,9 +1029,9 @@ fn generate_comparison_assertion_with_collection(
         span,
         &field_path,
         &pattern_str,
-        &actual_expr,
+        quote!(format!("{:?}", #actual_expr)),
         error_type_path,
-        expected_value.as_deref(),
+        expected_value,
         node_ident,
     );
 
@@ -1198,9 +1198,9 @@ fn generate_range_assertion_with_collection(
         span,
         &field_path,
         &pattern_str,
-        &match_expr,
+        quote!(format!("{:?}", #match_expr)),
         quote!(::assert_struct::__macro_support::ErrorType::Range),
-        None,
+        quote!(None),
         node_ident,
     );
 
@@ -1219,28 +1219,22 @@ fn generate_error_push(
     span: proc_macro2::Span,
     field_path_str: &str,
     pattern_str: &str,
-    actual_value_expr: &TokenStream,
+    actual_value: TokenStream,
     error_type_path: TokenStream,
-    expected_value: Option<&str>,
+    expected_value: TokenStream,
     node_ident: &Ident,
 ) -> TokenStream {
-    let expected_value_expr = if let Some(val) = expected_value {
-        quote!(Some(#val.to_string()))
-    } else {
-        quote!(None)
-    };
-
     quote_spanned! {span=>
         let __line = line!();
         let __file = file!();
         let __error = ::assert_struct::__macro_support::ErrorContext {
             field_path: #field_path_str.to_string(),
             pattern_str: #pattern_str.to_string(),
-            actual_value: format!("{:?}", #actual_value_expr),
+            actual_value: #actual_value,
             line_number: __line,
             file_name: __file,
             error_type: #error_type_path,
-            expected_value: #expected_value_expr,
+            expected_value: #expected_value,
             error_node: Some(&#node_ident),
         };
         __errors.push(__error);
@@ -1266,9 +1260,9 @@ fn generate_string_assertion_with_collection(
         span,
         &field_path_str,
         &pattern_str,
-        &quote!(actual),
+        quote!(format!("{:?}", actual)),
         quote!(::assert_struct::__macro_support::ErrorType::Value),
-        None,
+        quote!(None),
         node_ident,
     );
 
@@ -1311,9 +1305,9 @@ fn generate_simple_assertion_with_collection(
         span,
         &field_path_str,
         &pattern_str,
-        &actual_value_expr,
+        quote!(format!("{:?}", #actual_value_expr)),
         quote!(::assert_struct::__macro_support::ErrorType::Value),
-        None,
+        quote!(None),
         node_ident,
     );
 
