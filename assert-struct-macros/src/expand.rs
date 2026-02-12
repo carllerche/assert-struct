@@ -1361,8 +1361,17 @@ fn generate_slice_assertion_with_collection(
 
     // Convert Vec to slice for matching
     let slice_expr = quote! { (#value_expr).as_slice() };
-    let field_path_str = field_path.join(".");
     let elements_len = elements.len();
+
+    let error_push = generate_error_push(
+        proc_macro2::Span::call_site(),
+        field_path,
+        &format!("[{} elements]", elements_len),
+        quote!(format!("{:?}", &#value_expr)),
+        quote!(::assert_struct::__macro_support::ErrorType::Slice),
+        quote!(None),
+        node_ident,
+    );
 
     quote! {
         match #slice_expr {
@@ -1370,20 +1379,7 @@ fn generate_slice_assertion_with_collection(
                 #(#bindings_and_assertions)*
             }
             _ => {
-                let __line = line!();
-                let __file = file!();
-                let __error = ::assert_struct::__macro_support::ErrorContext {
-                    field_path: #field_path_str.to_string(),
-                    pattern_str: format!("[{} elements]", #elements_len),
-                    actual_value: format!("{:?}", &#value_expr),
-                    line_number: __line,
-                    file_name: __file,
-                    error_type: ::assert_struct::__macro_support::ErrorType::Slice,
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
-                };
-                __errors.push(__error);
+                #error_push
             }
         }
     }
@@ -1452,29 +1448,32 @@ fn generate_like_assertion_with_collection(
     path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
-    let field_path_str = path.join(".");
     let pattern_expr = &like_pattern.expr;
     let pattern_str = like_pattern.to_error_context_string();
 
     let span = pattern_expr.span();
+
+    let actual_value = if is_ref {
+        quote!(format!("{:?}", #value_expr))
+    } else {
+        quote!(format!("{:?}", &#value_expr))
+    };
+
+    let error_push = generate_error_push(
+        span,
+        path,
+        &pattern_str,
+        actual_value,
+        quote!(::assert_struct::__macro_support::ErrorType::Regex),
+        quote!(None),
+        node_ident,
+    );
     if is_ref {
         quote_spanned! {span=>
             {
                 use ::assert_struct::Like;
                 if !#value_expr.like(&#pattern_expr) {
-                    let __line = line!();
-                    let __file = file!();
-                    let __error = ::assert_struct::__macro_support::ErrorContext {
-                        field_path: #field_path_str.to_string(),
-                        pattern_str: #pattern_str.to_string(),
-                        actual_value: format!("{:?}", #value_expr),
-                        line_number: __line,
-                        file_name: __file,
-                        error_type: ::assert_struct::__macro_support::ErrorType::Regex,
-                        expected_value: None,
-                        error_node: Some(&#node_ident),
-                    };
-                    __errors.push(__error);
+                    #error_push
                 }
             }
         }
@@ -1483,19 +1482,7 @@ fn generate_like_assertion_with_collection(
             {
                 use ::assert_struct::Like;
                 if !(&#value_expr).like(&#pattern_expr) {
-                    let __line = line!();
-                    let __file = file!();
-                    let __error = ::assert_struct::__macro_support::ErrorContext {
-                        field_path: #field_path_str.to_string(),
-                        pattern_str: #pattern_str.to_string(),
-                        actual_value: format!("{:?}", &#value_expr),
-                        line_number: __line,
-                        file_name: __file,
-                        error_type: ::assert_struct::__macro_support::ErrorType::Regex,
-                        expected_value: None,
-                        error_node: Some(&#node_ident),
-                    };
-                    __errors.push(__error);
+                    #error_push
                 }
             }
         }
@@ -1511,7 +1498,6 @@ fn generate_closure_assertion_with_collection(
     node_ident: &Ident,
 ) -> TokenStream {
     let closure = &closure_pattern.closure;
-    let field_path_str = path.join(".");
     let closure_str = quote! { #closure }.to_string();
 
     // Adjust for reference level - closures receive the actual value
@@ -1522,22 +1508,21 @@ fn generate_closure_assertion_with_collection(
     };
 
     let span = closure.span();
+
+    let error_push = generate_error_push(
+        span,
+        path,
+        &closure_str,
+        quote!(format!("{:?}", #actual_expr)),
+        quote!(::assert_struct::__macro_support::ErrorType::Closure),
+        quote!(None),
+        node_ident,
+    );
+
     quote_spanned! {span=>
         {
             if !::assert_struct::__macro_support::check_closure_condition(#actual_expr, #closure) {
-                let __line = line!();
-                let __file = file!();
-                let __error = ::assert_struct::__macro_support::ErrorContext {
-                    field_path: #field_path_str.to_string(),
-                    pattern_str: #closure_str.to_string(),
-                    actual_value: format!("{:?}", #actual_expr),
-                    line_number: __line,
-                    file_name: __file,
-                    error_type: ::assert_struct::__macro_support::ErrorType::Closure,
-                    expected_value: None,
-                    error_node: Some(&#node_ident),
-                };
-                __errors.push(__error);
+                #error_push
             }
         }
     }
@@ -1561,27 +1546,22 @@ fn generate_map_assertion_with_collection(
         .map(|(key, _)| key.span())
         .unwrap_or_else(proc_macro2::Span::call_site);
 
-    let field_path_str = path.join(".");
-
     // Generate length check assertion for exact matching (when no rest pattern)
     let len_check = if !rest {
         let expected_len = entries.len();
+        let error_push = generate_error_push(
+            map_span,
+            path,
+            &format!("#{{ {} entries }}", expected_len),
+            quote!(format!("map with {} entries", (#value_expr).len())),
+            quote!(::assert_struct::__macro_support::ErrorType::Value),
+            quote!(Some(format!("{} entries", #expected_len))),
+            node_ident,
+        );
         quote_spanned! {map_span=>
             // Check exact length for maps without rest pattern
             if (#value_expr).len() != #expected_len {
-                let __line = line!();
-                let __file = file!();
-                let __error = ::assert_struct::__macro_support::ErrorContext {
-                    field_path: #field_path_str.to_string(),
-                    pattern_str: format!("#{{ {} entries }}", #expected_len),
-                    actual_value: format!("map with {} entries", (#value_expr).len()),
-                    line_number: __line,
-                    file_name: __file,
-                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
-                    expected_value: Some(format!("{} entries", #expected_len)),
-                    error_node: Some(&#node_ident),
-                };
-                __errors.push(__error);
+                #error_push
             }
         }
     } else {
@@ -1604,6 +1584,16 @@ fn generate_map_assertion_with_collection(
                 value_pattern,
                 true, // map.get() returns Option<&V>, so we have a reference
                 &key_path,
+            );
+
+            let missing_key_error = generate_error_push(
+                span,
+                &key_path,
+                &format!("key: {}", key_str),
+                quote!("missing key".to_string()),
+                quote!(::assert_struct::__macro_support::ErrorType::Value),
+                quote!(Some(format!("key present: {}", #key_str))),
+                node_ident,
             );
 
             // Handle different key types for duck typing
@@ -1629,19 +1619,7 @@ fn generate_map_assertion_with_collection(
                         #pattern_assertion
                     }
                     None => {
-                        let __line = line!();
-                        let __file = file!();
-                        let __error = ::assert_struct::__macro_support::ErrorContext {
-                            field_path: #field_path_str.to_string(),
-                            pattern_str: format!("key: {}", #key_str),
-                            actual_value: "missing key".to_string(),
-                            line_number: __line,
-                            file_name: __file,
-                            error_type: ::assert_struct::__macro_support::ErrorType::Value,
-                            expected_value: Some(format!("key present: {}", #key_str)),
-                            error_node: Some(&#node_ident),
-                        };
-                        __errors.push(__error);
+                        #missing_key_error
                     }
                 }
             }
