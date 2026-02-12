@@ -963,7 +963,6 @@ fn generate_comparison_assertion_with_collection(
     path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
-    let field_path = path.join(".");
     let op = &comparison_pattern.op;
     let expected = &comparison_pattern.expr;
 
@@ -1027,7 +1026,7 @@ fn generate_comparison_assertion_with_collection(
     let pattern_str = comparison_pattern.to_error_context_string();
     let error_push = generate_error_push(
         span,
-        &field_path,
+        path,
         &pattern_str,
         quote!(format!("{:?}", #actual_expr)),
         error_type_path,
@@ -1184,7 +1183,6 @@ fn generate_range_assertion_with_collection(
     path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
-    let field_path = path.join(".");
     let range = &range_pattern.expr;
     let match_expr = if is_ref {
         quote! { #value_expr }
@@ -1196,7 +1194,7 @@ fn generate_range_assertion_with_collection(
     let pattern_str = range_pattern.to_error_context_string();
     let error_push = generate_error_push(
         span,
-        &field_path,
+        path,
         &pattern_str,
         quote!(format!("{:?}", #match_expr)),
         quote!(::assert_struct::__macro_support::ErrorType::Range),
@@ -1217,13 +1215,14 @@ fn generate_range_assertion_with_collection(
 /// Generate the error context creation and push code
 fn generate_error_push(
     span: proc_macro2::Span,
-    field_path_str: &str,
+    field_path: &[String],
     pattern_str: &str,
     actual_value: TokenStream,
     error_type_path: TokenStream,
     expected_value: TokenStream,
     node_ident: &Ident,
 ) -> TokenStream {
+    let field_path_str = field_path.join(".");
     quote_spanned! {span=>
         let __line = line!();
         let __file = file!();
@@ -1249,7 +1248,6 @@ fn generate_string_assertion_with_collection(
     path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
-    let field_path_str = path.join(".");
     let lit = &string_pattern.lit;
 
     // String patterns always use .as_ref() to handle String/&str matching
@@ -1258,7 +1256,7 @@ fn generate_string_assertion_with_collection(
     let pattern_str = string_pattern.to_error_context_string();
     let error_push = generate_error_push(
         span,
-        &field_path_str,
+        path,
         &pattern_str,
         quote!(format!("{:?}", actual)),
         quote!(::assert_struct::__macro_support::ErrorType::Value),
@@ -1282,7 +1280,6 @@ fn generate_simple_assertion_with_collection(
     path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
-    let field_path_str = path.join(".");
     let expected = &simple_pattern.expr;
 
     // No special handling needed - string literals are handled by Pattern::String
@@ -1303,7 +1300,7 @@ fn generate_simple_assertion_with_collection(
     let pattern_str = simple_pattern.to_error_context_string();
     let error_push = generate_error_push(
         span,
-        &field_path_str,
+        path,
         &pattern_str,
         quote!(format!("{:?}", #actual_value_expr)),
         quote!(::assert_struct::__macro_support::ErrorType::Value),
