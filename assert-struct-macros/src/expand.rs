@@ -351,16 +351,9 @@ fn generate_pattern_assertion_with_collection(
         Pattern::String(string_pattern) => {
             generate_string_assertion_with_collection(value_expr, string_pattern, path, &node_ident)
         }
-        Pattern::Struct(PatternStruct {
-            path: struct_path,
-            fields,
-            rest,
-            ..
-        }) => generate_struct_match_assertion_with_collection(
+        Pattern::Struct(struct_pattern) => generate_struct_match_assertion_with_collection(
             value_expr,
-            struct_path, // Now passing &Option<syn::Path>
-            fields,
-            *rest,
+            struct_pattern,
             is_ref,
             path,
             &node_ident,
@@ -426,11 +419,11 @@ fn generate_pattern_assertion_with_collection(
                 &node_ident,
             )
         }
-        Pattern::Slice(PatternSlice { elements, .. }) => {
+        Pattern::Slice(slice_pattern) => {
             // Generate slice assertion with error collection
             generate_slice_assertion_with_collection(
                 value_expr,
-                elements,
+                slice_pattern,
                 is_ref,
                 path,
                 &node_ident,
@@ -458,32 +451,24 @@ fn generate_pattern_assertion_with_collection(
                 &node_ident,
             )
         }
-        Pattern::Closure(PatternClosure { closure, .. }) => {
+        Pattern::Closure(closure_pattern) => {
             // Generate closure assertion with error collection
             generate_closure_assertion_with_collection(
                 value_expr,
-                closure,
+                closure_pattern,
                 is_ref,
                 path,
                 &node_ident,
             )
         }
-        Pattern::Map(PatternMap { entries, rest, .. }) => {
+        Pattern::Map(map_pattern) => {
             // Generate map assertion with error collection
-            // Use span from first entry or default span if empty
-            let map_span = entries
-                .first()
-                .map(|(key, _)| key.span())
-                .unwrap_or_else(proc_macro2::Span::call_site);
-
             generate_map_assertion_with_collection(
                 value_expr,
-                entries,
-                *rest,
+                map_pattern,
                 is_ref,
                 path,
                 &node_ident,
-                map_span,
             )
         }
     }
@@ -544,13 +529,15 @@ fn generate_wildcard_struct_assertion_with_collection(
 /// Generate struct assertion with error collection for multiple field failures
 fn generate_struct_match_assertion_with_collection(
     value_expr: &TokenStream,
-    struct_path: &Option<syn::Path>,
-    fields: &Punctuated<FieldAssertion, Token![,]>,
-    rest: bool,
+    struct_pattern: &PatternStruct,
     is_ref: bool,
     field_path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
+    let struct_path = &struct_pattern.path;
+    let fields = &struct_pattern.fields;
+    let rest = struct_pattern.rest;
+
     // If struct_path is None, it's a wildcard pattern - use field access
     if struct_path.is_none() {
         return generate_wildcard_struct_assertion_with_collection(
@@ -1342,11 +1329,12 @@ fn generate_simple_assertion_with_collection(
 /// Generate slice assertion with error collection
 fn generate_slice_assertion_with_collection(
     value_expr: &TokenStream,
-    elements: &[Pattern],
+    slice_pattern: &PatternSlice,
     _is_ref: bool,
     field_path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
+    let elements = &slice_pattern.elements;
     let mut pattern_parts = Vec::new();
     let mut bindings_and_assertions = Vec::new();
 
@@ -1539,11 +1527,12 @@ fn generate_like_assertion_with_collection(
 /// Generate closure assertion with error collection
 fn generate_closure_assertion_with_collection(
     value_expr: &TokenStream,
-    closure: &syn::ExprClosure,
+    closure_pattern: &PatternClosure,
     is_ref: bool,
     path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
+    let closure = &closure_pattern.closure;
     let field_path_str = path.join(".");
     let closure_str = quote! { #closure }.to_string();
 
@@ -1580,13 +1569,20 @@ fn generate_closure_assertion_with_collection(
 /// Assumes map types have len() -> usize and get(&K) -> Option<&V> methods
 fn generate_map_assertion_with_collection(
     value_expr: &TokenStream,
-    entries: &[(syn::Expr, Pattern)],
-    rest: bool,
+    map_pattern: &PatternMap,
     _is_ref: bool,
     path: &[String],
     node_ident: &Ident,
-    map_span: proc_macro2::Span,
 ) -> TokenStream {
+    let entries = &map_pattern.entries;
+    let rest = map_pattern.rest;
+
+    // Use span from first entry or default span if empty
+    let map_span = entries
+        .first()
+        .map(|(key, _)| key.span())
+        .unwrap_or_else(proc_macro2::Span::call_site);
+
     let field_path_str = path.join(".");
 
     // Generate length check assertion for exact matching (when no rest pattern)
