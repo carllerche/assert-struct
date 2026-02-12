@@ -1092,45 +1092,34 @@ fn generate_comparison_assertion_with_collection(
         }
     };
 
-    let error_type = if matches!(op, ComparisonOp::Equal) {
-        quote! { ::assert_struct::__macro_support::ErrorType::Equality }
+    let error_type_path = if matches!(op, ComparisonOp::Equal) {
+        quote!(::assert_struct::__macro_support::ErrorType::Equality)
     } else {
-        quote! { ::assert_struct::__macro_support::ErrorType::Comparison }
+        quote!(::assert_struct::__macro_support::ErrorType::Comparison)
     };
 
     let expected_value = if matches!(op, ComparisonOp::Equal) {
-        quote! { Some(format!("{:?}", #expected)) }
+        let expected_str = quote! { #expected }.to_string();
+        Some(expected_str)
     } else {
-        quote! { None }
+        None
     };
+
+    let error_push = generate_error_push(
+        &field_path,
+        pattern_str,
+        &actual_expr,
+        error_type_path,
+        expected_value.as_deref(),
+        node_ident,
+    );
 
     quote_spanned! {span=>
         #[allow(clippy::nonminimal_bool)]
         if !(#comparison) {
-            // Capture line number using proper spanning
             let __line = line!();
             let __file = file!();
-
-            // Build error context
-            let mut __error = ::assert_struct::__macro_support::ErrorContext {
-                field_path: #field_path.to_string(),
-                pattern_str: #pattern_str.to_string(),
-                actual_value: format!("{:?}", #actual_expr),
-                line_number: __line,
-                file_name: __file,
-                error_type: #error_type,
-
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
-            };
-
-            // Add expected value for equality patterns
-            if let Some(expected) = #expected_value {
-                __error.expected_value = Some(expected);
-            }
-
-            __errors.push(__error);
+            #error_push
         }
     }
 }
@@ -1285,31 +1274,55 @@ fn generate_range_assertion_with_collection(
     };
 
     let span = range.span();
+    let error_push = generate_error_push(
+        &field_path,
+        pattern_str,
+        &match_expr,
+        quote!(::assert_struct::__macro_support::ErrorType::Range),
+        None,
+        node_ident,
+    );
+
     quote_spanned! {span=>
         match #match_expr {
             #range => {},
             _ => {
-                // Capture line number and file info
                 let __line = line!();
                 let __file = file!();
-
-                // Build error context
-                let __error = ::assert_struct::__macro_support::ErrorContext {
-                    field_path: #field_path.to_string(),
-                    pattern_str: #pattern_str.to_string(),
-                    actual_value: format!("{:?}", #match_expr),
-                    line_number: __line,
-                    file_name: __file,
-                    error_type: ::assert_struct::__macro_support::ErrorType::Range,
-
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
-                };
-
-                __errors.push(__error);
+                #error_push
             }
         }
+    }
+}
+
+/// Generate the error context creation and push code
+/// Assumes __line and __file variables are already defined in scope
+fn generate_error_push(
+    field_path_str: &str,
+    pattern_str: &str,
+    actual_value_expr: &TokenStream,
+    error_type_path: TokenStream,
+    expected_value: Option<&str>,
+    node_ident: &Ident,
+) -> TokenStream {
+    let expected_value_expr = if let Some(val) = expected_value {
+        quote!(Some(#val.to_string()))
+    } else {
+        quote!(None)
+    };
+
+    quote! {
+        let __error = ::assert_struct::__macro_support::ErrorContext {
+            field_path: #field_path_str.to_string(),
+            pattern_str: #pattern_str.to_string(),
+            actual_value: format!("{:?}", #actual_value_expr),
+            line_number: __line,
+            file_name: __file,
+            error_type: #error_type_path,
+            expected_value: #expected_value_expr,
+            error_node: Some(&#node_ident),
+        };
+        __errors.push(__error);
     }
 }
 
@@ -1327,23 +1340,21 @@ fn generate_string_assertion_with_collection(
     // String patterns always use .as_ref() to handle String/&str matching
     let actual = quote!((#value_expr).as_ref());
     let span = lit.span();
+    let error_push = generate_error_push(
+        &field_path_str,
+        &expected_str,
+        &quote!(actual),
+        quote!(::assert_struct::__macro_support::ErrorType::Value),
+        None,
+        node_ident,
+    );
 
     quote_spanned! {span=>
         let actual = #actual;
         if !matches!(actual, #lit) {
             let __line = line!();
             let __file = file!();
-            let __error = ::assert_struct::__macro_support::ErrorContext {
-                field_path: #field_path_str.to_string(),
-                pattern_str: #expected_str.to_string(),
-                actual_value: format!("{:?}", actual),
-                line_number: __line,
-                file_name: __file,
-                error_type: ::assert_struct::__macro_support::ErrorType::Value,
-                expected_value: None,
-                error_node: Some(&#node_ident),
-            };
-            __errors.push(__error);
+            #error_push
         }
     }
 }
@@ -1369,66 +1380,25 @@ fn generate_simple_assertion_with_collection(
         .any(|segment| segment.contains("[") && !segment.starts_with("["));
 
     let span = expected.span();
-    if is_index_operation {
-        // For index operations, avoid references on both sides to fix type inference
-        quote_spanned! {span=>
-            if !matches!(#actual, #expected) {
-                let __line = line!();
-                let __file = file!();
-                let __error = ::assert_struct::__macro_support::ErrorContext {
-                    field_path: #field_path_str.to_string(),
-                    pattern_str: #expected_str.to_string(),
-                    actual_value: format!("{:?}", #value_expr),
-                    line_number: __line,
-                    file_name: __file,
-                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
-
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
-                };
-                __errors.push(__error);
-            }
-        }
-    } else if is_ref {
-        quote_spanned! {span=>
-            if !matches!(#actual, #expected) {
-                let __line = line!();
-                let __file = file!();
-                let __error = ::assert_struct::__macro_support::ErrorContext {
-                    field_path: #field_path_str.to_string(),
-                    pattern_str: #expected_str.to_string(),
-                    actual_value: format!("{:?}", #value_expr),
-                    line_number: __line,
-                    file_name: __file,
-                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
-
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
-                };
-                __errors.push(__error);
-            }
-        }
+    let actual_value_expr = if is_index_operation || is_ref {
+        quote!(#value_expr)
     } else {
-        quote_spanned! {span=>
-            if !matches!(#actual, #expected) {
-                let __line = line!();
-                let __file = file!();
-                let __error = ::assert_struct::__macro_support::ErrorContext {
-                    field_path: #field_path_str.to_string(),
-                    pattern_str: #expected_str.to_string(),
-                    actual_value: format!("{:?}", &#value_expr),
-                    line_number: __line,
-                    file_name: __file,
-                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
+        quote!(&#value_expr)
+    };
+    let error_push = generate_error_push(
+        &field_path_str,
+        &expected_str,
+        &actual_value_expr,
+        quote!(::assert_struct::__macro_support::ErrorType::Value),
+        None,
+        node_ident,
+    );
 
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
-                };
-                __errors.push(__error);
-            }
+    quote_spanned! {span=>
+        if !matches!(#actual, #expected) {
+            let __line = line!();
+            let __file = file!();
+            #error_push
         }
     }
 }
