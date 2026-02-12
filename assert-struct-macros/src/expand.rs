@@ -1026,6 +1026,7 @@ fn generate_comparison_assertion_with_collection(
 
     let pattern_str = comparison_pattern.to_error_context_string();
     let error_push = generate_error_push(
+        span,
         &field_path,
         &pattern_str,
         &actual_expr,
@@ -1037,8 +1038,6 @@ fn generate_comparison_assertion_with_collection(
     quote_spanned! {span=>
         #[allow(clippy::nonminimal_bool)]
         if !(#comparison) {
-            let __line = line!();
-            let __file = file!();
             #error_push
         }
     }
@@ -1196,6 +1195,7 @@ fn generate_range_assertion_with_collection(
     let span = range.span();
     let pattern_str = range_pattern.to_error_context_string();
     let error_push = generate_error_push(
+        span,
         &field_path,
         &pattern_str,
         &match_expr,
@@ -1208,8 +1208,6 @@ fn generate_range_assertion_with_collection(
         match #match_expr {
             #range => {},
             _ => {
-                let __line = line!();
-                let __file = file!();
                 #error_push
             }
         }
@@ -1217,8 +1215,8 @@ fn generate_range_assertion_with_collection(
 }
 
 /// Generate the error context creation and push code
-/// Assumes __line and __file variables are already defined in scope
 fn generate_error_push(
+    span: proc_macro2::Span,
     field_path_str: &str,
     pattern_str: &str,
     actual_value_expr: &TokenStream,
@@ -1232,7 +1230,9 @@ fn generate_error_push(
         quote!(None)
     };
 
-    quote! {
+    quote_spanned! {span=>
+        let __line = line!();
+        let __file = file!();
         let __error = ::assert_struct::__macro_support::ErrorContext {
             field_path: #field_path_str.to_string(),
             pattern_str: #pattern_str.to_string(),
@@ -1263,6 +1263,7 @@ fn generate_string_assertion_with_collection(
     let span = lit.span();
     let pattern_str = string_pattern.to_error_context_string();
     let error_push = generate_error_push(
+        span,
         &field_path_str,
         &pattern_str,
         &quote!(actual),
@@ -1274,8 +1275,6 @@ fn generate_string_assertion_with_collection(
     quote_spanned! {span=>
         let actual = #actual;
         if !matches!(actual, #lit) {
-            let __line = line!();
-            let __file = file!();
             #error_push
         }
     }
@@ -1309,6 +1308,7 @@ fn generate_simple_assertion_with_collection(
     };
     let pattern_str = simple_pattern.to_error_context_string();
     let error_push = generate_error_push(
+        span,
         &field_path_str,
         &pattern_str,
         &actual_value_expr,
@@ -1319,8 +1319,6 @@ fn generate_simple_assertion_with_collection(
 
     quote_spanned! {span=>
         if !matches!(#actual, #expected) {
-            let __line = line!();
-            let __file = file!();
             #error_push
         }
     }
