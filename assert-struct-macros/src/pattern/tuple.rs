@@ -72,13 +72,6 @@ impl Parse for PatternTuple {
     }
 }
 
-/// Positional tuple element: just a pattern in sequence
-/// Example: "foo", > 10, Some(42)
-#[derive(Debug, Clone)]
-pub(crate) struct TupleElementPositional {
-    pub pattern: Pattern,
-}
-
 /// Represents an element in a tuple pattern, supporting both positional and indexed syntax
 ///
 /// Indexed elements are essentially field assertions where the field name is a numeric
@@ -87,7 +80,8 @@ pub(crate) struct TupleElementPositional {
 #[derive(Debug, Clone)]
 pub(crate) enum TupleElement {
     /// Positional element in sequence order
-    Positional(TupleElementPositional),
+    /// Example: "foo", > 10, Some(42)
+    Positional(Pattern),
 
     /// Indexed element with explicit numeric field name
     /// The field_name will be a synthetic ident like "_0", "_1", "_2"
@@ -167,7 +161,7 @@ impl TupleElement {
 
                 // Parse positional element: just a pattern
                 let pattern = input.parse()?;
-                elements.push(TupleElement::Positional(TupleElementPositional { pattern }));
+                elements.push(TupleElement::Positional(pattern));
             }
 
             position += 1;
@@ -200,8 +194,8 @@ impl fmt::Display for PatternTuple {
 impl fmt::Display for TupleElement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            TupleElement::Positional(elem) => {
-                write!(f, "{}", elem.pattern)
+            TupleElement::Positional(pattern) => {
+                write!(f, "{}", pattern)
             }
             TupleElement::Indexed(boxed_field_assertion) => {
                 let field_assertion = boxed_field_assertion.as_ref();
