@@ -352,13 +352,7 @@ fn generate_pattern_assertion_with_collection(
             )
         }
         Pattern::String(PatternString { lit, .. }) => {
-            generate_string_assertion_with_collection(
-                value_expr,
-                lit,
-                is_ref,
-                path,
-                &node_ident,
-            )
+            generate_string_assertion_with_collection(value_expr, lit, path, &node_ident)
         }
         Pattern::Struct(PatternStruct {
             path: struct_path,
@@ -623,16 +617,17 @@ fn generate_struct_match_assertion_with_collection(
 
             // Generate the value expression with operations applied
             // The field is already bound by the match pattern, so we only apply tail operations
-            let (expr, is_ref_after_operations) = if let Some(tail_ops) = field_operations.tail_operations() {
-                // Apply remaining operations after the field access
-                // We're in a reference context for struct destructuring (match &value)
-                let expr = apply_field_operations(&quote! { #field_name }, &tail_ops, true);
-                let is_ref = field_operation_returns_reference(&tail_ops);
-                (expr, is_ref)
-            } else {
-                // No additional operations, just use the bound field name
-                (quote! { #field_name }, true)
-            };
+            let (expr, is_ref_after_operations) =
+                if let Some(tail_ops) = field_operations.tail_operations() {
+                    // Apply remaining operations after the field access
+                    // We're in a reference context for struct destructuring (match &value)
+                    let expr = apply_field_operations(&quote! { #field_name }, &tail_ops, true);
+                    let is_ref = field_operation_returns_reference(&tail_ops);
+                    (expr, is_ref)
+                } else {
+                    // No additional operations, just use the bound field name
+                    (quote! { #field_name }, true)
+                };
 
             // Generate assertion with appropriate reference handling
             let assertion = generate_pattern_assertion_with_collection(
@@ -828,7 +823,7 @@ fn field_operation_returns_reference(operation: &FieldOperation) -> bool {
         FieldOperation::Await { .. } => false, // Await returns owned values
         FieldOperation::NamedField { .. } => false, // Field access auto-derefs to get field value
         FieldOperation::UnnamedField { .. } => false, // Tuple field access auto-derefs to get field value
-        FieldOperation::Index { .. } => true,   // Index operations return references to elements
+        FieldOperation::Index { .. } => true, // Index operations return references to elements
         FieldOperation::Combined { .. } => false, // Combined with deref also removes reference level
         FieldOperation::Chained { operations, .. } => {
             // For chained operations, the reference level is determined by the last operation
@@ -869,7 +864,6 @@ fn process_tuple_elements(
     for (i, tuple_element) in elements.iter().enumerate() {
         match tuple_element {
             TupleElement::Positional(pattern) => {
-
                 match pattern {
                     Pattern::Wildcard(PatternWildcard { .. }) => {
                         // Wildcard patterns use `_` in the match pattern
@@ -920,7 +914,9 @@ fn process_tuple_elements(
 
                         // Generate the value expression with operations applied
                         // The element is already bound by the match pattern, so we only apply tail operations
-                        let (value_expr, is_ref_after_operations) = if let Some(tail_ops) = operations.tail_operations() {
+                        let (value_expr, is_ref_after_operations) = if let Some(tail_ops) =
+                            operations.tail_operations()
+                        {
                             // Apply remaining operations after the element access
                             // Tuple elements are in reference context when destructured
                             let expr = apply_field_operations(&quote! { #name }, &tail_ops, true);
@@ -1322,7 +1318,6 @@ fn generate_range_assertion_with_collection(
 fn generate_string_assertion_with_collection(
     value_expr: &TokenStream,
     lit: &syn::LitStr,
-    is_ref: bool,
     path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
@@ -1331,68 +1326,24 @@ fn generate_string_assertion_with_collection(
 
     // String patterns always use .as_ref() to handle String/&str matching
     let actual = quote!((#value_expr).as_ref());
-
-    // Check if this is an index operation by looking at the path
-    // Exclude slice patterns which start with [
-    let is_index_operation = path
-        .iter()
-        .any(|segment| segment.contains("[") && !segment.starts_with("["));
-
     let span = lit.span();
-    if is_index_operation {
-        // For index operations, avoid references on both sides to fix type inference
-        quote_spanned! {span=>
-            if !matches!(#actual, #lit) {
-                let __line = line!();
-                let __file = file!();
-                let __error = ::assert_struct::__macro_support::ErrorContext {
-                    field_path: #field_path_str.to_string(),
-                    pattern_str: #expected_str.to_string(),
-                    actual_value: format!("{:?}", #value_expr),
-                    line_number: __line,
-                    file_name: __file,
-                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
-                    expected_value: None,
-                    error_node: Some(&#node_ident),
-                };
-                __errors.push(__error);
-            }
-        }
-    } else if is_ref {
-        quote_spanned! {span=>
-            if !matches!(#actual, #lit) {
-                let __line = line!();
-                let __file = file!();
-                let __error = ::assert_struct::__macro_support::ErrorContext {
-                    field_path: #field_path_str.to_string(),
-                    pattern_str: #expected_str.to_string(),
-                    actual_value: format!("{:?}", #value_expr),
-                    line_number: __line,
-                    file_name: __file,
-                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
-                    expected_value: None,
-                    error_node: Some(&#node_ident),
-                };
-                __errors.push(__error);
-            }
-        }
-    } else {
-        quote_spanned! {span=>
-            if !matches!(#actual, #lit) {
-                let __line = line!();
-                let __file = file!();
-                let __error = ::assert_struct::__macro_support::ErrorContext {
-                    field_path: #field_path_str.to_string(),
-                    pattern_str: #expected_str.to_string(),
-                    actual_value: format!("{:?}", &#value_expr),
-                    line_number: __line,
-                    file_name: __file,
-                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
-                    expected_value: None,
-                    error_node: Some(&#node_ident),
-                };
-                __errors.push(__error);
-            }
+
+    quote_spanned! {span=>
+        let actual = #actual;
+        if !matches!(actual, #lit) {
+            let __line = line!();
+            let __file = file!();
+            let __error = ::assert_struct::__macro_support::ErrorContext {
+                field_path: #field_path_str.to_string(),
+                pattern_str: #expected_str.to_string(),
+                actual_value: format!("{:?}", actual),
+                line_number: __line,
+                file_name: __file,
+                error_type: ::assert_struct::__macro_support::ErrorType::Value,
+                expected_value: None,
+                error_node: Some(&#node_ident),
+            };
+            __errors.push(__error);
         }
     }
 }
