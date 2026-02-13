@@ -180,6 +180,28 @@ impl Parse for FieldAssertion {
     /// email: =~ r".*@example\.com"
     /// ```
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let operations = input.parse()?;
+        let _: Token![:] = input.parse()?;
+        let pattern = input.parse()?;
+
+        Ok(FieldAssertion {
+            operations,
+            pattern,
+        })
+    }
+}
+
+impl Parse for FieldOperation {
+    /// Parse a complete field operation sequence: *field.method()[index].await
+    ///
+    /// # Example Input
+    /// ```text
+    /// name
+    /// *boxed_value
+    /// field.method()
+    /// tuple.0.inner
+    /// ```
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let span = input.span();
         let mut operations = Vec::new();
 
@@ -216,13 +238,7 @@ impl Parse for FieldAssertion {
             _ => FieldOperation::Chained { operations, span },
         };
 
-        let _: Token![:] = input.parse()?;
-        let pattern = input.parse()?;
-
-        Ok(FieldAssertion {
-            operations: final_operation,
-            pattern,
-        })
+        Ok(final_operation)
     }
 }
 
