@@ -206,7 +206,7 @@ impl Parse for FieldAssertion {
 
         // Parse additional operations (.field, .method(), [index], .await)
         while input.peek(Token![.]) || input.peek(syn::token::Bracket) {
-            operations.push(FieldOperation::parse_one(input)?);
+            FieldOperation::parse_one_into(input, &mut operations)?;
         }
 
         // Convert Vec to single operation or Chained
@@ -320,22 +320,28 @@ impl FieldOperation {
 
 impl FieldOperation {
     /// Parse a dot operation: .await, .field, .method(), or .0
-    fn parse_one_dot(input: syn::parse::ParseStream) -> syn::Result<Self> {
+    /// Pushes the parsed operation(s) into the provided Vec
+    fn parse_one_dot_into(
+        input: syn::parse::ParseStream,
+        ops: &mut Vec<FieldOperation>,
+    ) -> syn::Result<()> {
         let dot_span = input.span();
         let _: Token![.] = input.parse()?;
 
         if input.peek(Token![await]) {
             let await_span = input.span();
             let _: Token![await] = input.parse()?;
-            Ok(FieldOperation::Await { span: await_span })
+            ops.push(FieldOperation::Await { span: await_span });
+            Ok(())
         } else if input.peek(syn::LitInt) {
             // It's a tuple index like .0 or .1
             let lit_int: syn::LitInt = input.parse()?;
             let index: usize = lit_int.base10_parse()?;
-            return Ok(FieldOperation::UnnamedField {
+            ops.push(FieldOperation::UnnamedField {
                 index,
                 span: dot_span,
             });
+            Ok(())
         } else if input.peek(syn::LitFloat) {
             let lit_float: syn::LitFloat = input.parse()?;
             // Parse float like "0.0" and split into two UnnamedField operations
@@ -354,20 +360,16 @@ impl FieldOperation {
                 .parse::<usize>()
                 .map_err(|_| syn::Error::new(dot_span, "Invalid numeric index in field access"))?;
 
-            // Create two chained UnnamedField operations
-            return Ok(FieldOperation::Chained {
-                operations: vec![
-                    FieldOperation::UnnamedField {
-                        index: first_idx,
-                        span: dot_span,
-                    },
-                    FieldOperation::UnnamedField {
-                        index: second_idx,
-                        span: dot_span,
-                    },
-                ],
+            // Push two sequential UnnamedField operations
+            ops.push(FieldOperation::UnnamedField {
+                index: first_idx,
                 span: dot_span,
             });
+            ops.push(FieldOperation::UnnamedField {
+                index: second_idx,
+                span: dot_span,
+            });
+            Ok(())
         } else {
             // Parse as identifier for named field
             let ident: syn::Ident = input.parse()?;
@@ -388,35 +390,41 @@ impl FieldOperation {
                     let _: Token![,] = args_content.parse()?;
                 }
 
-                Ok(FieldOperation::Method {
+                ops.push(FieldOperation::Method {
                     name: ident,
                     args,
                     span: dot_span,
-                })
+                });
+                Ok(())
             } else {
                 // Single named field access
-                Ok(FieldOperation::NamedField {
+                ops.push(FieldOperation::NamedField {
                     name: ident,
                     span: dot_span,
-                })
+                });
+                Ok(())
             }
         }
     }
 
     /// Parse a single operation: .await, .field, .method(), or \[index\]
-    /// This parses exactly one operation and returns it
-    pub(crate) fn parse_one(input: syn::parse::ParseStream) -> syn::Result<Self> {
+    /// Pushes the parsed operation into the provided Vec
+    pub(crate) fn parse_one_into(
+        input: syn::parse::ParseStream,
+        ops: &mut Vec<FieldOperation>,
+    ) -> syn::Result<()> {
         if input.peek(Token![.]) {
-            Self::parse_one_dot(input)
+            Self::parse_one_dot_into(input, ops)
         } else if input.peek(syn::token::Bracket) {
             // Index operation - need to capture the span that encompasses the bracket
             let content;
             let bracket_token = syn::bracketed!(content in input);
             let index: syn::Expr = content.parse()?;
-            Ok(FieldOperation::Index {
+            ops.push(FieldOperation::Index {
                 index,
                 span: bracket_token.span.open(),
-            })
+            });
+            Ok(())
         } else {
             Err(syn::Error::new(
                 input.span(),
