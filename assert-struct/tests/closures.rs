@@ -7,6 +7,11 @@ struct TestData {
     items: Vec<i32>,
 }
 
+#[derive(Debug)]
+struct Container {
+    data: TestData,
+}
+
 #[test]
 fn test_basic_closure_success() {
     let data = TestData {
@@ -85,4 +90,22 @@ fn test_move_closure() {
             ..
         }
     );
+}
+
+#[test]
+fn test_closure_nested_struct() {
+    let container = Container {
+        data: TestData {
+            value: 42,
+            name: "test".to_string(),
+            items: vec![3, 4, 5],
+        },
+    };
+
+    assert_struct!(
+        container,
+        Container {
+            data: |data| data.value == 42
+        }
+    )
 }

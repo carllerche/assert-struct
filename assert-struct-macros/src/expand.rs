@@ -418,7 +418,6 @@ fn generate_pattern_assertion_with_collection(
             generate_closure_assertion_with_collection(
                 value_expr,
                 closure_pattern,
-                is_ref,
                 path,
                 &node_ident,
             )
@@ -1323,27 +1322,17 @@ fn generate_like_assertion_with_collection(
 fn generate_closure_assertion_with_collection(
     value_expr: &TokenStream,
     closure_pattern: &PatternClosure,
-    is_ref: bool,
     path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
     let closure = &closure_pattern.closure;
-    let closure_str = quote! { #closure }.to_string();
-
-    // Adjust for reference level - closures receive the actual value
-    let actual_expr = if is_ref {
-        quote! { #value_expr }
-    } else {
-        quote! { &#value_expr }
-    };
-
     let span = closure.span();
 
     let error_push = generate_error_push(
         span,
         path,
-        &closure_str,
-        quote!(format!("{:?}", #actual_expr)),
+        &quote! { #closure }.to_string(),
+        quote!(format!("{:?}", #value_expr)),
         quote!(::assert_struct::__macro_support::ErrorType::Closure),
         quote!(None),
         node_ident,
@@ -1351,7 +1340,7 @@ fn generate_closure_assertion_with_collection(
 
     quote_spanned! {span=>
         {
-            if !::assert_struct::__macro_support::check_closure_condition(#actual_expr, #closure) {
+            if !::assert_struct::__macro_support::check_closure_condition(#value_expr, #closure) {
                 #error_push
             }
         }
