@@ -9,6 +9,7 @@ use syn::{
 };
 
 use crate::parse::next_node_id;
+use crate::pattern::field::FieldName;
 use crate::pattern::{FieldAssertion, FieldOperation, Pattern, path_to_string};
 
 /// Tuple pattern: (10, 20) or Some(42) or None
@@ -97,71 +98,39 @@ impl TupleElement {
         let mut position = 0;
 
         while !input.is_empty() {
-            // First, try to parse operations (like * for deref)
-            let operations = FieldOperation::parse_option(input)?;
-
-            // Check if this is an indexed element by looking for number followed by colon or method call
+            // Try to parse as indexed element by attempting FieldOperation parse
             let fork = input.fork();
-            let is_indexed = if let Ok(_index_lit) = fork.parse::<syn::LitInt>() {
-                fork.peek(Token![:]) || fork.peek(Token![.])
+
+            if fork.parse::<FieldOperation>().is_ok() {
+                // Parse as indexed element
+                let operations: FieldOperation = input.parse()?;
+                let root_field = operations.root_field_name();
+
+                // Validate that the index matches the current position
+                match root_field {
+                    FieldName::Index(index) if index == position => {
+                        // Valid indexed element
+                        let _: Token![:] = input.parse()?;
+                        let pattern = input.parse()?;
+
+                        elements.push(TupleElement::Indexed(Box::new(FieldAssertion {
+                            operations,
+                            pattern,
+                        })));
+                    }
+                    FieldName::Index(index) => {
+                        // Index doesn't match position
+                        return Err(syn::Error::new(
+                            input.span(),
+                            format!("Index {} must match position {} in tuple", index, position),
+                        ));
+                    }
+                    FieldName::Ident(_) => {
+                        unreachable!("Already checked that root is Index")
+                    }
+                }
             } else {
-                false
-            };
-
-            if is_indexed {
-                // Parse indexed element: index: pattern, *index: pattern, or index.method(): pattern
-                let index_lit: syn::LitInt = input.parse()?;
-                let index: usize = index_lit.base10_parse()?;
-
-                // Validate that index matches current position
-                if index != position {
-                    return Err(syn::Error::new_spanned(
-                        index_lit,
-                        format!("Index {} must match position {} in tuple", index, position),
-                    ));
-                }
-
-                let span = index_lit.span();
-                let mut ops = Vec::new();
-
-                // Add deref operation if present
-                if let Some(deref_op) = operations {
-                    ops.push(deref_op);
-                }
-
-                // Add the index operation
-                ops.push(FieldOperation::UnnamedField { index, span });
-
-                // Parse remaining operations (method calls, field access, etc.)
-                while input.peek(Token![.]) || input.peek(syn::token::Bracket) {
-                    FieldOperation::parse_one_into(input, &mut ops)?;
-                }
-
-                // Convert Vec to single operation or Chained
-                let final_operations = match ops.len() {
-                    0 => unreachable!("Must have at least index operation"),
-                    1 => ops.into_iter().next().unwrap(),
-                    _ => FieldOperation::Chained { operations: ops, span },
-                };
-
-                let _: Token![:] = input.parse()?;
-                let pattern = input.parse()?;
-
-                // Build a FieldAssertion - tuples are just structs with numeric field names!
-                elements.push(TupleElement::Indexed(Box::new(FieldAssertion {
-                    operations: final_operations,
-                    pattern,
-                })));
-            } else {
-                // If we parsed operations but no index, this is an error
-                if operations.is_some() {
-                    return Err(syn::Error::new(
-                        input.span(),
-                        "Operations like * can only be used with indexed elements (e.g., *0:, *1:)",
-                    ));
-                }
-
-                // Parse positional element: just a pattern
+                // Parse as positional pattern
                 let pattern = input.parse()?;
                 elements.push(TupleElement::Positional(pattern));
             }
