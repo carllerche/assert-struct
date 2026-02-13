@@ -122,34 +122,26 @@ impl TupleElement {
                 }
 
                 let span = index_lit.span();
+                let mut ops = Vec::new();
 
-                // Build the operation chain starting with UnnamedField for the index
-                let mut index_operation = FieldOperation::UnnamedField { index, span };
-
-                // Parse remaining operations (method calls, field access, etc.)
-                if input.peek(Token![.]) || input.peek(syn::token::Bracket) {
-                    index_operation = FieldOperation::parse_chain(input, Some(index_operation))?;
+                // Add deref operation if present
+                if let Some(deref_op) = operations {
+                    ops.push(deref_op);
                 }
 
-                // Apply deref operations if present
-                let final_operations = if let Some(FieldOperation::Deref { count, span: deref_span }) = operations
-                {
-                    // Combine deref with index operation in a chain
-                    let deref_op = FieldOperation::Deref { count, span: deref_span };
-                    match index_operation {
-                        FieldOperation::Chained { mut operations, span } => {
-                            operations.insert(0, deref_op);
-                            FieldOperation::Chained { operations, span }
-                        }
-                        single_op => {
-                            FieldOperation::Chained {
-                                operations: vec![deref_op, single_op],
-                                span: deref_span,
-                            }
-                        }
-                    }
-                } else {
-                    index_operation
+                // Add the index operation
+                ops.push(FieldOperation::UnnamedField { index, span });
+
+                // Parse remaining operations (method calls, field access, etc.)
+                while input.peek(Token![.]) || input.peek(syn::token::Bracket) {
+                    ops.push(input.parse()?);
+                }
+
+                // Convert Vec to single operation or Chained
+                let final_operations = match ops.len() {
+                    0 => unreachable!("Must have at least index operation"),
+                    1 => ops.into_iter().next().unwrap(),
+                    _ => FieldOperation::Chained { operations: ops, span },
                 };
 
                 let _: Token![:] = input.parse()?;

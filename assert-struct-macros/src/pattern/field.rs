@@ -181,81 +181,45 @@ impl Parse for FieldAssertion {
     /// ```
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let span = input.span();
+        let mut operations = Vec::new();
 
-        // Count leading * tokens for dereferencing
+        // Parse leading derefs
         let mut deref_count = 0;
         while input.peek(Token![*]) {
             let _: Token![*] = input.parse()?;
             deref_count += 1;
         }
+        if deref_count > 0 {
+            operations.push(FieldOperation::Deref { count: deref_count, span });
+        }
 
-        // Parse the field name as a FieldOperation (NamedField or UnnamedField)
+        // Parse field name (required)
         let field_name: FieldName = input.parse()?;
-        let mut operations = match field_name {
+        let field_op = match field_name {
             FieldName::Ident(ident) => FieldOperation::NamedField { name: ident, span },
             FieldName::Index(index) => FieldOperation::UnnamedField { index, span },
         };
+        operations.push(field_op);
 
-        // Check for additional operations: .method(), .nested, [index], etc.
-        if input.peek(Token![.]) || input.peek(syn::token::Bracket) {
-            operations = parse_field_operations(input, Some(operations))?;
+        // Parse additional operations (.field, .method(), [index], .await)
+        while input.peek(Token![.]) || input.peek(syn::token::Bracket) {
+            operations.push(input.parse()?);
         }
 
-        // Apply deref if present - prepend Deref operations
-        if deref_count > 0 {
-            let deref_op = FieldOperation::Deref {
-                count: deref_count,
-                span,
-            };
-
-            // If operations is already a Chained, prepend deref to it
-            // Otherwise, create a new Chained with deref and the operation
-            operations = match operations {
-                FieldOperation::Chained { mut operations, span } => {
-                    operations.insert(0, deref_op);
-                    FieldOperation::Chained { operations, span }
-                }
-                single_op => FieldOperation::Chained {
-                    operations: vec![deref_op, single_op],
-                    span,
-                },
-            };
-        }
+        // Convert Vec to single operation or Chained
+        let final_operation = match operations.len() {
+            0 => unreachable!("Must have at least field name"),
+            1 => operations.into_iter().next().unwrap(),
+            _ => FieldOperation::Chained { operations, span },
+        };
 
         let _: Token![:] = input.parse()?;
         let pattern = input.parse()?;
 
         Ok(FieldAssertion {
-            operations,
+            operations: final_operation,
             pattern,
         })
-    }
-}
-
-/// Parse field operations starting from the first field name
-/// Handles chained operations like .field, \[index\], .method(), .await, etc.
-pub(crate) fn parse_field_operations(
-    input: syn::parse::ParseStream,
-    existing_operations: Option<FieldOperation>,
-) -> syn::Result<FieldOperation> {
-    let span = input.span();
-    let mut operations = vec![];
-
-    // Prepend existing operation if present
-    if let Some(existing) = existing_operations {
-        operations.push(existing);
-    }
-
-    // Continue parsing operations in the chain
-    while input.peek(Token![.]) || input.peek(syn::token::Bracket) {
-        operations.push(input.parse()?);
-    }
-
-    // Build the final operation
-    match operations.len() {
-        0 => Err(syn::Error::new(input.span(), "Expected field operations")),
-        1 => Ok(operations.into_iter().next().unwrap()),
-        _ => Ok(FieldOperation::Chained { operations, span }),
     }
 }
 
@@ -280,33 +244,6 @@ impl FieldOperation {
             }))
         } else {
             Ok(None)
-        }
-    }
-
-    /// Parse a chain of operations: .method().await\[0\].field, etc.
-    /// Returns a FieldOperation with appropriate chaining
-    pub(crate) fn parse_chain(
-        input: syn::parse::ParseStream,
-        existing_operations: Option<Self>,
-    ) -> syn::Result<Self> {
-        let span = input.span();
-        let mut operations = vec![];
-
-        // Prepend existing operation if present
-        if let Some(existing) = existing_operations {
-            operations.push(existing);
-        }
-
-        // Parse additional operations
-        while input.peek(Token![.]) || input.peek(syn::token::Bracket) {
-            operations.push(input.parse()?);
-        }
-
-        // Build the final operation
-        match operations.len() {
-            0 => Err(syn::Error::new(input.span(), "Expected field operations")),
-            1 => Ok(operations.into_iter().next().unwrap()),
-            _ => Ok(FieldOperation::Chained { operations, span }),
         }
     }
 
