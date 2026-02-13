@@ -340,13 +340,7 @@ fn generate_pattern_assertion_with_collection(
 
     match pattern {
         Pattern::Simple(simple_pattern) => {
-            generate_simple_assertion_with_collection(
-                value_expr,
-                simple_pattern,
-                is_ref,
-                path,
-                &node_ident,
-            )
+            generate_simple_assertion_with_collection(value_expr, simple_pattern, path, &node_ident)
         }
         Pattern::String(string_pattern) => {
             generate_string_assertion_with_collection(value_expr, string_pattern, path, &node_ident)
@@ -1251,7 +1245,6 @@ fn generate_string_assertion_with_collection(
     let lit = &string_pattern.lit;
 
     // String patterns always use .as_ref() to handle String/&str matching
-    let actual = quote!((#value_expr).as_ref());
     let span = lit.span();
     let pattern_str = string_pattern.to_error_context_string();
     let error_push = generate_error_push(
@@ -1265,7 +1258,7 @@ fn generate_string_assertion_with_collection(
     );
 
     quote_spanned! {span=>
-        let actual = #actual;
+        let actual = (#value_expr).as_ref();
         if !matches!(actual, #lit) {
             #error_push
         }
@@ -1274,35 +1267,18 @@ fn generate_string_assertion_with_collection(
 
 /// Generate simple assertion with error collection
 fn generate_simple_assertion_with_collection(
-    value_expr: &TokenStream,
+    actual: &TokenStream,
     simple_pattern: &PatternSimple,
-    is_ref: bool,
     path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
     let expected = &simple_pattern.expr;
-
-    // No special handling needed - string literals are handled by Pattern::String
-    let actual = value_expr;
-
-    // Check if this is an index operation by looking at the path
-    // Exclude slice patterns which start with [
-    let is_index_operation = path
-        .iter()
-        .any(|segment| segment.contains("[") && !segment.starts_with("["));
-
     let span = expected.span();
-    let actual_value_expr = if is_index_operation || is_ref {
-        quote!(#value_expr)
-    } else {
-        quote!(&#value_expr)
-    };
-    let pattern_str = simple_pattern.to_error_context_string();
     let error_push = generate_error_push(
         span,
         path,
-        &pattern_str,
-        quote!(format!("{:?}", #actual_value_expr)),
+        &simple_pattern.to_error_context_string(),
+        quote!(format!("{:?}", #actual)),
         quote!(::assert_struct::__macro_support::ErrorType::Value),
         quote!(None),
         node_ident,

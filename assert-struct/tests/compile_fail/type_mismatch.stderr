@@ -1,14 +1,9 @@
 error[E0599]: the method `as_ref` exists for reference `&u32`, but its trait bounds were not satisfied
-  --> tests/compile_fail/type_mismatch.rs:16:5
+  --> tests/compile_fail/type_mismatch.rs:18:14
    |
-16 |       assert_struct!(user, User {
-   |  _____^
-17 | |         name: "Alice",
-18 | |         age: "thirty",
-19 | |     });
-   | |______^ method cannot be called on `&u32` due to unsatisfied trait bounds
+18 |         age: "thirty",
+   |              ^^^^^^^^ method cannot be called on `&u32` due to unsatisfied trait bounds
    |
    = note: the following trait bounds were not satisfied:
            `u32: AsRef<_>`
            which is required by `&u32: AsRef<_>`
-   = note: this error originates in the macro `assert_struct` (in Nightly builds, run with -Z macro-backtrace for more info)
