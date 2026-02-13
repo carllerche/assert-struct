@@ -348,7 +348,6 @@ fn generate_pattern_assertion_with_collection(
         Pattern::Struct(struct_pattern) => generate_struct_match_assertion_with_collection(
             value_expr,
             struct_pattern,
-            is_ref,
             path,
             &node_ident,
         ),
@@ -438,7 +437,6 @@ fn generate_pattern_assertion_with_collection(
 fn generate_wildcard_struct_assertion_with_collection(
     value_expr: &TokenStream,
     fields: &Punctuated<FieldAssertion, Token![,]>,
-    _is_ref: bool,
     field_path: &[String],
     _node_ident: &Ident,
 ) -> TokenStream {
@@ -490,7 +488,6 @@ fn generate_wildcard_struct_assertion_with_collection(
 fn generate_struct_match_assertion_with_collection(
     value_expr: &TokenStream,
     struct_pattern: &PatternStruct,
-    is_ref: bool,
     field_path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
@@ -499,13 +496,11 @@ fn generate_struct_match_assertion_with_collection(
     let rest = struct_pattern.rest;
 
     // If struct_path is None, it's a wildcard pattern - use field access
-    if struct_path.is_none() {
+    let Some(struct_path) = struct_path.as_ref() else {
         return generate_wildcard_struct_assertion_with_collection(
-            value_expr, fields, is_ref, field_path, node_ident,
+            value_expr, fields, field_path, node_ident,
         );
-    }
-
-    let struct_path = struct_path.as_ref().unwrap();
+    };
 
     // For nested field access, we need to collect unique field names only
     // If we have middle.inner.value and middle.count, we only want "middle" once
@@ -548,25 +543,18 @@ fn generate_struct_match_assertion_with_collection(
 
             // Generate the value expression with operations applied
             // The field is already bound by the match pattern, so we only apply tail operations
-            let (expr, is_ref_after_operations) =
-                if let Some(tail_ops) = field_operations.tail_operations() {
-                    // Apply remaining operations after the field access
-                    // We're in a reference context for struct destructuring (match &value)
-                    let expr = apply_field_operations(&quote! { #field_name }, &tail_ops, true);
-                    let is_ref = field_operation_returns_reference(&tail_ops);
-                    (expr, is_ref)
-                } else {
-                    // No additional operations, just use the bound field name
-                    (quote! { #field_name }, true)
-                };
+            let expr = if let Some(tail_ops) = field_operations.tail_operations() {
+                // Apply remaining operations after the field access
+                // We're in a reference context for struct destructuring (match &value)
+                apply_field_operations(&quote! { #field_name }, &tail_ops, true)
+            } else {
+                // No additional operations, just use the bound field name
+                quote! { #field_name }
+            };
 
             // Generate assertion with appropriate reference handling
-            let assertion = generate_pattern_assertion_with_collection(
-                &expr,
-                field_pattern,
-                is_ref_after_operations,
-                &new_path,
-            );
+            let assertion =
+                generate_pattern_assertion_with_collection(&expr, field_pattern, true, &new_path);
 
             // Wrap the assertion with the span of the field pattern if available
             if let Some(span) = get_pattern_span(field_pattern) {
