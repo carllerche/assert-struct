@@ -391,13 +391,7 @@ fn generate_pattern_assertion_with_collection(
         }
         Pattern::Range(range_pattern) => {
             // Generate improved range assertion with error collection
-            generate_range_assertion_with_collection(
-                value_expr,
-                range_pattern,
-                is_ref,
-                path,
-                &node_ident,
-            )
+            generate_range_assertion_with_collection(value_expr, range_pattern, path, &node_ident)
         }
         Pattern::Slice(slice_pattern) => {
             // Generate slice assertion with error collection
@@ -946,12 +940,11 @@ fn generate_comparison_assertion_with_collection(
     let expected = &comparison_pattern.expr;
 
     let is_index_operation = true;
-    let actual_expr = quote! { #value_expr };
 
     let span = expected.span();
     let comparison = if is_index_operation {
         // For index operations, avoid references on both sides
-        match op {
+        match comparison_pattern.op {
             ComparisonOp::Less => quote_spanned! {span=> (#value_expr).lt(&(#expected)) },
             ComparisonOp::LessEqual => quote_spanned! {span=> (#value_expr).le(&(#expected)) },
             ComparisonOp::Greater => quote_spanned! {span=> (#value_expr).gt(&(#expected)) },
@@ -976,12 +969,11 @@ fn generate_comparison_assertion_with_collection(
         quote!(None)
     };
 
-    let pattern_str = comparison_pattern.to_error_context_string();
     let error_push = generate_error_push(
         span,
         path,
-        &pattern_str,
-        quote!(format!("{:?}", #actual_expr)),
+        &comparison_pattern.to_error_context_string(),
+        quote!(format!("{:?}", #value_expr)),
         error_type_path,
         expected_value,
         node_ident,
@@ -1077,31 +1069,24 @@ fn generate_enum_tuple_assertion_with_collection(
 fn generate_range_assertion_with_collection(
     value_expr: &TokenStream,
     range_pattern: &PatternRange,
-    is_ref: bool,
     path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
     let range = &range_pattern.expr;
-    let match_expr = if is_ref {
-        quote! { #value_expr }
-    } else {
-        quote! { &#value_expr }
-    };
 
     let span = range.span();
-    let pattern_str = range_pattern.to_error_context_string();
     let error_push = generate_error_push(
         span,
         path,
-        &pattern_str,
-        quote!(format!("{:?}", #match_expr)),
+        &range_pattern.to_error_context_string(),
+        quote!(format!("{:?}", #value_expr)),
         quote!(::assert_struct::__macro_support::ErrorType::Range),
         quote!(None),
         node_ident,
     );
 
     quote_spanned! {span=>
-        match #match_expr {
+        match &#value_expr {
             #range => {},
             _ => {
                 #error_push
