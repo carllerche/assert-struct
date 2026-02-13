@@ -132,15 +132,21 @@ impl TupleElement {
                 }
 
                 // Apply deref operations if present
-                let final_operations = if let Some(FieldOperation::Deref {
-                    count,
-                    span: deref_span,
-                }) = operations
+                let final_operations = if let Some(FieldOperation::Deref { count, span: deref_span }) = operations
                 {
-                    FieldOperation::Combined {
-                        deref_count: count,
-                        operation: Box::new(index_operation),
-                        span: deref_span,
+                    // Combine deref with index operation in a chain
+                    let deref_op = FieldOperation::Deref { count, span: deref_span };
+                    match index_operation {
+                        FieldOperation::Chained { mut operations, span } => {
+                            operations.insert(0, deref_op);
+                            FieldOperation::Chained { operations, span }
+                        }
+                        single_op => {
+                            FieldOperation::Chained {
+                                operations: vec![deref_op, single_op],
+                                span: deref_span,
+                            }
+                        }
                     }
                 } else {
                     index_operation

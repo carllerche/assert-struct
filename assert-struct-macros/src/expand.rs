@@ -40,7 +40,7 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
     quote! {
         {
             // Suppress clippy warnings that are expected in macro-generated code
-            #[allow(unused_assignments, clippy::neg_cmp_op_on_partial_ord, clippy::op_ref, clippy::zero_prefixed_literal, clippy::bool_comparison)]
+            #[allow(unused_assignments, clippy::neg_cmp_op_on_partial_ord, clippy::op_ref, clippy::zero_prefixed_literal, clippy::bool_comparison, clippy::redundant_pattern_matching, clippy::useless_asref)]
             let __assert_struct_result = {
                 use std::convert::AsRef;
 
@@ -616,15 +616,6 @@ fn generate_field_operation_path(base_field: String, operation: &FieldOperation)
         FieldOperation::Index { index, .. } => {
             format!("{}[{}]", base_field, quote! { #index })
         }
-        FieldOperation::Combined {
-            deref_count,
-            operation,
-            ..
-        } => {
-            let stars = "*".repeat(*deref_count);
-            let base_with_deref = format!("{}{}", stars, base_field);
-            generate_field_operation_path(base_with_deref, operation)
-        }
         FieldOperation::Chained { operations, .. } => {
             let mut result = base_field;
             for op in operations {
@@ -677,28 +668,13 @@ fn apply_field_operations(
         FieldOperation::Index { index, span } => {
             quote_spanned! { *span=> #base_expr[#index] }
         }
-        FieldOperation::Combined {
-            deref_count,
-            operation,
-            span,
-        } => {
-            // First apply dereferencing with reference context awareness
-            let mut expr = base_expr.clone();
-            let total_count = if in_ref_context {
-                deref_count + 1
-            } else {
-                *deref_count
-            };
-            for _ in 0..total_count {
-                expr = quote_spanned! { *span=> *#expr };
-            }
-            // Then apply the nested operation (no longer in ref context after deref)
-            apply_field_operations(&expr, operation, false)
-        }
         FieldOperation::Chained { operations, .. } => {
             let mut expr = base_expr.clone();
+            let mut is_ref = in_ref_context;
             for op in operations {
-                expr = apply_field_operations(&expr, op, false);
+                expr = apply_field_operations(&expr, op, is_ref);
+                // After first operation, reference context depends on whether operation returns a reference
+                is_ref = field_operation_returns_reference(op);
             }
             expr
         }
@@ -714,7 +690,6 @@ fn field_operation_returns_reference(operation: &FieldOperation) -> bool {
         FieldOperation::NamedField { .. } => false, // Field access auto-derefs to get field value
         FieldOperation::UnnamedField { .. } => false, // Tuple field access auto-derefs to get field value
         FieldOperation::Index { .. } => true, // Index operations return references to elements
-        FieldOperation::Combined { .. } => false, // Combined with deref also removes reference level
         FieldOperation::Chained { operations, .. } => {
             // For chained operations, the reference level is determined by the last operation
             operations
