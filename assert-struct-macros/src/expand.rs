@@ -378,7 +378,6 @@ fn generate_pattern_assertion_with_collection(
                 generate_plain_tuple_assertion_with_collection(
                     value_expr,
                     elements,
-                    is_ref,
                     path,
                     &node_ident,
                 )
@@ -881,7 +880,6 @@ fn process_tuple_elements(
 fn generate_plain_tuple_assertion_with_collection(
     value_expr: &TokenStream,
     elements: &[TupleElement],
-    is_ref: bool,
     field_path: &[String],
     _node_ident: &Ident,
 ) -> TokenStream {
@@ -889,27 +887,13 @@ fn generate_plain_tuple_assertion_with_collection(
     let (match_patterns, element_assertions) =
         process_tuple_elements(elements, "__tuple_elem_", true, field_path);
 
-    // Use match expression for consistency with enum tuples
-    // The unreachable _ arm is acceptable for plain tuples
-    if is_ref {
-        quote! {
-            #[allow(unreachable_patterns)]
-            match #value_expr {
-                (#(#match_patterns),*) => {
-                    #(#element_assertions)*
-                },
-                _ => unreachable!("Plain tuple match should always succeed"),
-            }
-        }
-    } else {
-        quote! {
-            #[allow(unreachable_patterns)]
-            match &#value_expr {
-                (#(#match_patterns),*) => {
-                    #(#element_assertions)*
-                },
-                _ => unreachable!("Plain tuple match should always succeed"),
-            }
+    quote! {
+        #[allow(unreachable_patterns)]
+        match #value_expr {
+            (#(#match_patterns),*) => {
+                #(#element_assertions)*
+            },
+            _ => unreachable!("Plain tuple match should always succeed"),
         }
     }
 }
