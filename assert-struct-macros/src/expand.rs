@@ -578,58 +578,29 @@ fn generate_struct_match_assertion_with_collection(
         .collect();
 
     let span = struct_path.span();
-    if is_ref {
-        quote_spanned! {span=>
-            #[allow(unreachable_patterns)]
-            match #value_expr {
-                #struct_path { #(#field_names),* #rest_pattern } => {
-                    #(#field_assertions)*
-                },
-                _ => {
-                    let __line = line!();
-                    let __file = file!();
+    quote_spanned! {span=>
+        #[allow(unreachable_patterns)]
+        match &#value_expr {
+            #struct_path { #(#field_names),* #rest_pattern } => {
+                #(#field_assertions)*
+            },
+            _ => {
+                let __line = line!();
+                let __file = file!();
 
-                    let __error = ::assert_struct::__macro_support::ErrorContext {
-                        field_path: #field_path_str.to_string(),
-                        pattern_str: stringify!(#struct_path).to_string(),
-                        actual_value: format!("{:?}", #value_expr),
-                        line_number: __line,
-                        file_name: __file,
-                        error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                let __error = ::assert_struct::__macro_support::ErrorContext {
+                    field_path: #field_path_str.to_string(),
+                    pattern_str: stringify!(#struct_path).to_string(),
+                    actual_value: format!("{:?}", #value_expr),
+                    line_number: __line,
+                    file_name: __file,
+                    error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
 
-                        expected_value: None,
+                    expected_value: None,
 
-                        error_node: Some(&#node_ident),
-                    };
-                    __errors.push(__error);
-                }
-            }
-        }
-    } else {
-        quote_spanned! {span=>
-            #[allow(unreachable_patterns)]
-            match &#value_expr {
-                #struct_path { #(#field_names),* #rest_pattern } => {
-                    #(#field_assertions)*
-                },
-                _ => {
-                    let __line = line!();
-                    let __file = file!();
-
-                    let __error = ::assert_struct::__macro_support::ErrorContext {
-                        field_path: #field_path_str.to_string(),
-                        pattern_str: stringify!(#struct_path).to_string(),
-                        actual_value: format!("{:?}", &#value_expr),
-                        line_number: __line,
-                        file_name: __file,
-                        error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-
-                        expected_value: None,
-
-                        error_node: Some(&#node_ident),
-                    };
-                    __errors.push(__error);
-                }
+                    error_node: Some(&#node_ident),
+                };
+                __errors.push(__error);
             }
         }
     }
