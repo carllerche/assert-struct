@@ -101,7 +101,11 @@ impl TupleElement {
             // Try to parse as indexed element by attempting FieldOperation parse
             let fork = input.fork();
 
-            if fork.parse::<FieldOperation>().is_ok() {
+            if fork.parse::<Pattern>().is_ok() && !fork.peek(Token![:]) {
+                // Parse as positional pattern
+                let pattern = input.parse()?;
+                elements.push(TupleElement::Positional(pattern));
+            } else {
                 // Parse as indexed element
                 let operations: FieldOperation = input.parse()?;
                 let root_field = operations.root_field_name();
@@ -126,13 +130,15 @@ impl TupleElement {
                         ));
                     }
                     FieldName::Ident(_) => {
-                        unreachable!("Already checked that root is Index")
+                        // Index doesn't match position
+                        return Err(syn::Error::new(
+                            input.span(),
+                            format!(
+                                "Operations like * can only be used with indexed elements (e.g., *0:, *1:)"
+                            ),
+                        ));
                     }
                 }
-            } else {
-                // Parse as positional pattern
-                let pattern = input.parse()?;
-                elements.push(TupleElement::Positional(pattern));
             }
 
             position += 1;
