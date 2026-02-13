@@ -395,24 +395,12 @@ fn generate_pattern_assertion_with_collection(
         }
         Pattern::Slice(slice_pattern) => {
             // Generate slice assertion with error collection
-            generate_slice_assertion_with_collection(
-                value_expr,
-                slice_pattern,
-                is_ref,
-                path,
-                &node_ident,
-            )
+            generate_slice_assertion_with_collection(value_expr, slice_pattern, path, &node_ident)
         }
         #[cfg(feature = "regex")]
         Pattern::Regex(regex_pattern) => {
             // Generate regex assertion with error collection
-            generate_regex_assertion_with_collection(
-                value_expr,
-                regex_pattern,
-                is_ref,
-                path,
-                &node_ident,
-            )
+            generate_regex_assertion_with_collection(value_expr, regex_pattern, path, &node_ident)
         }
         #[cfg(feature = "regex")]
         Pattern::Like(like_pattern) => {
@@ -1183,16 +1171,14 @@ fn generate_simple_assertion_with_collection(
 /// Generate slice assertion with error collection
 fn generate_slice_assertion_with_collection(
     value_expr: &TokenStream,
-    slice_pattern: &PatternSlice,
-    _is_ref: bool,
+    pattern: &PatternSlice,
     field_path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
-    let elements = &slice_pattern.elements;
     let mut pattern_parts = Vec::new();
     let mut bindings_and_assertions = Vec::new();
 
-    for (i, elem) in elements.iter().enumerate() {
+    for (i, elem) in pattern.elements.iter().enumerate() {
         match elem {
             Pattern::Range(PatternRange {
                 expr: syn::Expr::Range(r),
@@ -1226,7 +1212,7 @@ fn generate_slice_assertion_with_collection(
 
     // Convert Vec to slice for matching
     let slice_expr = quote! { (#value_expr).as_slice() };
-    let elements_len = elements.len();
+    let elements_len = pattern.elements.len();
 
     let error_push = generate_error_push(
         proc_macro2::Span::call_site(),
@@ -1255,50 +1241,29 @@ fn generate_slice_assertion_with_collection(
 fn generate_regex_assertion_with_collection(
     value_expr: &TokenStream,
     regex_pattern: &PatternRegex,
-    is_ref: bool,
     path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
     let pattern_str = &regex_pattern.pattern;
     let span = regex_pattern.span;
-    let full_pattern_str = regex_pattern.to_error_context_string();
-
-    let actual_value = if is_ref {
-        quote!(format!("{:?}", #value_expr))
-    } else {
-        quote!(format!("{:?}", &#value_expr))
-    };
 
     let error_push = generate_error_push(
         span,
         path,
-        &full_pattern_str,
-        actual_value,
+        &regex_pattern.to_error_context_string(),
+        quote!(format!("{:?}", #value_expr)),
         quote!(::assert_struct::__macro_support::ErrorType::Regex),
         quote!(None),
         node_ident,
     );
 
-    if is_ref {
-        quote_spanned! {span=>
-            {
-                use ::assert_struct::Like;
-                let re = ::assert_struct::__macro_support::Regex::new(#pattern_str)
-                    .expect(concat!("Invalid regex pattern: ", #pattern_str));
-                if !#value_expr.like(&re) {
-                    #error_push
-                }
-            }
-        }
-    } else {
-        quote_spanned! {span=>
-            {
-                use ::assert_struct::Like;
-                let re = ::assert_struct::__macro_support::Regex::new(#pattern_str)
-                    .expect(concat!("Invalid regex pattern: ", #pattern_str));
-                if !(&#value_expr).like(&re) {
-                    #error_push
-                }
+    quote_spanned! {span=>
+        {
+            use ::assert_struct::Like;
+            let re = ::assert_struct::__macro_support::Regex::new(#pattern_str)
+                .expect(concat!("Invalid regex pattern: ", #pattern_str));
+            if !#value_expr.like(&re) {
+                #error_push
             }
         }
     }
