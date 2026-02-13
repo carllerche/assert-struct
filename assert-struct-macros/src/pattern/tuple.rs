@@ -134,7 +134,7 @@ impl TupleElement {
 
                 // Parse remaining operations (method calls, field access, etc.)
                 while input.peek(Token![.]) || input.peek(syn::token::Bracket) {
-                    ops.push(input.parse()?);
+                    ops.push(FieldOperation::parse_one(input)?);
                 }
 
                 // Convert Vec to single operation or Chained

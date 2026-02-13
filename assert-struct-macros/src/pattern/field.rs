@@ -203,7 +203,7 @@ impl Parse for FieldAssertion {
 
         // Parse additional operations (.field, .method(), [index], .await)
         while input.peek(Token![.]) || input.peek(syn::token::Bracket) {
-            operations.push(input.parse()?);
+            operations.push(FieldOperation::parse_one(input)?);
         }
 
         // Convert Vec to single operation or Chained
@@ -310,10 +310,10 @@ impl FieldOperation {
     }
 }
 
-impl Parse for FieldOperation {
+impl FieldOperation {
     /// Parse a single operation: .await, .field, .method(), or \[index\]
     /// This parses exactly one operation and returns it
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+    pub(crate) fn parse_one(input: syn::parse::ParseStream) -> syn::Result<Self> {
         if input.peek(Token![.]) {
             let dot_span = input.span();
             let _: Token![.] = input.parse()?;
