@@ -62,11 +62,15 @@ impl Parse for FieldName {
             Ok(FieldName::Index(index))
         } else {
             // Try parsing as identifier
-            input.parse::<syn::Ident>().map(FieldName::Ident)
-                .map_err(|_| syn::Error::new(
-                    input.span(),
-                    "expected field name (identifier or numeric index)"
-                ))
+            input
+                .parse::<syn::Ident>()
+                .map(FieldName::Ident)
+                .map_err(|_| {
+                    syn::Error::new(
+                        input.span(),
+                        "expected field name (identifier or numeric index)",
+                    )
+                })
         }
     }
 }
@@ -346,14 +350,18 @@ impl FieldOperation {
                     } else {
                         Some(FieldOperation::Chained {
                             operations: tail_ops,
-                            span: *span
+                            span: *span,
                         })
                     }
                 } else {
                     None
                 }
             }
-            FieldOperation::Combined { deref_count, operation, span } => {
+            FieldOperation::Combined {
+                deref_count,
+                operation,
+                span,
+            } => {
                 match operation.as_ref() {
                     // If the inner operation is just a field access, return only the deref
                     FieldOperation::NamedField { .. } | FieldOperation::UnnamedField { .. } => {
@@ -426,15 +434,23 @@ impl Parse for FieldOperation {
                     // Parse float like "0.0" and split into two UnnamedField operations
                     let float_str = lit_float.to_string();
                     if let Some((first, second)) = float_str.split_once('.') {
-                        if let (Ok(first_idx), Ok(second_idx)) = (first.parse::<usize>(), second.parse::<usize>()) {
+                        if let (Ok(first_idx), Ok(second_idx)) =
+                            (first.parse::<usize>(), second.parse::<usize>())
+                        {
                             // Consume the float from real input
                             let _: syn::LitFloat = input.parse()?;
 
                             // Create two chained UnnamedField operations
                             return Ok(FieldOperation::Chained {
                                 operations: vec![
-                                    FieldOperation::UnnamedField { index: first_idx, span: dot_span },
-                                    FieldOperation::UnnamedField { index: second_idx, span: dot_span },
+                                    FieldOperation::UnnamedField {
+                                        index: first_idx,
+                                        span: dot_span,
+                                    },
+                                    FieldOperation::UnnamedField {
+                                        index: second_idx,
+                                        span: dot_span,
+                                    },
                                 ],
                                 span: dot_span,
                             });

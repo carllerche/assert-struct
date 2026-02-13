@@ -14,4 +14,3 @@ error[E0277]: can't compare `String` with `{integer}`
              `String` implements `PartialEq<PathBuf>`
              `String` implements `PartialEq<str>`
              `String` implements `PartialEq`
-   = note: required for `&String` to implement `PartialEq<&{integer}>`

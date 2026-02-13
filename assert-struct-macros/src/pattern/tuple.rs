@@ -132,7 +132,11 @@ impl TupleElement {
                 }
 
                 // Apply deref operations if present
-                let final_operations = if let Some(FieldOperation::Deref { count, span: deref_span }) = operations {
+                let final_operations = if let Some(FieldOperation::Deref {
+                    count,
+                    span: deref_span,
+                }) = operations
+                {
                     FieldOperation::Combined {
                         deref_count: count,
                         operation: Box::new(index_operation),

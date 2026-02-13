@@ -355,7 +355,6 @@ fn generate_pattern_assertion_with_collection(
         Pattern::Comparison(comparison_pattern) => generate_comparison_assertion_with_collection(
             value_expr,
             comparison_pattern,
-            is_ref,
             path,
             &node_ident,
         ),
@@ -366,27 +365,14 @@ fn generate_pattern_assertion_with_collection(
         }) => {
             // Handle enum tuples with error collection
             if let Some(vpath) = variant_path {
-                if elements.is_empty() {
-                    // Unit variant like None - use collection version for proper error collection
-                    generate_enum_tuple_assertion_with_collection(
-                        value_expr,
-                        vpath,
-                        &[], // Empty elements for unit variant
-                        is_ref,
-                        path,
-                        &node_ident,
-                    )
-                } else {
-                    // Tuple variant with data - use collection version
-                    generate_enum_tuple_assertion_with_collection(
-                        value_expr,
-                        vpath,
-                        elements,
-                        is_ref,
-                        path,
-                        &node_ident,
-                    )
-                }
+                // Tuple variant with data - use collection version
+                generate_enum_tuple_assertion_with_collection(
+                    value_expr,
+                    vpath,
+                    elements,
+                    path,
+                    &node_ident,
+                )
             } else {
                 // Plain tuple - use collection version for proper error collection
                 generate_plain_tuple_assertion_with_collection(
@@ -953,55 +939,28 @@ fn generate_plain_tuple_assertion_with_collection(
 fn generate_comparison_assertion_with_collection(
     value_expr: &TokenStream,
     comparison_pattern: &PatternComparison,
-    is_ref: bool,
     path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
     let op = &comparison_pattern.op;
     let expected = &comparison_pattern.expr;
 
-    // Check if this is an index operation by looking at the path
-    // Exclude slice patterns which start with [
-    let is_index_operation = path
-        .iter()
-        .any(|segment| segment.contains("[") && !segment.starts_with("["));
-
-    // Adjust for reference level
-    let actual_expr = if is_ref {
-        quote! { #value_expr }
-    } else {
-        quote! { &#value_expr }
-    };
+    let is_index_operation = true;
+    let actual_expr = quote! { #value_expr };
 
     let span = expected.span();
     let comparison = if is_index_operation {
         // For index operations, avoid references on both sides
         match op {
-            ComparisonOp::Less => quote_spanned! {span=> #value_expr < #expected },
-            ComparisonOp::LessEqual => quote_spanned! {span=> #value_expr <= #expected },
-            ComparisonOp::Greater => quote_spanned! {span=> #value_expr > #expected },
-            ComparisonOp::GreaterEqual => quote_spanned! {span=> #value_expr >= #expected },
-            ComparisonOp::Equal => quote_spanned! {span=> #value_expr == #expected },
-            ComparisonOp::NotEqual => quote_spanned! {span=> #value_expr != #expected },
-        }
-    } else if is_ref {
-        match op {
-            ComparisonOp::Less => quote_spanned! {span=> #value_expr < &(#expected) },
-            ComparisonOp::LessEqual => quote_spanned! {span=> #value_expr <= &(#expected) },
-            ComparisonOp::Greater => quote_spanned! {span=> #value_expr > &(#expected) },
-            ComparisonOp::GreaterEqual => quote_spanned! {span=> #value_expr >= &(#expected) },
-            ComparisonOp::Equal => quote_spanned! {span=> #value_expr == &(#expected) },
-            ComparisonOp::NotEqual => quote_spanned! {span=> #value_expr != &(#expected) },
+            ComparisonOp::Less => quote_spanned! {span=> (#value_expr).lt(&(#expected)) },
+            ComparisonOp::LessEqual => quote_spanned! {span=> (#value_expr).le(&(#expected)) },
+            ComparisonOp::Greater => quote_spanned! {span=> (#value_expr).gt(&(#expected)) },
+            ComparisonOp::GreaterEqual => quote_spanned! {span=> (#value_expr).ge(&(#expected)) },
+            ComparisonOp::Equal => quote_spanned! {span=> (#value_expr).eq(&(#expected)) },
+            ComparisonOp::NotEqual => quote_spanned! {span=> (#value_expr).ne(&(#expected)) },
         }
     } else {
-        match op {
-            ComparisonOp::Less => quote_spanned! {span=> &#value_expr < &(#expected) },
-            ComparisonOp::LessEqual => quote_spanned! {span=> &#value_expr <= &(#expected) },
-            ComparisonOp::Greater => quote_spanned! {span=> &#value_expr > &(#expected) },
-            ComparisonOp::GreaterEqual => quote_spanned! {span=> &#value_expr >= &(#expected) },
-            ComparisonOp::Equal => quote_spanned! {span=> &#value_expr == &(#expected) },
-            ComparisonOp::NotEqual => quote_spanned! {span=> &#value_expr != &(#expected) },
-        }
+        todo!()
     };
 
     let error_type_path = if matches!(op, ComparisonOp::Equal) {
@@ -1041,7 +1000,6 @@ fn generate_enum_tuple_assertion_with_collection(
     value_expr: &TokenStream,
     variant_path: &syn::Path,
     elements: &[TupleElement],
-    is_ref: bool,
     field_path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
@@ -1050,50 +1008,22 @@ fn generate_enum_tuple_assertion_with_collection(
 
     // Special handling for unit variants (empty elements)
     if elements.is_empty() {
-        // Unit variants don't have parentheses
-        if is_ref {
-            quote_spanned! {span=>
-                match #value_expr {
-                    #variant_path => {},
-                    _ => {
-                        let __line = line!();
-                        let __file = file!();
+        quote_spanned! {span=>
+            if !matches!(#value_expr, #variant_path) {
+                let __line = line!();
+                let __file = file!();
 
-                        let __error = ::assert_struct::__macro_support::ErrorContext {
-                            field_path: #field_path_str.to_string(),
-                            pattern_str: stringify!(#variant_path).to_string(),
-                            actual_value: format!("{:?}", #value_expr),
-                            line_number: __line,
-                            file_name: __file,
-                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-                            expected_value: None,
-                            error_node: Some(&#node_ident),
-                        };
-                        __errors.push(__error);
-                    }
-                }
-            }
-        } else {
-            quote_spanned! {span=>
-                match &#value_expr {
-                    #variant_path => {},
-                    _ => {
-                        let __line = line!();
-                        let __file = file!();
-
-                        let __error = ::assert_struct::__macro_support::ErrorContext {
-                            field_path: #field_path_str.to_string(),
-                            pattern_str: stringify!(#variant_path).to_string(),
-                            actual_value: format!("{:?}", &#value_expr),
-                            line_number: __line,
-                            file_name: __file,
-                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-                            expected_value: None,
-                            error_node: Some(&#node_ident),
-                        };
-                        __errors.push(__error);
-                    }
-                }
+                let __error = ::assert_struct::__macro_support::ErrorContext {
+                    field_path: #field_path_str.to_string(),
+                    pattern_str: stringify!(#variant_path).to_string(),
+                    actual_value: format!("{:?}", #value_expr),
+                    line_number: __line,
+                    file_name: __file,
+                    error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                    expected_value: None,
+                    error_node: Some(&#node_ident),
+                };
+                __errors.push(__error);
             }
         }
     } else {
@@ -1117,52 +1047,26 @@ fn generate_enum_tuple_assertion_with_collection(
             process_tuple_elements(elements, "__elem_", true, field_path)
         };
 
-        if is_ref {
-            quote_spanned! {span=>
-                match #value_expr {
-                    #variant_path(#(#match_patterns),*) => {
-                        #(#element_assertions)*
-                    },
-                    _ => {
-                        let __line = line!();
-                        let __file = file!();
+        quote_spanned! {span=>
+            match &#value_expr {
+                #variant_path(#(#match_patterns),*) => {
+                    #(#element_assertions)*
+                },
+                _ => {
+                    let __line = line!();
+                    let __file = file!();
 
-                        let __error = ::assert_struct::__macro_support::ErrorContext {
-                            field_path: #field_path_str.to_string(),
-                            pattern_str: stringify!(#variant_path).to_string(),
-                            actual_value: format!("{:?}", #value_expr),
-                            line_number: __line,
-                            file_name: __file,
-                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-                            expected_value: None,
-                            error_node: Some(&#node_ident),
-                        };
-                        __errors.push(__error);
-                    }
-                }
-            }
-        } else {
-            quote_spanned! {span=>
-                match &#value_expr {
-                    #variant_path(#(#match_patterns),*) => {
-                        #(#element_assertions)*
-                    },
-                    _ => {
-                        let __line = line!();
-                        let __file = file!();
-
-                        let __error = ::assert_struct::__macro_support::ErrorContext {
-                            field_path: #field_path_str.to_string(),
-                            pattern_str: stringify!(#variant_path).to_string(),
-                            actual_value: format!("{:?}", &#value_expr),
-                            line_number: __line,
-                            file_name: __file,
-                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-                            expected_value: None,
-                            error_node: Some(&#node_ident),
-                        };
-                        __errors.push(__error);
-                    }
+                    let __error = ::assert_struct::__macro_support::ErrorContext {
+                        field_path: #field_path_str.to_string(),
+                        pattern_str: stringify!(#variant_path).to_string(),
+                        actual_value: format!("{:?}", #value_expr),
+                        line_number: __line,
+                        file_name: __file,
+                        error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+                        expected_value: None,
+                        error_node: Some(&#node_ident),
+                    };
+                    __errors.push(__error);
                 }
             }
         }

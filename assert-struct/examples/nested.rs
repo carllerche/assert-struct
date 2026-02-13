@@ -1,10 +1,17 @@
+#![allow(dead_code)]
 use assert_struct::assert_struct;
 
-struct Foo {
-    bar: ((usize, usize), usize),
+#[derive(Debug)]
+struct TestStruct {
+    boxed_option: Box<Option<String>>,
 }
 
-fn main() {
-    let actual = Foo { bar: ((0, 0), 0) };
-    assert_struct!(actual, _ { bar.0.0: 0, .. });
+pub fn main() {
+    let test = TestStruct {
+        boxed_option: Box::new(Some("hello".to_string())),
+    };
+
+    assert_struct!(test, TestStruct {
+        *boxed_option: Some("goodbye"),  // Should be "hello", will fail
+    });
 }
