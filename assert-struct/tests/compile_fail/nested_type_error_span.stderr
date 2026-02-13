@@ -1,16 +1,32 @@
-error[E0277]: can't compare `String` with `{integer}`
+error[E0277]: can't compare `str` with `{integer}`
   --> tests/compile_fail/nested_type_error_span.rs:81:30
    |
 81 |                     *rhs: == 123,  // Type error: can't compare String with integer
-   |                              ^^^ no implementation for `String == {integer}`
+   |                              ^^^ no implementation for `str == {integer}`
    |
-   = help: the trait `PartialEq<{integer}>` is not implemented for `String`
+   = help: the trait `PartialEq<{integer}>` is not implemented for `str`
    = help: the following other types implement trait `PartialEq<Rhs>`:
-             `String` implements `PartialEq<&str>`
-             `String` implements `PartialEq<ByteStr>`
-             `String` implements `PartialEq<ByteString>`
-             `String` implements `PartialEq<Cow<'_, str>>`
-             `String` implements `PartialEq<Path>`
-             `String` implements `PartialEq<PathBuf>`
-             `String` implements `PartialEq<str>`
-             `String` implements `PartialEq`
+             `&str` implements `PartialEq<ByteStr>`
+             `&str` implements `PartialEq<ByteString>`
+             `&str` implements `PartialEq<Cow<'_, str>>`
+             `&str` implements `PartialEq<OsString>`
+             `&str` implements `PartialEq<String>`
+             `str` implements `PartialEq<ByteStr>`
+             `str` implements `PartialEq<ByteString>`
+             `str` implements `PartialEq<Cow<'_, str>>`
+           and $N others
+
+error[E0277]: the size for values of type `str` cannot be known at compilation time
+  --> tests/compile_fail/nested_type_error_span.rs:72:5
+   |
+72 | /     assert_struct!(query_sql, _ {
+73 | |         stmt: Statement::Query(_ {
+74 | |             body: ExprSet::Select(_ {
+75 | |                 source: Source::Table([
+...  |
+89 | |         ..
+90 | |     });
+   | |______^ doesn't have a size known at compile-time
+   |
+   = help: the trait `Sized` is not implemented for `str`
+   = note: this error originates in the macro `$crate::__export::format_args` which comes from the expansion of the macro `assert_struct` (in Nightly builds, run with -Z macro-backtrace for more info)

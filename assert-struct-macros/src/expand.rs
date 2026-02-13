@@ -461,7 +461,7 @@ fn generate_wildcard_struct_assertion_with_collection(
 
             let (expr, is_ref_after) = if let Some(tail_ops) = field_operations.tail_operations() {
                 // Apply remaining operations after the field access
-                let expr = apply_field_operations(&base_field_access, &tail_ops, false);
+                let expr = apply_field_operations(&base_field_access, &tail_ops);
                 let is_ref = field_operation_returns_reference(&tail_ops);
                 (expr, is_ref)
             } else {
@@ -546,7 +546,7 @@ fn generate_struct_match_assertion_with_collection(
             let expr = if let Some(tail_ops) = field_operations.tail_operations() {
                 // Apply remaining operations after the field access
                 // We're in a reference context for struct destructuring (match &value)
-                apply_field_operations(&quote! { #field_name }, &tail_ops, true)
+                apply_field_operations(&quote! { #field_name }, &tail_ops)
             } else {
                 // No additional operations, just use the bound field name
                 quote! { #field_name }
@@ -633,16 +633,12 @@ fn generate_field_operation_path(base_field: String, operation: &FieldOperation)
 /// - `base_expr`: The base expression to apply operations to
 /// - `operation`: The field operation to apply
 /// - `in_ref_context`: Whether we're in a reference context (from destructuring `&value`)
-fn apply_field_operations(
-    base_expr: &TokenStream,
-    operation: &FieldOperation,
-    in_ref_context: bool,
-) -> TokenStream {
+fn apply_field_operations(base_expr: &TokenStream, operation: &FieldOperation) -> TokenStream {
     match operation {
         FieldOperation::Deref { count, span } => {
             let mut expr = base_expr.clone();
             // In reference context, we need one extra dereference
-            let total_count = if in_ref_context { count + 1 } else { *count };
+            let total_count = count + 1;
             for _ in 0..total_count {
                 expr = quote_spanned! { *span=> *#expr };
             }
@@ -670,11 +666,8 @@ fn apply_field_operations(
         }
         FieldOperation::Chained { operations, .. } => {
             let mut expr = base_expr.clone();
-            let mut is_ref = in_ref_context;
             for op in operations {
-                expr = apply_field_operations(&expr, op, is_ref);
-                // After first operation, reference context depends on whether operation returns a reference
-                is_ref = field_operation_returns_reference(op);
+                expr = apply_field_operations(&expr, op);
             }
             expr
         }
@@ -779,18 +772,17 @@ fn process_tuple_elements(
 
                         // Generate the value expression with operations applied
                         // The element is already bound by the match pattern, so we only apply tail operations
-                        let (value_expr, is_ref_after_operations) = if let Some(tail_ops) =
-                            operations.tail_operations()
-                        {
-                            // Apply remaining operations after the element access
-                            // Tuple elements are in reference context when destructured
-                            let expr = apply_field_operations(&quote! { #name }, &tail_ops, true);
-                            let is_ref = field_operation_returns_reference(&tail_ops);
-                            (expr, is_ref)
-                        } else {
-                            // No additional operations, just use the bound element name
-                            (quote! { #name }, is_ref)
-                        };
+                        let (value_expr, is_ref_after_operations) =
+                            if let Some(tail_ops) = operations.tail_operations() {
+                                // Apply remaining operations after the element access
+                                // Tuple elements are in reference context when destructured
+                                let expr = apply_field_operations(&quote! { #name }, &tail_ops);
+                                let is_ref = field_operation_returns_reference(&tail_ops);
+                                (expr, is_ref)
+                            } else {
+                                // No additional operations, just use the bound element name
+                                (quote! { #name }, is_ref)
+                            };
 
                         // Generate assertion with error collection
                         let assertion = generate_pattern_assertion_with_collection(
