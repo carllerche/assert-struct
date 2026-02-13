@@ -190,7 +190,10 @@ impl Parse for FieldAssertion {
             deref_count += 1;
         }
         if deref_count > 0 {
-            operations.push(FieldOperation::Deref { count: deref_count, span });
+            operations.push(FieldOperation::Deref {
+                count: deref_count,
+                span,
+            });
         }
 
         // Parse field name (required)
@@ -284,7 +287,12 @@ impl FieldOperation {
                 // Find the index of the first non-Deref field access
                 let field_access_idx = operations
                     .iter()
-                    .position(|op| matches!(op, FieldOperation::NamedField { .. } | FieldOperation::UnnamedField { .. }))
+                    .position(|op| {
+                        matches!(
+                            op,
+                            FieldOperation::NamedField { .. } | FieldOperation::UnnamedField { .. }
+                        )
+                    })
                     .expect("Chained operation must have at least one field access");
 
                 // Collect all operations except the field access itself
@@ -320,45 +328,47 @@ impl FieldOperation {
             let await_span = input.span();
             let _: Token![await] = input.parse()?;
             Ok(FieldOperation::Await { span: await_span })
+        } else if input.peek(syn::LitInt) {
+            // It's a tuple index like .0 or .1
+            let lit_int: syn::LitInt = input.parse()?;
+            let index: usize = lit_int.base10_parse()?;
+            return Ok(FieldOperation::UnnamedField {
+                index,
+                span: dot_span,
+            });
+        } else if input.peek(syn::LitFloat) {
+            let lit_float: syn::LitFloat = input.parse()?;
+            // Parse float like "0.0" and split into two UnnamedField operations
+            let float_str = lit_float.to_string();
+            let Some((first, second)) = float_str.split_once('.') else {
+                return Err(syn::Error::new(
+                    dot_span,
+                    "Invalid float literal in field access",
+                ));
+            };
+
+            let first_idx = first
+                .parse::<usize>()
+                .map_err(|_| syn::Error::new(dot_span, "Invalid numeric index in field access"))?;
+            let second_idx = second
+                .parse::<usize>()
+                .map_err(|_| syn::Error::new(dot_span, "Invalid numeric index in field access"))?;
+
+            // Create two chained UnnamedField operations
+            return Ok(FieldOperation::Chained {
+                operations: vec![
+                    FieldOperation::UnnamedField {
+                        index: first_idx,
+                        span: dot_span,
+                    },
+                    FieldOperation::UnnamedField {
+                        index: second_idx,
+                        span: dot_span,
+                    },
+                ],
+                span: dot_span,
+            });
         } else {
-            // Try to parse as integer first (for tuple indices)
-            if input.peek(syn::LitInt) {
-                // It's a tuple index like .0 or .1
-                let lit_int: syn::LitInt = input.parse()?;
-                let index: usize = lit_int.base10_parse()?;
-                return Ok(FieldOperation::UnnamedField {
-                    index,
-                    span: dot_span,
-                });
-            }
-
-            // Try to parse as float (handles .0.0 tokenized as 0.0)
-            if input.peek(syn::LitFloat) {
-                let lit_float: syn::LitFloat = input.parse()?;
-                // Parse float like "0.0" and split into two UnnamedField operations
-                let float_str = lit_float.to_string();
-                if let Some((first, second)) = float_str.split_once('.') {
-                    if let (Ok(first_idx), Ok(second_idx)) =
-                        (first.parse::<usize>(), second.parse::<usize>())
-                    {
-                        // Create two chained UnnamedField operations
-                        return Ok(FieldOperation::Chained {
-                            operations: vec![
-                                FieldOperation::UnnamedField {
-                                    index: first_idx,
-                                    span: dot_span,
-                                },
-                                FieldOperation::UnnamedField {
-                                    index: second_idx,
-                                    span: dot_span,
-                                },
-                            ],
-                            span: dot_span,
-                        });
-                    }
-                }
-            }
-
             // Parse as identifier for named field
             let ident: syn::Ident = input.parse()?;
 
