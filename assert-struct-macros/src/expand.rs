@@ -914,14 +914,15 @@ fn generate_enum_tuple_assertion_with_collection(
 
         // Build path with variant name for single-element tuples
         let mut base_path = field_path.to_vec();
+        base_path.push(variant_name);
         let use_variant_name = elements.len() == 1;
 
         // Use helper to process elements with appropriate path
         let (match_patterns, element_assertions) = if use_variant_name {
-            base_path.push(variant_name);
+            // base_path.push(variant_name);
             process_tuple_elements(elements, "__elem_", true, &base_path)
         } else {
-            process_tuple_elements(elements, "__elem_", true, field_path)
+            process_tuple_elements(elements, "__elem_", true, &base_path)
         };
 
         quote_spanned! {span=>
