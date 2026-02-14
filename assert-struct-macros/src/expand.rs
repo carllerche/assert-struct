@@ -376,23 +376,23 @@ fn generate_pattern_assertion_with_collection(
             path,
             &node_ident,
         ),
-        Pattern::Enum(PatternEnum {
-            path: variant_path,
-            elements,
-            ..
-        }) => {
+        Pattern::Enum(enum_pattern) => {
             // Enum tuple variant - use collection version
             generate_enum_tuple_assertion_with_collection(
                 value_expr,
-                variant_path,
-                elements,
+                enum_pattern,
                 path,
                 &node_ident,
             )
         }
-        Pattern::Tuple(PatternTuple { elements, .. }) => {
+        Pattern::Tuple(tuple_pattern) => {
             // Plain tuple - use collection version for proper error collection
-            generate_plain_tuple_assertion_with_collection(value_expr, elements, path, &node_ident)
+            generate_plain_tuple_assertion_with_collection(
+                value_expr,
+                tuple_pattern,
+                path,
+                &node_ident,
+            )
         }
         Pattern::Wildcard(PatternWildcard { .. }) => {
             // Wildcard patterns generate no assertions - they just verify the field exists
@@ -805,10 +805,11 @@ fn process_tuple_elements(
 /// Uses match expressions for consistency with enum tuple handling.
 fn generate_plain_tuple_assertion_with_collection(
     value_expr: &TokenStream,
-    elements: &[TupleElement],
+    pattern: &PatternTuple,
     field_path: &[String],
     _node_ident: &Ident,
 ) -> TokenStream {
+    let elements = &pattern.elements;
     // Use helper to process elements with collection strategy
     let (match_patterns, element_assertions) =
         process_tuple_elements(elements, "__tuple_elem_", true, field_path);
@@ -887,11 +888,12 @@ fn generate_comparison_assertion_with_collection(
 /// Generate assertion for enum tuple variants with error collection
 fn generate_enum_tuple_assertion_with_collection(
     value_expr: &TokenStream,
-    variant_path: &syn::Path,
-    elements: &[TupleElement],
+    pattern: &PatternEnum,
     field_path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
+    let variant_path = &pattern.path;
+    let elements = &pattern.elements;
     let field_path_str = field_path.join(".");
     let span = variant_path.span();
 
