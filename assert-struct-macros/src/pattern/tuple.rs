@@ -1,6 +1,6 @@
 //! Tuple pattern types and utilities.
 //!
-//! Handles tuple patterns including enum variants: Some(42), Event::Click(>= 0, < 100)
+//! Handles raw tuple patterns: (10, 20), (> 10, < 30)
 
 use std::fmt;
 use syn::{
@@ -10,41 +10,15 @@ use syn::{
 
 use crate::parse::next_node_id;
 use crate::pattern::field::FieldName;
-use crate::pattern::{FieldAssertion, FieldOperation, Pattern, path_to_string};
+use crate::pattern::{FieldAssertion, FieldOperation, Pattern};
 
-/// Tuple pattern: (10, 20) or Some(42) or None
+/// Tuple pattern: (10, 20) or (> 10, < 30)
 /// Supports mixed positional and indexed elements
+/// Note: Enum tuple variants like Some(42) are handled by PatternEnum
 #[derive(Debug, Clone)]
 pub(crate) struct PatternTuple {
     pub node_id: usize,
-    pub path: Option<syn::Path>,
     pub elements: Vec<TupleElement>,
-}
-
-impl PatternTuple {
-    /// Parses a tuple pattern with a required path prefix.
-    ///
-    /// # Example Input
-    /// ```text
-    /// Some(> 30)
-    /// Event::Click(>= 0, < 100)
-    /// Ok(== 42)
-    /// ```
-    ///
-    /// This assumes the input starts with a path followed by parenthesized content.
-    pub(crate) fn parse_with_path_prefix(input: ParseStream) -> syn::Result<Self> {
-        let path: syn::Path = input.parse()?;
-        let content;
-        syn::parenthesized!(content in input);
-
-        let elements = TupleElement::parse_comma_separated(&content)?;
-
-        Ok(PatternTuple {
-            node_id: next_node_id(),
-            path: Some(path),
-            elements,
-        })
-    }
 }
 
 impl Parse for PatternTuple {
@@ -58,7 +32,7 @@ impl Parse for PatternTuple {
     /// ```
     ///
     /// This parses parenthesized tuple elements. For enum/tuple variants
-    /// with a path prefix (e.g., `Some(> 30)`), use `parse_with_path_prefix` instead.
+    /// with a path prefix (e.g., `Some(> 30)`), use PatternEnum instead.
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let content;
         syn::parenthesized!(content in input);
@@ -67,7 +41,6 @@ impl Parse for PatternTuple {
 
         Ok(PatternTuple {
             node_id: next_node_id(),
-            path: None,
             elements,
         })
     }
@@ -152,9 +125,6 @@ impl TupleElement {
 
 impl fmt::Display for PatternTuple {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(path) = &self.path {
-            write!(f, "{}", path_to_string(path))?;
-        }
         write!(f, "(")?;
         for (i, elem) in self.elements.iter().enumerate() {
             if i > 0 {

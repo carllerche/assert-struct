@@ -1,8 +1,8 @@
 use crate::AssertStruct;
 use crate::pattern::{
     ComparisonOp, FieldAssertion, FieldOperation, Pattern, PatternClosure, PatternComparison,
-    PatternMap, PatternRange, PatternSimple, PatternSlice, PatternString, PatternStruct,
-    PatternTuple, PatternWildcard, TupleElement,
+    PatternEnum, PatternMap, PatternRange, PatternSimple, PatternSlice, PatternString,
+    PatternStruct, PatternTuple, PatternWildcard, TupleElement,
 };
 #[cfg(feature = "regex")]
 use crate::pattern::{PatternLike, PatternRegex};
@@ -71,6 +71,7 @@ fn get_pattern_node_ident(pattern: &Pattern) -> Ident {
         Pattern::Simple(PatternSimple { node_id, .. })
         | Pattern::String(PatternString { node_id, .. })
         | Pattern::Struct(PatternStruct { node_id, .. })
+        | Pattern::Enum(PatternEnum { node_id, .. })
         | Pattern::Tuple(PatternTuple { node_id, .. })
         | Pattern::Slice(PatternSlice { node_id, .. })
         | Pattern::Comparison(PatternComparison { node_id, .. })
@@ -97,8 +98,9 @@ fn get_pattern_span(pattern: &Pattern) -> Option<Span> {
         #[cfg(feature = "regex")]
         Pattern::Like(PatternLike { expr, .. }) => Some(expr.span()),
         Pattern::Struct(PatternStruct { path, .. }) => path.as_ref().map(|p| p.span()),
-        Pattern::Tuple(PatternTuple { path, .. }) => path.as_ref().map(|p| p.span()),
-        Pattern::Slice(PatternSlice { .. })
+        Pattern::Enum(PatternEnum { path, .. }) => Some(path.span()),
+        Pattern::Tuple(PatternTuple { .. })
+        | Pattern::Slice(PatternSlice { .. })
         | Pattern::Wildcard(PatternWildcard { .. })
         | Pattern::Map(PatternMap { .. }) => None,
         Pattern::Closure(PatternClosure { closure, .. }) => Some(closure.span()),
@@ -115,6 +117,7 @@ fn generate_pattern_nodes(
         Pattern::Simple(PatternSimple { node_id, .. })
         | Pattern::String(PatternString { node_id, .. })
         | Pattern::Struct(PatternStruct { node_id, .. })
+        | Pattern::Enum(PatternEnum { node_id, .. })
         | Pattern::Tuple(PatternTuple { node_id, .. })
         | Pattern::Slice(PatternSlice { node_id, .. })
         | Pattern::Comparison(PatternComparison { node_id, .. })
@@ -210,7 +213,7 @@ fn generate_pattern_nodes(
                 }
             }
         }
-        Pattern::Tuple(PatternTuple { path, elements, .. }) => {
+        Pattern::Enum(PatternEnum { path, elements, .. }) => {
             let child_refs: Vec<TokenStream> = elements
                 .iter()
                 .map(|elem| {
@@ -222,19 +225,35 @@ fn generate_pattern_nodes(
                 })
                 .collect();
 
-            if let Some(enum_path) = path {
-                let path_str = quote!(#enum_path).to_string().replace(" :: ", "::");
-                quote! {
-                    ::assert_struct::__macro_support::PatternNode::EnumVariant {
-                        path: #path_str,
-                        args: Some(&[#(&#child_refs),*]),
-                    }
-                }
+            let path_str = quote!(#path).to_string().replace(" :: ", "::");
+            let args = if elements.is_empty() {
+                quote!(None)
             } else {
-                quote! {
-                    ::assert_struct::__macro_support::PatternNode::Tuple {
-                        items: &[#(&#child_refs),*],
-                    }
+                quote!(Some(&[#(&#child_refs),*]))
+            };
+
+            quote! {
+                ::assert_struct::__macro_support::PatternNode::EnumVariant {
+                    path: #path_str,
+                    args: #args,
+                }
+            }
+        }
+        Pattern::Tuple(PatternTuple { elements, .. }) => {
+            let child_refs: Vec<TokenStream> = elements
+                .iter()
+                .map(|elem| {
+                    let pattern = match elem {
+                        TupleElement::Positional(pattern) => pattern,
+                        TupleElement::Indexed(boxed_elem) => &boxed_elem.pattern,
+                    };
+                    generate_pattern_nodes(pattern, node_defs)
+                })
+                .collect();
+
+            quote! {
+                ::assert_struct::__macro_support::PatternNode::Tuple {
+                    items: &[#(&#child_refs),*],
                 }
             }
         }
@@ -357,30 +376,23 @@ fn generate_pattern_assertion_with_collection(
             path,
             &node_ident,
         ),
-        Pattern::Tuple(PatternTuple {
+        Pattern::Enum(PatternEnum {
             path: variant_path,
             elements,
             ..
         }) => {
-            // Handle enum tuples with error collection
-            if let Some(vpath) = variant_path {
-                // Tuple variant with data - use collection version
-                generate_enum_tuple_assertion_with_collection(
-                    value_expr,
-                    vpath,
-                    elements,
-                    path,
-                    &node_ident,
-                )
-            } else {
-                // Plain tuple - use collection version for proper error collection
-                generate_plain_tuple_assertion_with_collection(
-                    value_expr,
-                    elements,
-                    path,
-                    &node_ident,
-                )
-            }
+            // Enum tuple variant - use collection version
+            generate_enum_tuple_assertion_with_collection(
+                value_expr,
+                variant_path,
+                elements,
+                path,
+                &node_ident,
+            )
+        }
+        Pattern::Tuple(PatternTuple { elements, .. }) => {
+            // Plain tuple - use collection version for proper error collection
+            generate_plain_tuple_assertion_with_collection(value_expr, elements, path, &node_ident)
         }
         Pattern::Wildcard(PatternWildcard { .. }) => {
             // Wildcard patterns generate no assertions - they just verify the field exists

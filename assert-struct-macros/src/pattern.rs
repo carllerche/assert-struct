@@ -5,6 +5,7 @@
 
 mod closure;
 mod comparison;
+mod enum_pattern;
 mod field;
 mod map;
 mod range;
@@ -21,6 +22,7 @@ mod regex;
 // Re-export all pattern types
 pub(crate) use closure::PatternClosure;
 pub(crate) use comparison::{ComparisonOp, PatternComparison};
+pub(crate) use enum_pattern::PatternEnum;
 pub(crate) use field::{FieldAssertion, FieldOperation};
 pub(crate) use map::PatternMap;
 pub(crate) use range::PatternRange;
@@ -47,6 +49,7 @@ pub(crate) enum Pattern {
     Simple(PatternSimple),
     String(PatternString),
     Struct(PatternStruct),
+    Enum(PatternEnum),
     Tuple(PatternTuple),
     Slice(PatternSlice),
     Comparison(PatternComparison),
@@ -136,19 +139,9 @@ impl Parse for Pattern {
                 return Ok(Pattern::Struct(input.parse()?));
             }
 
-            // Path followed by parens is an enum/tuple variant with patterns
-            // Example: `Some(> 30)`, `Event::Click(>= 0, < 100)`
-            if fork.peek(syn::token::Paren) {
-                return Ok(Pattern::Tuple(PatternTuple::parse_with_path_prefix(input)?));
-            }
-
-            // TODO: remove this once Pattern::Simple expansion is fixed to remove hax
-            let path: syn::Path = input.parse()?;
-            return Ok(Pattern::Tuple(PatternTuple {
-                node_id: crate::parse::next_node_id(),
-                path: Some(path),
-                elements: vec![],
-            }));
+            // Path followed by parens OR standalone path is an enum variant
+            // Example: `Some(> 30)`, `Event::Click(>= 0, < 100)`, `Status::Active`
+            return Ok(Pattern::Enum(input.parse()?));
         }
 
         // Everything else is either a range, string literal, or simple expression
@@ -201,6 +194,7 @@ impl fmt::Display for Pattern {
             Pattern::Simple(p) => write!(f, "{}", p),
             Pattern::String(p) => write!(f, "{}", p),
             Pattern::Struct(p) => write!(f, "{}", p),
+            Pattern::Enum(p) => write!(f, "{}", p),
             Pattern::Tuple(p) => write!(f, "{}", p),
             Pattern::Slice(p) => write!(f, "{}", p),
             Pattern::Comparison(p) => write!(f, "{} {}", p.op, expr_to_string(&p.expr)),
