@@ -133,9 +133,7 @@ impl TupleElement {
                         // Index doesn't match position
                         return Err(syn::Error::new(
                             input.span(),
-                            format!(
-                                "Operations like * can only be used with indexed elements (e.g., *0:, *1:)"
-                            ),
+                            "Operations like * can only be used with indexed elements (e.g., *0:, *1:)",
                         ));
                     }
                 }

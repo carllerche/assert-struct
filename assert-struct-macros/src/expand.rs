@@ -529,35 +529,12 @@ fn generate_struct_match_assertion_with_collection(
         .iter()
         .map(|f| {
             let field_name = f.operations.root_field_name();
-            let field_pattern = &f.pattern;
-            let field_operations = &f.operations;
 
-            // Build path for this field - include operations in path for better error messages
-            let mut new_path = field_path.to_vec();
-            let field_path_str = if let Some(tail_ops) = field_operations.tail_operations() {
-                generate_field_operation_path(field_name.to_string(), &tail_ops)
-            } else {
-                field_name.to_string()
-            };
-            new_path.push(field_path_str);
-
-            // Generate the value expression with operations applied
-            // The field is already bound by the match pattern, so we only apply tail operations
-            let expr = if let Some(tail_ops) = field_operations.tail_operations() {
-                // Apply remaining operations after the field access
-                // We're in a reference context for struct destructuring (match &value)
-                apply_field_operations(&quote! { #field_name }, &tail_ops)
-            } else {
-                // No additional operations, just use the bound field name
-                quote! { #field_name }
-            };
-
-            // Generate assertion with appropriate reference handling
-            let assertion =
-                generate_pattern_assertion_with_collection(&expr, field_pattern, true, &new_path);
+            // Expand the FieldAssertion starting from the bound field name
+            let assertion = expand_field_assertion(&quote! { #field_name }, f, field_path);
 
             // Wrap the assertion with the span of the field pattern if available
-            if let Some(span) = get_pattern_span(field_pattern) {
+            if let Some(span) = get_pattern_span(&f.pattern) {
                 quote_spanned! {span=> #assertion }
             } else {
                 assertion
@@ -624,6 +601,45 @@ fn generate_field_operation_path(base_field: String, operation: &FieldOperation)
             result
         }
     }
+}
+
+/// Expand a FieldAssertion starting from a bound field name
+///
+/// This assumes the base field (root field name from the FieldOperation) is already bound
+/// to `base`. It applies any tail operations and generates the pattern assertion.
+///
+/// # Parameters
+/// - `base`: Expression for the bound field (e.g., `field_name` or `__tuple_elem_0`)
+/// - `field_assertion`: The FieldAssertion to expand
+/// - `is_ref_context`: Whether we're in a reference context (from destructuring)
+/// - `base_field_path`: The field path up to the base field
+fn expand_field_assertion(
+    base: &TokenStream,
+    field_assertion: &FieldAssertion,
+    base_field_path: &[String],
+) -> TokenStream {
+    let field_operations = &field_assertion.operations;
+    let field_pattern = &field_assertion.pattern;
+
+    // Build the field path for error messages
+    let mut new_path = base_field_path.to_vec();
+    let root_field_name = field_operations.root_field_name();
+    let field_path_str = if let Some(tail_ops) = field_operations.tail_operations() {
+        generate_field_operation_path(root_field_name.to_string(), &tail_ops)
+    } else {
+        root_field_name.to_string()
+    };
+    new_path.push(field_path_str);
+
+    // Apply tail operations and determine final reference context
+    let expr = if let Some(tail_ops) = field_operations.tail_operations() {
+        apply_field_operations(base, &tail_ops)
+    } else {
+        base.clone()
+    };
+
+    // Generate the pattern assertion
+    generate_pattern_assertion_with_collection(&expr, field_pattern, true, &new_path)
 }
 
 /// Apply field operations to a value expression
@@ -749,7 +765,6 @@ fn process_tuple_elements(
             }
             TupleElement::Indexed(boxed_elem) => {
                 let pattern = &boxed_elem.pattern;
-                let operations = &boxed_elem.operations;
 
                 match pattern {
                     Pattern::Wildcard(PatternWildcard { .. }) => {
@@ -761,36 +776,9 @@ fn process_tuple_elements(
                         let name = quote::format_ident!("{}{}", prefix, i);
                         match_patterns.push(quote! { #name });
 
-                        // Build path for error messages - include operations
-                        let mut elem_path = field_path.to_vec();
-                        let elem_path_str = if let Some(tail_ops) = operations.tail_operations() {
-                            generate_field_operation_path(i.to_string(), &tail_ops)
-                        } else {
-                            i.to_string()
-                        };
-                        elem_path.push(elem_path_str);
-
-                        // Generate the value expression with operations applied
-                        // The element is already bound by the match pattern, so we only apply tail operations
-                        let (value_expr, is_ref_after_operations) =
-                            if let Some(tail_ops) = operations.tail_operations() {
-                                // Apply remaining operations after the element access
-                                // Tuple elements are in reference context when destructured
-                                let expr = apply_field_operations(&quote! { #name }, &tail_ops);
-                                let is_ref = field_operation_returns_reference(&tail_ops);
-                                (expr, is_ref)
-                            } else {
-                                // No additional operations, just use the bound element name
-                                (quote! { #name }, is_ref)
-                            };
-
-                        // Generate assertion with error collection
-                        let assertion = generate_pattern_assertion_with_collection(
-                            &value_expr,
-                            pattern,
-                            is_ref_after_operations,
-                            &elem_path,
-                        );
+                        // Expand the indexed FieldAssertion starting from the bound element name
+                        let assertion =
+                            expand_field_assertion(&quote! { #name }, boxed_elem, field_path);
                         assertions.push(assertion);
                     }
                 }
