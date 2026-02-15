@@ -187,23 +187,16 @@ fn generate_wildcard_struct_assertion_with_collection(
             // Access the field and apply tail operations
             let base_field_access = quote! { (#value_expr).#field_name };
 
-            let (expr, is_ref_after) = if let Some(tail_ops) = field_operations.tail_operations() {
+            let expr = if let Some(tail_ops) = field_operations.tail_operations() {
                 // Apply remaining operations after the field access
-                let expr = apply_field_operations(&base_field_access, &tail_ops);
-                let is_ref = field_operation_returns_reference(&tail_ops);
-                (expr, is_ref)
+                apply_field_operations(&base_field_access, &tail_ops)
             } else {
                 // No additional operations, take a reference to the field for comparison
-                (quote! { &#base_field_access }, true)
+                quote! { &#base_field_access }
             };
 
             // Recursively expand the pattern for this field
-            generate_pattern_assertion_with_collection(
-                &expr,
-                field_pattern,
-                is_ref_after,
-                &new_path,
-            )
+            generate_pattern_assertion_with_collection(&expr, field_pattern, true, &new_path)
         })
         .collect();
 
