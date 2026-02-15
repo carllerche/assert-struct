@@ -137,13 +137,7 @@ fn generate_pattern_assertion_with_collection(
         #[cfg(feature = "regex")]
         Pattern::Like(like_pattern) => {
             // Generate Like trait assertion with error collection
-            generate_like_assertion_with_collection(
-                value_expr,
-                like_pattern,
-                is_ref,
-                path,
-                &node_ident,
-            )
+            generate_like_assertion_with_collection(value_expr, like_pattern, path, &node_ident)
         }
         Pattern::Closure(closure_pattern) => {
             // Generate closure assertion with error collection
@@ -908,7 +902,6 @@ fn generate_regex_assertion_with_collection(
 fn generate_like_assertion_with_collection(
     value_expr: &TokenStream,
     like_pattern: &PatternLike,
-    is_ref: bool,
     path: &[String],
     node_ident: &Ident,
 ) -> TokenStream {
@@ -916,12 +909,7 @@ fn generate_like_assertion_with_collection(
     let pattern_str = like_pattern.to_error_context_string();
 
     let span = pattern_expr.span();
-
-    let actual_value = if is_ref {
-        quote!(format!("{:?}", #value_expr))
-    } else {
-        quote!(format!("{:?}", &#value_expr))
-    };
+    let actual_value = quote!(format!("{:?}", #value_expr));
 
     let error_push = generate_error_push(
         span,
@@ -932,22 +920,12 @@ fn generate_like_assertion_with_collection(
         quote!(None),
         node_ident,
     );
-    if is_ref {
-        quote_spanned! {span=>
-            {
-                use ::assert_struct::Like;
-                if !#value_expr.like(&#pattern_expr) {
-                    #error_push
-                }
-            }
-        }
-    } else {
-        quote_spanned! {span=>
-            {
-                use ::assert_struct::Like;
-                if !(&#value_expr).like(&#pattern_expr) {
-                    #error_push
-                }
+
+    quote_spanned! {span=>
+        {
+            use ::assert_struct::Like;
+            if !#value_expr.like(&#pattern_expr) {
+                #error_push
             }
         }
     }
