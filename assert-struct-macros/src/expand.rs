@@ -13,7 +13,7 @@ use quote::{quote, quote_spanned};
 use std::collections::HashSet;
 use syn::{Token, punctuated::Punctuated, spanned::Spanned};
 
-use nodes::{generate_pattern_nodes, get_pattern_node_ident, get_pattern_span};
+use nodes::{expand_pattern_node_ident, generate_pattern_nodes, get_pattern_span};
 
 pub fn expand(assert: &AssertStruct) -> TokenStream {
     let value = &assert.value;
@@ -37,8 +37,7 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
     // Generate the assertion for the root pattern
     // Start with root path containing the variable name
     let root_path = vec![quote! { #value }.to_string()];
-    let assertion =
-        generate_pattern_assertion_with_collection(&quote! { #value }, pattern, false, &root_path);
+    let assertion = expand_pattern_assertion(&quote! { #value }, pattern, false, &root_path);
 
     // Wrap in a block to avoid variable name conflicts
     quote! {
@@ -70,141 +69,72 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
 }
 
 /// Generate assertion code with error collection instead of immediate panic.
-fn generate_pattern_assertion_with_collection(
+fn expand_pattern_assertion(
     value_expr: &TokenStream,
     pattern: &Pattern,
     is_ref: bool,
     path: &[String],
 ) -> TokenStream {
     // Get the node identifier for this pattern
-    let node_ident = get_pattern_node_ident(pattern);
+    let node_ident = expand_pattern_node_ident(pattern);
 
     match pattern {
         Pattern::Simple(simple_pattern) => {
-            generate_simple_assertion_with_collection(value_expr, simple_pattern, &node_ident)
+            expand_simple_assertion(value_expr, simple_pattern, &node_ident)
         }
         Pattern::String(string_pattern) => {
-            generate_string_assertion_with_collection(value_expr, string_pattern, &node_ident)
+            expand_string_assertion(value_expr, string_pattern, &node_ident)
         }
-        Pattern::Struct(struct_pattern) => generate_struct_match_assertion_with_collection(
-            value_expr,
-            struct_pattern,
-            path,
-            &node_ident,
-        ),
-        Pattern::Comparison(comparison_pattern) => generate_comparison_assertion_with_collection(
-            value_expr,
-            comparison_pattern,
-            &node_ident,
-        ),
+        Pattern::Struct(struct_pattern) => {
+            expand_struct_assertion(value_expr, struct_pattern, path, &node_ident)
+        }
+        Pattern::Comparison(comparison_pattern) => {
+            expand_comparison_assertion(value_expr, comparison_pattern, &node_ident)
+        }
         Pattern::Enum(enum_pattern) => {
             // Enum tuple variant - use collection version
-            generate_enum_tuple_assertion_with_collection(
-                value_expr,
-                enum_pattern,
-                path,
-                &node_ident,
-            )
+            expand_enum_assertion(value_expr, enum_pattern, path, &node_ident)
         }
         Pattern::Tuple(tuple_pattern) => {
             // Plain tuple - use collection version for proper error collection
-            generate_plain_tuple_assertion_with_collection(
-                value_expr,
-                tuple_pattern,
-                path,
-                &node_ident,
-            )
+            expand_tuple_assertion(value_expr, tuple_pattern, path, &node_ident)
         }
-        Pattern::Wildcard(PatternWildcard { .. }) => {
+        Pattern::Wildcard(_) => {
             // Wildcard patterns generate no assertions - they just verify the field exists
             // which is already handled by the struct/tuple destructuring
             quote! {}
         }
         Pattern::Range(range_pattern) => {
             // Generate improved range assertion with error collection
-            generate_range_assertion_with_collection(value_expr, range_pattern, &node_ident)
+            expand_range_assertion(value_expr, range_pattern, &node_ident)
         }
         Pattern::Slice(slice_pattern) => {
             // Generate slice assertion with error collection
-            generate_slice_assertion_with_collection(value_expr, slice_pattern, path, &node_ident)
+            expand_slice_assertion(value_expr, slice_pattern, path, &node_ident)
         }
         #[cfg(feature = "regex")]
         Pattern::Regex(regex_pattern) => {
             // Generate regex assertion with error collection
-            generate_regex_assertion_with_collection(value_expr, regex_pattern, &node_ident)
+            expand_regex_assertion(value_expr, regex_pattern, &node_ident)
         }
         #[cfg(feature = "regex")]
         Pattern::Like(like_pattern) => {
             // Generate Like trait assertion with error collection
-            generate_like_assertion_with_collection(value_expr, like_pattern, &node_ident)
+            expand_like_assertion(value_expr, like_pattern, &node_ident)
         }
         Pattern::Closure(closure_pattern) => {
             // Generate closure assertion with error collection
-            generate_closure_assertion_with_collection(
-                value_expr,
-                closure_pattern,
-                &node_ident,
-            )
+            expand_closure_assertion(value_expr, closure_pattern, &node_ident)
         }
         Pattern::Map(map_pattern) => {
             // Generate map assertion with error collection
-            generate_map_assertion_with_collection(
-                value_expr,
-                map_pattern,
-                is_ref,
-                path,
-                &node_ident,
-            )
+            expand_map_assertion(value_expr, map_pattern, is_ref, path, &node_ident)
         }
-    }
-}
-
-/// Generate wildcard struct assertion using direct field access
-fn generate_wildcard_struct_assertion_with_collection(
-    value_expr: &TokenStream,
-    fields: &Punctuated<FieldAssertion, Token![,]>,
-    field_path: &[String],
-    _node_ident: &Ident,
-) -> TokenStream {
-    let field_assertions: Vec<_> = fields
-        .iter()
-        .map(|f| {
-            let field_name = f.operations.root_field_name();
-            let field_pattern = &f.pattern;
-            let field_operations = &f.operations;
-
-            // Build path for this field - include full operations for error messages
-            let mut new_path = field_path.to_vec();
-            let field_path_str = if let Some(tail_ops) = field_operations.tail_operations() {
-                generate_field_operation_path(field_name.to_string(), &tail_ops)
-            } else {
-                field_name.to_string()
-            };
-            new_path.push(field_path_str);
-
-            // Access the field and apply tail operations
-            let base_field_access = quote! { (#value_expr).#field_name };
-
-            let expr = if let Some(tail_ops) = field_operations.tail_operations() {
-                // Apply remaining operations after the field access
-                apply_field_operations(&base_field_access, &tail_ops)
-            } else {
-                // No additional operations, take a reference to the field for comparison
-                quote! { &#base_field_access }
-            };
-
-            // Recursively expand the pattern for this field
-            generate_pattern_assertion_with_collection(&expr, field_pattern, true, &new_path)
-        })
-        .collect();
-
-    quote! {
-        #(#field_assertions)*
     }
 }
 
 /// Generate struct assertion with error collection for multiple field failures
-fn generate_struct_match_assertion_with_collection(
+fn expand_struct_assertion(
     value_expr: &TokenStream,
     struct_pattern: &PatternStruct,
     field_path: &[String],
@@ -216,9 +146,7 @@ fn generate_struct_match_assertion_with_collection(
 
     // If struct_path is None, it's a wildcard pattern - use field access
     let Some(struct_path) = struct_path.as_ref() else {
-        return generate_wildcard_struct_assertion_with_collection(
-            value_expr, fields, field_path, node_ident,
-        );
+        return expand_struct_wildcard_assertion(value_expr, fields, field_path, node_ident);
     };
 
     // For nested field access, we need to collect unique field names only
@@ -284,6 +212,50 @@ fn generate_struct_match_assertion_with_collection(
                 __errors.push(__error);
             }
         }
+    }
+}
+
+/// Generate wildcard struct assertion using direct field access
+fn expand_struct_wildcard_assertion(
+    value_expr: &TokenStream,
+    fields: &Punctuated<FieldAssertion, Token![,]>,
+    field_path: &[String],
+    _node_ident: &Ident,
+) -> TokenStream {
+    let field_assertions: Vec<_> = fields
+        .iter()
+        .map(|f| {
+            let field_name = f.operations.root_field_name();
+            let field_pattern = &f.pattern;
+            let field_operations = &f.operations;
+
+            // Build path for this field - include full operations for error messages
+            let mut new_path = field_path.to_vec();
+            let field_path_str = if let Some(tail_ops) = field_operations.tail_operations() {
+                generate_field_operation_path(field_name.to_string(), &tail_ops)
+            } else {
+                field_name.to_string()
+            };
+            new_path.push(field_path_str);
+
+            // Access the field and apply tail operations
+            let base_field_access = quote! { (#value_expr).#field_name };
+
+            let expr = if let Some(tail_ops) = field_operations.tail_operations() {
+                // Apply remaining operations after the field access
+                apply_field_operations(&base_field_access, &tail_ops)
+            } else {
+                // No additional operations, take a reference to the field for comparison
+                quote! { &#base_field_access }
+            };
+
+            // Recursively expand the pattern for this field
+            expand_pattern_assertion(&expr, field_pattern, true, &new_path)
+        })
+        .collect();
+
+    quote! {
+        #(#field_assertions)*
     }
 }
 
@@ -355,7 +327,7 @@ fn expand_field_assertion(
     };
 
     // Generate the pattern assertion
-    generate_pattern_assertion_with_collection(&expr, field_pattern, true, &new_path)
+    expand_pattern_assertion(&expr, field_pattern, true, &new_path)
 }
 
 /// Apply field operations to a value expression
@@ -450,7 +422,7 @@ fn process_tuple_elements(
                         elem_path.push(i.to_string());
 
                         // Generate assertion with error collection
-                        let assertion = generate_pattern_assertion_with_collection(
+                        let assertion = expand_pattern_assertion(
                             &quote! { #name },
                             pattern,
                             is_ref,
@@ -488,7 +460,7 @@ fn process_tuple_elements(
 
 /// Generate assertion for plain tuples with error collection.
 /// Uses match expressions for consistency with enum tuple handling.
-fn generate_plain_tuple_assertion_with_collection(
+fn expand_tuple_assertion(
     value_expr: &TokenStream,
     pattern: &PatternTuple,
     field_path: &[String],
@@ -513,7 +485,7 @@ fn generate_plain_tuple_assertion_with_collection(
 // Check if a path refers to Option::Some
 
 /// Generate comparison assertion with error collection
-fn generate_comparison_assertion_with_collection(
+fn expand_comparison_assertion(
     value_expr: &TokenStream,
     comparison_pattern: &PatternComparison,
     node_ident: &Ident,
@@ -569,7 +541,7 @@ fn generate_comparison_assertion_with_collection(
 }
 
 /// Generate assertion for enum tuple variants with error collection
-fn generate_enum_tuple_assertion_with_collection(
+fn expand_enum_assertion(
     value_expr: &TokenStream,
     pattern: &PatternEnum,
     field_path: &[String],
@@ -646,7 +618,7 @@ fn generate_enum_tuple_assertion_with_collection(
 }
 
 /// Generate range assertion with error collection
-fn generate_range_assertion_with_collection(
+fn expand_range_assertion(
     value_expr: &TokenStream,
     range_pattern: &PatternRange,
     node_ident: &Ident,
@@ -700,7 +672,7 @@ fn generate_error_push(
 
 /// Generate string literal assertion with error collection
 /// String literals always use .as_ref() to handle String/&str matching
-fn generate_string_assertion_with_collection(
+fn expand_string_assertion(
     value_expr: &TokenStream,
     string_pattern: &PatternString,
     node_ident: &Ident,
@@ -728,7 +700,7 @@ fn generate_string_assertion_with_collection(
 }
 
 /// Generate simple assertion with error collection
-fn generate_simple_assertion_with_collection(
+fn expand_simple_assertion(
     actual: &TokenStream,
     simple_pattern: &PatternSimple,
     node_ident: &Ident,
@@ -752,7 +724,7 @@ fn generate_simple_assertion_with_collection(
 }
 
 /// Generate slice assertion with error collection
-fn generate_slice_assertion_with_collection(
+fn expand_slice_assertion(
     value_expr: &TokenStream,
     pattern: &PatternSlice,
     field_path: &[String],
@@ -782,7 +754,7 @@ fn generate_slice_assertion_with_collection(
                 let mut elem_path = field_path.to_vec();
                 elem_path.push(format!("[{}]", i));
 
-                let assertion = generate_pattern_assertion_with_collection(
+                let assertion = expand_pattern_assertion(
                     &quote! { #binding },
                     elem,
                     true, // elements from slice matching are references
@@ -820,7 +792,7 @@ fn generate_slice_assertion_with_collection(
 
 #[cfg(feature = "regex")]
 /// Generate regex assertion with error collection
-fn generate_regex_assertion_with_collection(
+fn expand_regex_assertion(
     value_expr: &TokenStream,
     regex_pattern: &PatternRegex,
     node_ident: &Ident,
@@ -851,7 +823,7 @@ fn generate_regex_assertion_with_collection(
 
 #[cfg(feature = "regex")]
 /// Generate Like trait assertion with error collection
-fn generate_like_assertion_with_collection(
+fn expand_like_assertion(
     value_expr: &TokenStream,
     like_pattern: &PatternLike,
     node_ident: &Ident,
@@ -882,7 +854,7 @@ fn generate_like_assertion_with_collection(
 }
 
 /// Generate closure assertion with error collection
-fn generate_closure_assertion_with_collection(
+fn expand_closure_assertion(
     value_expr: &TokenStream,
     closure_pattern: &PatternClosure,
     node_ident: &Ident,
@@ -910,7 +882,7 @@ fn generate_closure_assertion_with_collection(
 
 /// Generate map assertion with error collection using duck typing
 /// Assumes map types have len() -> usize and get(&K) -> Option<&V> methods
-fn generate_map_assertion_with_collection(
+fn expand_map_assertion(
     value_expr: &TokenStream,
     map_pattern: &PatternMap,
     _is_ref: bool,
@@ -958,7 +930,7 @@ fn generate_map_assertion_with_collection(
             key_path.push(key_str.clone());
 
             let span = key.span();
-            let pattern_assertion = generate_pattern_assertion_with_collection(
+            let pattern_assertion = expand_pattern_assertion(
                 &quote! { __map_value },
                 value_pattern,
                 true, // map.get() returns Option<&V>, so we have a reference

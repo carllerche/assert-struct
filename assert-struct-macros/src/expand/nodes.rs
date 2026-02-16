@@ -15,7 +15,7 @@ use quote::quote;
 use syn::spanned::Spanned;
 
 /// Get the node identifier for a pattern
-pub(super) fn get_pattern_node_ident(pattern: &Pattern) -> Ident {
+pub(super) fn expand_pattern_node_ident(pattern: &Pattern) -> Ident {
     let node_id = match pattern {
         Pattern::Simple(PatternSimple { node_id, .. })
         | Pattern::String(PatternString { node_id, .. })
