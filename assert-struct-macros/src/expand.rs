@@ -169,7 +169,6 @@ fn expand_struct_assertion(value_expr: &TokenStream, pattern: &PatternStruct) ->
 
     let error_push = generate_error_push(
         span,
-        stringify!(struct_path),
         quote!(format!("{:?}", #value_expr)),
         quote!(::assert_struct::__macro_support::ErrorType::EnumVariant),
         quote!(None),
@@ -423,7 +422,6 @@ fn expand_comparison_assertion(
 
     let error_push = generate_error_push(
         span,
-        &pattern.to_error_context_string(),
         quote!(format!("{:?}", #value_expr)),
         error_type_path,
         expected_value,
@@ -446,7 +444,6 @@ fn expand_enum_assertion(value_expr: &TokenStream, pattern: &PatternEnum) -> Tok
 
     let error_push = generate_error_push(
         span,
-        &quote!(#variant_path).to_string(),
         quote!(format!("{:?}", #value_expr)),
         quote!(::assert_struct::__macro_support::ErrorType::EnumVariant),
         quote!(None),
@@ -484,7 +481,6 @@ fn expand_range_assertion(value_expr: &TokenStream, pattern: &PatternRange) -> T
     let span = range.span();
     let error_push = generate_error_push(
         span,
-        &pattern.to_error_context_string(),
         quote!(format!("{:?}", #value_expr)),
         quote!(::assert_struct::__macro_support::ErrorType::Range),
         quote!(None),
@@ -508,10 +504,8 @@ fn expand_string_assertion(value_expr: &TokenStream, pattern: &PatternString) ->
 
     // String patterns always use .as_ref() to handle String/&str matching
     let span = lit.span();
-    let pattern_str = pattern.to_error_context_string();
     let error_push = generate_error_push(
         span,
-        &pattern_str,
         quote!(format!("{:?}", actual)),
         quote!(::assert_struct::__macro_support::ErrorType::Value),
         quote!(None),
@@ -532,7 +526,6 @@ fn expand_simple_assertion(actual: &TokenStream, pattern: &PatternSimple) -> Tok
     let span = expected.span();
     let error_push = generate_error_push(
         span,
-        &pattern.to_error_context_string(),
         quote!(format!("{:?}", #actual)),
         quote!(::assert_struct::__macro_support::ErrorType::Value),
         quote!(None),
@@ -580,7 +573,6 @@ fn expand_slice_assertion(value_expr: &TokenStream, pattern: &PatternSlice) -> T
 
     let error_push = generate_error_push(
         proc_macro2::Span::call_site(),
-        &format!("[{} elements]", elements_len),
         quote!(format!("{:?}", &#value_expr)),
         quote!(::assert_struct::__macro_support::ErrorType::Slice),
         quote!(None),
@@ -607,7 +599,6 @@ fn expand_regex_assertion(value_expr: &TokenStream, pattern: &PatternRegex) -> T
 
     let error_push = generate_error_push(
         span,
-        &pattern.to_error_context_string(),
         quote!(format!("{:?}", #value_expr)),
         quote!(::assert_struct::__macro_support::ErrorType::Regex),
         quote!(None),
@@ -630,14 +621,12 @@ fn expand_regex_assertion(value_expr: &TokenStream, pattern: &PatternRegex) -> T
 /// Generate Like trait assertion with error collection
 fn expand_like_assertion(value_expr: &TokenStream, pattern: &PatternLike) -> TokenStream {
     let pattern_expr = &pattern.expr;
-    let pattern_str = pattern.to_error_context_string();
 
     let span = pattern_expr.span();
     let actual_value = quote!(format!("{:?}", #value_expr));
 
     let error_push = generate_error_push(
         span,
-        &pattern_str,
         actual_value,
         quote!(::assert_struct::__macro_support::ErrorType::Regex),
         quote!(None),
@@ -661,7 +650,6 @@ fn expand_closure_assertion(value_expr: &TokenStream, pattern: &PatternClosure) 
 
     let error_push = generate_error_push(
         span,
-        &quote! { #closure }.to_string(),
         quote!(format!("{:?}", #value_expr)),
         quote!(::assert_struct::__macro_support::ErrorType::Closure),
         quote!(None),
@@ -694,7 +682,6 @@ fn expand_map_assertion(value_expr: &TokenStream, pattern: &PatternMap) -> Token
         let expected_len = entries.len();
         let error_push = generate_error_push(
             map_span,
-            &format!("#{{ {} entries }}", expected_len),
             quote!(format!("map with {} entries", (#value_expr).len())),
             quote!(::assert_struct::__macro_support::ErrorType::Value),
             quote!(Some(format!("{} entries", #expected_len))),
@@ -722,7 +709,6 @@ fn expand_map_assertion(value_expr: &TokenStream, pattern: &PatternMap) -> Token
 
             let missing_key_error = generate_error_push(
                 span,
-                &format!("key: {}", key_str),
                 quote!("missing key".to_string()),
                 quote!(::assert_struct::__macro_support::ErrorType::Value),
                 quote!(Some(format!("key present: {}", #key_str))),
@@ -768,7 +754,6 @@ fn expand_map_assertion(value_expr: &TokenStream, pattern: &PatternMap) -> Token
 /// Generate the error context creation and push code
 fn generate_error_push(
     span: proc_macro2::Span,
-    pattern_str: &str,
     actual_value: TokenStream,
     error_type_path: TokenStream,
     expected_value: TokenStream,
@@ -779,7 +764,6 @@ fn generate_error_push(
         let __line = line!();
         let __file = file!();
         let __error = ::assert_struct::__macro_support::ErrorContext {
-            pattern_str: #pattern_str.to_string(),
             actual_value: #actual_value,
             line_number: __line,
             file_name: __file,

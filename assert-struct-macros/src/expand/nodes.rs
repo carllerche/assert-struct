@@ -11,7 +11,7 @@ use crate::pattern::{
 #[cfg(feature = "regex")]
 use crate::pattern::{PatternLike, PatternRegex};
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::quote;
+use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
 
 /// Get the node identifier for a pattern
@@ -72,21 +72,34 @@ pub(super) fn generate_pattern_nodes(
         } else {
             quote! { None }
         };
-        return quote! {
+        // Rest patterns don't have a specific span, use call_site
+        let span = Span::call_site();
+        return quote_spanned! { span=>
             ::assert_struct::__macro_support::PatternNode {
                 kind: ::assert_struct::__macro_support::NodeKind::Rest,
                 parent: #parent_ref,
+                line: line!(),
+                column: column!(),
             }
         };
     }
 
     let node_ident = Ident::new(&format!("__PATTERN_NODE_{}", node_id), Span::call_site());
 
+    // Get the span for this pattern
+    let span = get_pattern_span(pattern).unwrap_or_else(Span::call_site);
+
     // Generate parent reference
     let parent_ref = if let Some(parent) = parent_ident {
         quote! { Some(&#parent) }
     } else {
         quote! { None }
+    };
+
+    // Generate line and column using the pattern's span
+    let line_col = quote_spanned! { span=>
+        line: line!(),
+        column: column!(),
     };
 
     let node_def = match pattern {
@@ -98,6 +111,7 @@ pub(super) fn generate_pattern_nodes(
                         value: #value_str,
                     },
                     parent: #parent_ref,
+                    #line_col
                 }
             }
         }
@@ -109,6 +123,7 @@ pub(super) fn generate_pattern_nodes(
                         value: #value_str,
                     },
                     parent: #parent_ref,
+                    #line_col
                 }
             }
         }
@@ -129,6 +144,7 @@ pub(super) fn generate_pattern_nodes(
                         value: #value_str,
                     },
                     parent: #parent_ref,
+                    #line_col
                 }
             }
         }
@@ -140,6 +156,7 @@ pub(super) fn generate_pattern_nodes(
                         pattern: #pattern_str,
                     },
                     parent: #parent_ref,
+                    #line_col
                 }
             }
         }
@@ -152,6 +169,7 @@ pub(super) fn generate_pattern_nodes(
                         pattern: #pattern_str,
                     },
                     parent: #parent_ref,
+                    #line_col
                 }
             }
         }
@@ -164,6 +182,7 @@ pub(super) fn generate_pattern_nodes(
                         expr: #expr_str,
                     },
                     parent: #parent_ref,
+                    #line_col
                 }
             }
         }
@@ -172,6 +191,7 @@ pub(super) fn generate_pattern_nodes(
                 ::assert_struct::__macro_support::PatternNode {
                     kind: ::assert_struct::__macro_support::NodeKind::Wildcard,
                     parent: #parent_ref,
+                    #line_col
                 }
             }
         }
@@ -183,6 +203,7 @@ pub(super) fn generate_pattern_nodes(
                         closure: #closure_str,
                     },
                     parent: #parent_ref,
+                    #line_col
                 }
             }
         }
@@ -212,6 +233,7 @@ pub(super) fn generate_pattern_nodes(
                         args: #args,
                     },
                     parent: #parent_ref,
+                    #line_col
                 }
             }
         }
@@ -233,6 +255,7 @@ pub(super) fn generate_pattern_nodes(
                         items: &[#(&#child_refs),*],
                     },
                     parent: #parent_ref,
+                    #line_col
                 }
             }
         }
@@ -248,6 +271,7 @@ pub(super) fn generate_pattern_nodes(
                         items: &[#(&#child_refs),*],
                     },
                     parent: #parent_ref,
+                    #line_col
                 }
             }
         }
@@ -274,6 +298,10 @@ pub(super) fn generate_pattern_nodes(
 
             if *rest {
                 // Rest patterns are handled inline, no need for a separate node
+                let rest_line_col = quote_spanned! { span=>
+                    line: line!(),
+                    column: column!(),
+                };
                 quote! {
                     ::assert_struct::__macro_support::PatternNode {
                         kind: ::assert_struct::__macro_support::NodeKind::Struct {
@@ -283,10 +311,12 @@ pub(super) fn generate_pattern_nodes(
                                 ("..", &::assert_struct::__macro_support::PatternNode {
                                     kind: ::assert_struct::__macro_support::NodeKind::Rest,
                                     parent: Some(&#node_ident),
+                                    #rest_line_col
                                 })
                             ],
                         },
                         parent: #parent_ref,
+                        #line_col
                     }
                 }
             } else {
@@ -297,6 +327,7 @@ pub(super) fn generate_pattern_nodes(
                             fields: &[#(#field_entries),*],
                         },
                         parent: #parent_ref,
+                        #line_col
                     }
                 }
             }
@@ -314,6 +345,10 @@ pub(super) fn generate_pattern_nodes(
                 .collect();
 
             if *rest {
+                let rest_line_col = quote_spanned! { span=>
+                    line: line!(),
+                    column: column!(),
+                };
                 quote! {
                     ::assert_struct::__macro_support::PatternNode {
                         kind: ::assert_struct::__macro_support::NodeKind::Map {
@@ -322,10 +357,12 @@ pub(super) fn generate_pattern_nodes(
                                 ("..", &::assert_struct::__macro_support::PatternNode {
                                     kind: ::assert_struct::__macro_support::NodeKind::Rest,
                                     parent: Some(&#node_ident),
+                                    #rest_line_col
                                 })
                             ],
                         },
                         parent: #parent_ref,
+                        #line_col
                     }
                 }
             } else {
@@ -335,6 +372,7 @@ pub(super) fn generate_pattern_nodes(
                             entries: &[#(#entry_refs),*],
                         },
                         parent: #parent_ref,
+                        #line_col
                     }
                 }
             }

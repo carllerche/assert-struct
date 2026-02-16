@@ -25,7 +25,6 @@ use std::fmt;
 /// The field path is reconstructed during error display by traversing the pattern tree.
 #[derive(Debug, Clone)]
 pub struct ErrorContext {
-    pub pattern_str: String,
     pub actual_value: String,
     pub line_number: u32,
     pub file_name: &'static str,
@@ -39,6 +38,8 @@ pub struct ErrorContext {
 pub struct PatternNode {
     pub kind: NodeKind,
     pub parent: Option<&'static PatternNode>,
+    pub line: u32,
+    pub column: u32,
 }
 
 /// The kind of pattern node
@@ -210,6 +211,8 @@ impl fmt::Debug for PatternNode {
         f.debug_struct("PatternNode")
             .field("kind", &self.kind)
             .field("parent", &self.parent.map(|_| "<parent>"))
+            .field("line", &self.line)
+            .field("column", &self.column)
             .finish()
     }
 }
