@@ -37,7 +37,13 @@ pub struct ErrorContext {
 
 /// Tree-based pattern representation for error formatting
 #[derive(Debug)]
-pub enum PatternNode {
+pub struct PatternNode {
+    pub kind: NodeKind,
+}
+
+/// The kind of pattern node
+#[derive(Debug)]
+pub enum NodeKind {
     // Structural patterns
     Struct {
         name: &'static str,
@@ -201,28 +207,28 @@ pub(crate) struct ErrorAnnotation {
 
 impl fmt::Display for PatternNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            PatternNode::Struct { name, .. } => write!(f, "{} {{ ... }}", name),
-            PatternNode::Slice { .. } => {
+        match &self.kind {
+            NodeKind::Struct { name, .. } => write!(f, "{} {{ ... }}", name),
+            NodeKind::Slice { .. } => {
                 write!(f, "[...]")
             }
-            PatternNode::Tuple { items } => write!(f, "({})", ".., ".repeat(items.len())),
-            PatternNode::Map { entries } => write!(f, "#{{ {} entries }}", entries.len()),
-            PatternNode::EnumVariant { path, args } => {
+            NodeKind::Tuple { items } => write!(f, "({})", ".., ".repeat(items.len())),
+            NodeKind::Map { entries } => write!(f, "#{{ {} entries }}", entries.len()),
+            NodeKind::EnumVariant { path, args } => {
                 if args.is_some() {
                     write!(f, "{}(...)", path)
                 } else {
                     write!(f, "{}", path)
                 }
             }
-            PatternNode::Simple { value } => write!(f, "{}", value),
-            PatternNode::Comparison { op, value } => write!(f, "{} {}", op, value),
-            PatternNode::Range { pattern } => write!(f, "{}", pattern),
-            PatternNode::Regex { pattern } => write!(f, "=~ {}", pattern),
-            PatternNode::Like { expr } => write!(f, "=~ {}", expr),
-            PatternNode::Rest => write!(f, ".."),
-            PatternNode::Wildcard => write!(f, "_"),
-            PatternNode::Closure { closure } => write!(f, "{}", closure),
+            NodeKind::Simple { value } => write!(f, "{}", value),
+            NodeKind::Comparison { op, value } => write!(f, "{} {}", op, value),
+            NodeKind::Range { pattern } => write!(f, "{}", pattern),
+            NodeKind::Regex { pattern } => write!(f, "=~ {}", pattern),
+            NodeKind::Like { expr } => write!(f, "=~ {}", expr),
+            NodeKind::Rest => write!(f, ".."),
+            NodeKind::Wildcard => write!(f, "_"),
+            NodeKind::Closure { closure } => write!(f, "{}", closure),
         }
     }
 }
@@ -380,8 +386,8 @@ fn traverse_pattern_tree(
     }
 
     // Continue traversal based on node type
-    match node {
-        PatternNode::Struct { name, fields, .. } => {
+    match &node.kind {
+        NodeKind::Struct { name, fields, .. } => {
             // Check if this struct contains future errors
             let contains_errors = contains_future_errors(node, state);
 
@@ -403,7 +409,7 @@ fn traverse_pattern_tree(
             }
             state.current_depth -= 1;
         }
-        PatternNode::Tuple { items } => {
+        NodeKind::Tuple { items } => {
             // Check for tuple element errors at this level
             let tuple_errors = collect_tuple_child_errors(node, state, &field_path);
 
@@ -449,7 +455,7 @@ fn traverse_pattern_tree(
                 state.current_depth -= 1;
             }
         }
-        PatternNode::Slice { items, .. } => {
+        NodeKind::Slice { items, .. } => {
             state.current_depth += 1;
             for (i, item) in items.iter().enumerate() {
                 let mut new_path = field_path.clone();
@@ -458,7 +464,7 @@ fn traverse_pattern_tree(
             }
             state.current_depth -= 1;
         }
-        PatternNode::EnumVariant {
+        NodeKind::EnumVariant {
             args: Some(args), ..
         } => {
             // Enum variants with args are handled like tuples
@@ -503,7 +509,7 @@ fn traverse_pattern_tree(
                 state.current_depth -= 1;
             }
         }
-        PatternNode::EnumVariant { args: None, .. } => {}
+        NodeKind::EnumVariant { args: None, .. } => {}
         // Leaf nodes don't need further traversal
         _ => {}
     }
@@ -589,8 +595,8 @@ fn build_error_fragment(
     // Note: EnumVariant is NOT considered complex here because we want to show
     // field names like "statement: Statement::Query(...)"
     let is_complex_pattern = matches!(
-        node,
-        PatternNode::Range { .. } | PatternNode::Regex { .. } | PatternNode::Like { .. }
+        &node.kind,
+        NodeKind::Range { .. } | NodeKind::Regex { .. } | NodeKind::Like { .. }
     );
 
     // Build the appropriate fragment based on node type and context
@@ -608,13 +614,13 @@ fn build_error_fragment(
 
 /// Format a pattern node to a simple string representation
 fn format_pattern_simple(node: &'static PatternNode) -> String {
-    match node {
-        PatternNode::Simple { value } => value.to_string(),
-        PatternNode::Comparison { op, value } => format!("{} {}", op, value),
-        PatternNode::Range { pattern } => pattern.to_string(),
-        PatternNode::Regex { pattern } => format!("=~ {}", pattern),
-        PatternNode::Like { expr } => format!("=~ {}", expr),
-        PatternNode::Slice { items } => {
+    match &node.kind {
+        NodeKind::Simple { value } => value.to_string(),
+        NodeKind::Comparison { op, value } => format!("{} {}", op, value),
+        NodeKind::Range { pattern } => pattern.to_string(),
+        NodeKind::Regex { pattern } => format!("=~ {}", pattern),
+        NodeKind::Like { expr } => format!("=~ {}", expr),
+        NodeKind::Slice { items } => {
             let content = items
                 .iter()
                 .map(|item| format_pattern_simple(item))
@@ -622,7 +628,7 @@ fn format_pattern_simple(node: &'static PatternNode) -> String {
                 .join(", ");
             format!("[{}]", content)
         }
-        PatternNode::Tuple { items } => {
+        NodeKind::Tuple { items } => {
             let content = items
                 .iter()
                 .map(|item| format_pattern_simple(item))
@@ -630,7 +636,7 @@ fn format_pattern_simple(node: &'static PatternNode) -> String {
                 .join(", ");
             format!("({})", content)
         }
-        PatternNode::Map { entries } => {
+        NodeKind::Map { entries } => {
             let content = entries
                 .iter()
                 .map(|(key, value)| format!("{}: {}", key, format_pattern_simple(value)))
@@ -638,7 +644,7 @@ fn format_pattern_simple(node: &'static PatternNode) -> String {
                 .join(", ");
             format!("#{{{}}}", content)
         }
-        PatternNode::EnumVariant { path, args } => {
+        NodeKind::EnumVariant { path, args } => {
             if let Some(args) = args {
                 if !args.is_empty() {
                     let arg_str = args
@@ -651,17 +657,17 @@ fn format_pattern_simple(node: &'static PatternNode) -> String {
             }
             path.to_string()
         }
-        PatternNode::Struct { name, .. } => format!("{} {{ ... }}", name),
-        PatternNode::Rest => "..".to_string(),
-        PatternNode::Wildcard => "_".to_string(),
-        PatternNode::Closure { closure } => closure.to_string(),
+        NodeKind::Struct { name, .. } => format!("{} {{ ... }}", name),
+        NodeKind::Rest => "..".to_string(),
+        NodeKind::Wildcard => "_".to_string(),
+        NodeKind::Closure { closure } => closure.to_string(),
     }
 }
 
 /// Build a pattern fragment from a PatternNode
 fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContext>) -> Fragment {
-    match node {
-        PatternNode::Simple { value } => Fragment::Annotated {
+    match &node.kind {
+        NodeKind::Simple { value } => Fragment::Annotated {
             pattern: value.to_string(),
             annotation: error.map(|e| ErrorAnnotation {
                 actual_value: format_actual_value(&e.actual_value, &e.error_type),
@@ -669,7 +675,7 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
                 underline_range: None, // Underline entire pattern
             }),
         },
-        PatternNode::Comparison { op, value } => Fragment::Annotated {
+        NodeKind::Comparison { op, value } => Fragment::Annotated {
             pattern: format!("{} {}", op, value),
             annotation: error.map(|e| ErrorAnnotation {
                 actual_value: format_actual_value(&e.actual_value, &e.error_type),
@@ -677,7 +683,7 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
                 underline_range: None,
             }),
         },
-        PatternNode::Range { pattern } => Fragment::Annotated {
+        NodeKind::Range { pattern } => Fragment::Annotated {
             pattern: pattern.to_string(),
             annotation: error.map(|e| ErrorAnnotation {
                 actual_value: format_actual_value(&e.actual_value, &e.error_type),
@@ -685,7 +691,7 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
                 underline_range: None,
             }),
         },
-        PatternNode::Regex { pattern } => Fragment::Annotated {
+        NodeKind::Regex { pattern } => Fragment::Annotated {
             pattern: format!("=~ {}", pattern),
             annotation: error.map(|e| ErrorAnnotation {
                 actual_value: format_actual_value(&e.actual_value, &e.error_type),
@@ -693,7 +699,7 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
                 underline_range: None,
             }),
         },
-        PatternNode::Like { expr } => Fragment::Annotated {
+        NodeKind::Like { expr } => Fragment::Annotated {
             pattern: format!("=~ {}", expr),
             annotation: error.map(|e| ErrorAnnotation {
                 actual_value: format_actual_value(&e.actual_value, &e.error_type),
@@ -701,7 +707,7 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
                 underline_range: None,
             }),
         },
-        PatternNode::EnumVariant { path, args } => {
+        NodeKind::EnumVariant { path, args } => {
             // Special handling for enum variant errors
             // When the error is an EnumVariant error, we want to only underline the variant name
             let is_variant_error = error
@@ -715,7 +721,7 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
 
                 // Check if first arg is a struct pattern
                 if args.len() == 1 {
-                    if let PatternNode::Struct { fields, name, .. } = args[0] {
+                    if let NodeKind::Struct { fields, name, .. } = &args[0].kind {
                         // It's an enum with a struct pattern like Statement::Query(Query { ... })
                         let fields_str = fields
                             .iter()
@@ -800,7 +806,7 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
                 }
             }
         }
-        PatternNode::Map { entries } => {
+        NodeKind::Map { entries } => {
             let content = entries
                 .iter()
                 .map(|(key, value)| format!("{}: {}", key, format_pattern_simple(value)))
@@ -815,9 +821,9 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
                 }),
             }
         }
-        PatternNode::Rest => Fragment::Rest,
-        PatternNode::Wildcard => Fragment::Wildcard,
-        PatternNode::Closure { closure } => Fragment::Annotated {
+        NodeKind::Rest => Fragment::Rest,
+        NodeKind::Wildcard => Fragment::Wildcard,
+        NodeKind::Closure { closure } => Fragment::Annotated {
             pattern: closure.to_string(),
             annotation: error.map(|e| ErrorAnnotation {
                 actual_value: format_actual_value(&e.actual_value, &e.error_type),
@@ -842,7 +848,7 @@ fn build_tuple_fragment_with_errors(
     errors: &[&ErrorContext],
     field_path: &[String],
 ) -> Fragment {
-    if let PatternNode::Tuple { items } = node {
+    if let NodeKind::Tuple { items } = &node.kind {
         // Build field fragment if this tuple is a struct field
         let field_name = field_path
             .last()
@@ -890,11 +896,11 @@ fn build_enum_tuple_fragment_with_errors(
     errors: &[&ErrorContext],
     field_path: &[String],
 ) -> Fragment {
-    if let PatternNode::EnumVariant {
+    if let NodeKind::EnumVariant {
         path,
         args: Some(args),
         ..
-    } = node
+    } = &node.kind
     {
         let field_name = field_path
             .last()
@@ -983,20 +989,20 @@ fn node_contains_recursive(root: &'static PatternNode, target: &'static PatternN
         return true;
     }
 
-    match root {
-        PatternNode::Struct { fields, .. } => fields
+    match &root.kind {
+        NodeKind::Struct { fields, .. } => fields
             .iter()
             .any(|(_, field_node)| node_contains_recursive(field_node, target)),
-        PatternNode::EnumVariant {
+        NodeKind::EnumVariant {
             args: Some(args), ..
         } => args.iter().any(|arg| node_contains_recursive(arg, target)),
-        PatternNode::Slice { items, .. } => items
+        NodeKind::Slice { items, .. } => items
             .iter()
             .any(|item| node_contains_recursive(item, target)),
-        PatternNode::Tuple { items } => items
+        NodeKind::Tuple { items } => items
             .iter()
             .any(|item| node_contains_recursive(item, target)),
-        PatternNode::Map { entries } => entries
+        NodeKind::Map { entries } => entries
             .iter()
             .any(|(_, entry_node)| node_contains_recursive(entry_node, target)),
         _ => false,
@@ -1415,4 +1421,5 @@ pub fn format_errors_with_root(
 ) -> String {
     let display = build_error_display(root, errors, root_name);
     render_error_display(&display)
+    // format!("root={root:#?}; errors={errors:#?}; root_name={root_name:#?}")
 }

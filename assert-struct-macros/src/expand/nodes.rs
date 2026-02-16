@@ -67,7 +67,9 @@ pub(super) fn generate_pattern_nodes(
     if node_id == usize::MAX {
         // For rest patterns, return inline node definition without creating a constant
         return quote! {
-            ::assert_struct::__macro_support::PatternNode::Rest
+            ::assert_struct::__macro_support::PatternNode {
+                kind: ::assert_struct::__macro_support::NodeKind::Rest,
+            }
         };
     }
 
@@ -77,16 +79,20 @@ pub(super) fn generate_pattern_nodes(
         Pattern::Simple(PatternSimple { expr, .. }) => {
             let value_str = quote! { #expr }.to_string();
             quote! {
-                ::assert_struct::__macro_support::PatternNode::Simple {
-                    value: #value_str,
+                ::assert_struct::__macro_support::PatternNode {
+                    kind: ::assert_struct::__macro_support::NodeKind::Simple {
+                        value: #value_str,
+                    }
                 }
             }
         }
         Pattern::String(PatternString { lit, .. }) => {
             let value_str = format!("\"{}\"", lit.value());
             quote! {
-                ::assert_struct::__macro_support::PatternNode::Simple {
-                    value: #value_str,
+                ::assert_struct::__macro_support::PatternNode {
+                    kind: ::assert_struct::__macro_support::NodeKind::Simple {
+                        value: #value_str,
+                    }
                 }
             }
         }
@@ -101,17 +107,21 @@ pub(super) fn generate_pattern_nodes(
             };
             let value_str = quote! { #expr }.to_string();
             quote! {
-                ::assert_struct::__macro_support::PatternNode::Comparison {
-                    op: #op_str,
-                    value: #value_str,
+                ::assert_struct::__macro_support::PatternNode {
+                    kind: ::assert_struct::__macro_support::NodeKind::Comparison {
+                        op: #op_str,
+                        value: #value_str,
+                    }
                 }
             }
         }
         Pattern::Range(PatternRange { expr, .. }) => {
             let pattern_str = quote! { #expr }.to_string();
             quote! {
-                ::assert_struct::__macro_support::PatternNode::Range {
-                    pattern: #pattern_str,
+                ::assert_struct::__macro_support::PatternNode {
+                    kind: ::assert_struct::__macro_support::NodeKind::Range {
+                        pattern: #pattern_str,
+                    }
                 }
             }
         }
@@ -119,8 +129,10 @@ pub(super) fn generate_pattern_nodes(
         Pattern::Regex(PatternRegex { pattern, .. }) => {
             let pattern_str = format!("r\"{}\"", pattern);
             quote! {
-                ::assert_struct::__macro_support::PatternNode::Regex {
-                    pattern: #pattern_str,
+                ::assert_struct::__macro_support::PatternNode {
+                    kind: ::assert_struct::__macro_support::NodeKind::Regex {
+                        pattern: #pattern_str,
+                    }
                 }
             }
         }
@@ -128,21 +140,27 @@ pub(super) fn generate_pattern_nodes(
         Pattern::Like(PatternLike { expr, .. }) => {
             let expr_str = quote! { #expr }.to_string();
             quote! {
-                ::assert_struct::__macro_support::PatternNode::Like {
-                    expr: #expr_str,
+                ::assert_struct::__macro_support::PatternNode {
+                    kind: ::assert_struct::__macro_support::NodeKind::Like {
+                        expr: #expr_str,
+                    }
                 }
             }
         }
         Pattern::Wildcard(PatternWildcard { .. }) => {
             quote! {
-                ::assert_struct::__macro_support::PatternNode::Wildcard
+                ::assert_struct::__macro_support::PatternNode {
+                    kind: ::assert_struct::__macro_support::NodeKind::Wildcard
+                }
             }
         }
         Pattern::Closure(PatternClosure { closure, .. }) => {
             let closure_str = quote! { #closure }.to_string();
             quote! {
-                ::assert_struct::__macro_support::PatternNode::Closure {
-                    closure: #closure_str,
+                ::assert_struct::__macro_support::PatternNode {
+                    kind: ::assert_struct::__macro_support::NodeKind::Closure {
+                        closure: #closure_str,
+                    }
                 }
             }
         }
@@ -166,9 +184,11 @@ pub(super) fn generate_pattern_nodes(
             };
 
             quote! {
-                ::assert_struct::__macro_support::PatternNode::EnumVariant {
-                    path: #path_str,
-                    args: #args,
+                ::assert_struct::__macro_support::PatternNode {
+                    kind: ::assert_struct::__macro_support::NodeKind::EnumVariant {
+                        path: #path_str,
+                        args: #args,
+                    }
                 }
             }
         }
@@ -185,8 +205,10 @@ pub(super) fn generate_pattern_nodes(
                 .collect();
 
             quote! {
-                ::assert_struct::__macro_support::PatternNode::Tuple {
-                    items: &[#(&#child_refs),*],
+                ::assert_struct::__macro_support::PatternNode {
+                    kind: ::assert_struct::__macro_support::NodeKind::Tuple {
+                        items: &[#(&#child_refs),*],
+                    }
                 }
             }
         }
@@ -197,8 +219,10 @@ pub(super) fn generate_pattern_nodes(
                 .collect();
 
             quote! {
-                ::assert_struct::__macro_support::PatternNode::Slice {
-                    items: &[#(&#child_refs),*],
+                ::assert_struct::__macro_support::PatternNode {
+                    kind: ::assert_struct::__macro_support::NodeKind::Slice {
+                        items: &[#(&#child_refs),*],
+                    }
                 }
             }
         }
@@ -226,19 +250,25 @@ pub(super) fn generate_pattern_nodes(
             if *rest {
                 // Rest patterns are handled inline, no need for a separate node
                 quote! {
-                    ::assert_struct::__macro_support::PatternNode::Struct {
-                        name: #name_str,
-                        fields: &[
-                            #(#field_entries,)*
-                            ("..", &::assert_struct::__macro_support::PatternNode::Rest)
-                        ],
+                    ::assert_struct::__macro_support::PatternNode {
+                        kind: ::assert_struct::__macro_support::NodeKind::Struct {
+                            name: #name_str,
+                            fields: &[
+                                #(#field_entries,)*
+                                ("..", &::assert_struct::__macro_support::PatternNode {
+                                    kind: ::assert_struct::__macro_support::NodeKind::Rest
+                                })
+                            ],
+                        }
                     }
                 }
             } else {
                 quote! {
-                    ::assert_struct::__macro_support::PatternNode::Struct {
-                        name: #name_str,
-                        fields: &[#(#field_entries),*],
+                    ::assert_struct::__macro_support::PatternNode {
+                        kind: ::assert_struct::__macro_support::NodeKind::Struct {
+                            name: #name_str,
+                            fields: &[#(#field_entries),*],
+                        }
                     }
                 }
             }
@@ -257,17 +287,23 @@ pub(super) fn generate_pattern_nodes(
 
             if *rest {
                 quote! {
-                    ::assert_struct::__macro_support::PatternNode::Map {
-                        entries: &[
-                            #(#entry_refs,)*
-                            ("..", &::assert_struct::__macro_support::PatternNode::Rest)
-                        ],
+                    ::assert_struct::__macro_support::PatternNode {
+                        kind: ::assert_struct::__macro_support::NodeKind::Map {
+                            entries: &[
+                                #(#entry_refs,)*
+                                ("..", &::assert_struct::__macro_support::PatternNode {
+                                    kind: ::assert_struct::__macro_support::NodeKind::Rest
+                                })
+                            ],
+                        }
                     }
                 }
             } else {
                 quote! {
-                    ::assert_struct::__macro_support::PatternNode::Map {
-                        entries: &[#(#entry_refs),*],
+                    ::assert_struct::__macro_support::PatternNode {
+                        kind: ::assert_struct::__macro_support::NodeKind::Map {
+                            entries: &[#(#entry_refs),*],
+                        }
                     }
                 }
             }
