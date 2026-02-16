@@ -22,11 +22,6 @@ impl PatternString {
             lit,
         }
     }
-
-    /// Convert this pattern to a string for error context
-    pub(crate) fn to_error_context_string(&self) -> String {
-        format!("\"{}\"", self.lit.value())
-    }
 }
 
 impl fmt::Display for PatternString {

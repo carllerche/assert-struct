@@ -38,22 +38,6 @@ impl fmt::Display for ComparisonOp {
     }
 }
 
-impl PatternComparison {
-    /// Convert this pattern to a string for error context
-    pub(crate) fn to_error_context_string(&self) -> String {
-        let op_str = match self.op {
-            ComparisonOp::Less => "<",
-            ComparisonOp::LessEqual => "<=",
-            ComparisonOp::Greater => ">",
-            ComparisonOp::GreaterEqual => ">=",
-            ComparisonOp::Equal => "==",
-            ComparisonOp::NotEqual => "!=",
-        };
-        let expr = &self.expr;
-        format!("{} {}", op_str, quote::quote! { #expr })
-    }
-}
-
 impl Parse for PatternComparison {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         // Comparison operators are checked early to capture them before

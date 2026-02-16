@@ -569,7 +569,6 @@ fn expand_slice_assertion(value_expr: &TokenStream, pattern: &PatternSlice) -> T
 
     // Convert Vec to slice for matching
     let slice_expr = quote! { (#value_expr).as_slice() };
-    let elements_len = pattern.elements.len();
 
     let error_push = generate_error_push(
         proc_macro2::Span::call_site(),
