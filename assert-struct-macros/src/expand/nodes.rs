@@ -15,23 +15,7 @@ use quote::quote;
 use syn::spanned::Spanned;
 
 /// Get the node identifier for a pattern
-pub(super) fn expand_pattern_node_ident(pattern: &Pattern) -> Ident {
-    let node_id = match pattern {
-        Pattern::Simple(PatternSimple { node_id, .. })
-        | Pattern::String(PatternString { node_id, .. })
-        | Pattern::Struct(PatternStruct { node_id, .. })
-        | Pattern::Enum(PatternEnum { node_id, .. })
-        | Pattern::Tuple(PatternTuple { node_id, .. })
-        | Pattern::Slice(PatternSlice { node_id, .. })
-        | Pattern::Comparison(PatternComparison { node_id, .. })
-        | Pattern::Range(PatternRange { node_id, .. })
-        | Pattern::Wildcard(PatternWildcard { node_id })
-        | Pattern::Closure(PatternClosure { node_id, .. })
-        | Pattern::Map(PatternMap { node_id, .. }) => *node_id,
-        #[cfg(feature = "regex")]
-        Pattern::Regex(PatternRegex { node_id, .. })
-        | Pattern::Like(PatternLike { node_id, .. }) => *node_id,
-    };
+pub(super) fn expand_pattern_node_ident(node_id: usize) -> Ident {
     Ident::new(&format!("__PATTERN_NODE_{}", node_id), Span::call_site())
 }
 

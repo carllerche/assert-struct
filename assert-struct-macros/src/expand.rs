@@ -34,10 +34,7 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
         })
         .collect();
 
-    // Generate the assertion for the root pattern
-    // Start with root path containing the variable name
-    let root_path = vec![quote! { #value }.to_string()];
-    let assertion = expand_pattern_assertion(&quote! { #value }, pattern, false, &root_path);
+    let assertion = expand_pattern_assertion(&quote! { #value }, pattern);
 
     // Wrap in a block to avoid variable name conflicts
     quote! {
@@ -69,35 +66,21 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
 }
 
 /// Generate assertion code with error collection instead of immediate panic.
-fn expand_pattern_assertion(
-    value_expr: &TokenStream,
-    pattern: &Pattern,
-    is_ref: bool,
-    path: &[String],
-) -> TokenStream {
-    // Get the node identifier for this pattern
-    let node_ident = expand_pattern_node_ident(pattern);
-
+fn expand_pattern_assertion(value_expr: &TokenStream, pattern: &Pattern) -> TokenStream {
     match pattern {
-        Pattern::Simple(simple_pattern) => {
-            expand_simple_assertion(value_expr, simple_pattern, &node_ident)
-        }
-        Pattern::String(string_pattern) => {
-            expand_string_assertion(value_expr, string_pattern, &node_ident)
-        }
-        Pattern::Struct(struct_pattern) => {
-            expand_struct_assertion(value_expr, struct_pattern, path, &node_ident)
-        }
+        Pattern::Simple(simple_pattern) => expand_simple_assertion(value_expr, simple_pattern),
+        Pattern::String(string_pattern) => expand_string_assertion(value_expr, string_pattern),
+        Pattern::Struct(struct_pattern) => expand_struct_assertion(value_expr, struct_pattern),
         Pattern::Comparison(comparison_pattern) => {
-            expand_comparison_assertion(value_expr, comparison_pattern, &node_ident)
+            expand_comparison_assertion(value_expr, comparison_pattern)
         }
         Pattern::Enum(enum_pattern) => {
             // Enum tuple variant - use collection version
-            expand_enum_assertion(value_expr, enum_pattern, path, &node_ident)
+            expand_enum_assertion(value_expr, enum_pattern)
         }
         Pattern::Tuple(tuple_pattern) => {
             // Plain tuple - use collection version for proper error collection
-            expand_tuple_assertion(value_expr, tuple_pattern, path, &node_ident)
+            expand_tuple_assertion(value_expr, tuple_pattern)
         }
         Pattern::Wildcard(_) => {
             // Wildcard patterns generate no assertions - they just verify the field exists
@@ -106,47 +89,42 @@ fn expand_pattern_assertion(
         }
         Pattern::Range(range_pattern) => {
             // Generate improved range assertion with error collection
-            expand_range_assertion(value_expr, range_pattern, &node_ident)
+            expand_range_assertion(value_expr, range_pattern)
         }
         Pattern::Slice(slice_pattern) => {
             // Generate slice assertion with error collection
-            expand_slice_assertion(value_expr, slice_pattern, path, &node_ident)
+            expand_slice_assertion(value_expr, slice_pattern)
         }
         #[cfg(feature = "regex")]
         Pattern::Regex(regex_pattern) => {
             // Generate regex assertion with error collection
-            expand_regex_assertion(value_expr, regex_pattern, &node_ident)
+            expand_regex_assertion(value_expr, regex_pattern)
         }
         #[cfg(feature = "regex")]
         Pattern::Like(like_pattern) => {
             // Generate Like trait assertion with error collection
-            expand_like_assertion(value_expr, like_pattern, &node_ident)
+            expand_like_assertion(value_expr, like_pattern)
         }
         Pattern::Closure(closure_pattern) => {
             // Generate closure assertion with error collection
-            expand_closure_assertion(value_expr, closure_pattern, &node_ident)
+            expand_closure_assertion(value_expr, closure_pattern)
         }
         Pattern::Map(map_pattern) => {
             // Generate map assertion with error collection
-            expand_map_assertion(value_expr, map_pattern, is_ref, path, &node_ident)
+            expand_map_assertion(value_expr, map_pattern)
         }
     }
 }
 
 /// Generate struct assertion with error collection for multiple field failures
-fn expand_struct_assertion(
-    value_expr: &TokenStream,
-    struct_pattern: &PatternStruct,
-    field_path: &[String],
-    node_ident: &Ident,
-) -> TokenStream {
-    let struct_path = &struct_pattern.path;
-    let fields = &struct_pattern.fields;
-    let rest = struct_pattern.rest;
+fn expand_struct_assertion(value_expr: &TokenStream, pattern: &PatternStruct) -> TokenStream {
+    let struct_path = &pattern.path;
+    let fields = &pattern.fields;
+    let rest = pattern.rest;
 
     // If struct_path is None, it's a wildcard pattern - use field access
     let Some(struct_path) = struct_path.as_ref() else {
-        return expand_struct_wildcard_assertion(value_expr, fields, field_path, node_ident);
+        return expand_struct_wildcard_assertion(value_expr, fields);
     };
 
     // For nested field access, we need to collect unique field names only
@@ -176,7 +154,7 @@ fn expand_struct_assertion(
             let field_name = f.operations.root_field_name();
 
             // Expand the FieldAssertion starting from the bound field name
-            let assertion = expand_field_assertion(&quote! { #field_name }, f, field_path);
+            let assertion = expand_field_assertion(&quote! { #field_name }, f);
 
             // Wrap the assertion with the span of the field pattern if available
             if let Some(span) = get_pattern_span(&f.pattern) {
@@ -188,6 +166,16 @@ fn expand_struct_assertion(
         .collect();
 
     let span = struct_path.span();
+
+    let error_push = generate_error_push(
+        span,
+        stringify!(struct_path),
+        quote!(format!("{:?}", #value_expr)),
+        quote!(::assert_struct::__macro_support::ErrorType::EnumVariant),
+        quote!(None),
+        pattern.node_id,
+    );
+
     quote_spanned! {span=>
         #[allow(unreachable_patterns)]
         match &#value_expr {
@@ -195,21 +183,7 @@ fn expand_struct_assertion(
                 #(#field_assertions)*
             },
             _ => {
-                let __line = line!();
-                let __file = file!();
-
-                let __error = ::assert_struct::__macro_support::ErrorContext {
-                    pattern_str: stringify!(#struct_path).to_string(),
-                    actual_value: format!("{:?}", #value_expr),
-                    line_number: __line,
-                    file_name: __file,
-                    error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-
-                    expected_value: None,
-
-                    error_node: Some(&#node_ident),
-                };
-                __errors.push(__error);
+                #error_push
             }
         }
     }
@@ -219,8 +193,6 @@ fn expand_struct_assertion(
 fn expand_struct_wildcard_assertion(
     value_expr: &TokenStream,
     fields: &Punctuated<FieldAssertion, Token![,]>,
-    field_path: &[String],
-    _node_ident: &Ident,
 ) -> TokenStream {
     let field_assertions: Vec<_> = fields
         .iter()
@@ -228,15 +200,6 @@ fn expand_struct_wildcard_assertion(
             let field_name = f.operations.root_field_name();
             let field_pattern = &f.pattern;
             let field_operations = &f.operations;
-
-            // Build path for this field - include full operations for error messages
-            let mut new_path = field_path.to_vec();
-            let field_path_str = if let Some(tail_ops) = field_operations.tail_operations() {
-                generate_field_operation_path(field_name.to_string(), &tail_ops)
-            } else {
-                field_name.to_string()
-            };
-            new_path.push(field_path_str);
 
             // Access the field and apply tail operations
             let base_field_access = quote! { (#value_expr).#field_name };
@@ -250,44 +213,12 @@ fn expand_struct_wildcard_assertion(
             };
 
             // Recursively expand the pattern for this field
-            expand_pattern_assertion(&expr, field_pattern, true, &new_path)
+            expand_pattern_assertion(&expr, field_pattern)
         })
         .collect();
 
     quote! {
         #(#field_assertions)*
-    }
-}
-
-/// Generate a readable path string for a field operation for error messages
-fn generate_field_operation_path(base_field: String, operation: &FieldOperation) -> String {
-    match operation {
-        FieldOperation::Deref { count, .. } => {
-            let stars = "*".repeat(*count);
-            format!("{}{}", stars, base_field)
-        }
-        FieldOperation::Method { name, .. } => {
-            format!("{}.{}()", base_field, name)
-        }
-        FieldOperation::Await { .. } => {
-            format!("{}.await", base_field)
-        }
-        FieldOperation::NamedField { name, .. } => {
-            format!("{}.{}", base_field, name)
-        }
-        FieldOperation::UnnamedField { index, .. } => {
-            format!("{}.{}", base_field, index)
-        }
-        FieldOperation::Index { index, .. } => {
-            format!("{}[{}]", base_field, quote! { #index })
-        }
-        FieldOperation::Chained { operations, .. } => {
-            let mut result = base_field;
-            for op in operations {
-                result = generate_field_operation_path(result, op);
-            }
-            result
-        }
     }
 }
 
@@ -301,23 +232,9 @@ fn generate_field_operation_path(base_field: String, operation: &FieldOperation)
 /// - `field_assertion`: The FieldAssertion to expand
 /// - `is_ref_context`: Whether we're in a reference context (from destructuring)
 /// - `base_field_path`: The field path up to the base field
-fn expand_field_assertion(
-    base: &TokenStream,
-    field_assertion: &FieldAssertion,
-    base_field_path: &[String],
-) -> TokenStream {
+fn expand_field_assertion(base: &TokenStream, field_assertion: &FieldAssertion) -> TokenStream {
     let field_operations = &field_assertion.operations;
     let field_pattern = &field_assertion.pattern;
-
-    // Build the field path for error messages
-    let mut new_path = base_field_path.to_vec();
-    let root_field_name = field_operations.root_field_name();
-    let field_path_str = if let Some(tail_ops) = field_operations.tail_operations() {
-        generate_field_operation_path(root_field_name.to_string(), &tail_ops)
-    } else {
-        root_field_name.to_string()
-    };
-    new_path.push(field_path_str);
 
     // Apply tail operations and determine final reference context
     let expr = if let Some(tail_ops) = field_operations.tail_operations() {
@@ -327,7 +244,7 @@ fn expand_field_assertion(
     };
 
     // Generate the pattern assertion
-    expand_pattern_assertion(&expr, field_pattern, true, &new_path)
+    expand_pattern_assertion(&expr, field_pattern)
 }
 
 /// Apply field operations to a value expression
@@ -398,8 +315,6 @@ fn apply_field_operations(base_expr: &TokenStream, operation: &FieldOperation) -
 fn process_tuple_elements(
     elements: &[TupleElement],
     prefix: &str,
-    is_ref: bool,
-    field_path: &[String],
 ) -> (Vec<TokenStream>, Vec<TokenStream>) {
     let mut match_patterns = Vec::new();
     let mut assertions = Vec::new();
@@ -417,17 +332,8 @@ fn process_tuple_elements(
                         let name = quote::format_ident!("{}{}", prefix, i);
                         match_patterns.push(quote! { #name });
 
-                        // Build path for error messages
-                        let mut elem_path = field_path.to_vec();
-                        elem_path.push(i.to_string());
-
                         // Generate assertion with error collection
-                        let assertion = expand_pattern_assertion(
-                            &quote! { #name },
-                            pattern,
-                            is_ref,
-                            &elem_path,
-                        );
+                        let assertion = expand_pattern_assertion(&quote! { #name }, pattern);
                         assertions.push(assertion);
                     }
                 }
@@ -446,8 +352,7 @@ fn process_tuple_elements(
                         match_patterns.push(quote! { #name });
 
                         // Expand the indexed FieldAssertion starting from the bound element name
-                        let assertion =
-                            expand_field_assertion(&quote! { #name }, boxed_elem, field_path);
+                        let assertion = expand_field_assertion(&quote! { #name }, boxed_elem);
                         assertions.push(assertion);
                     }
                 }
@@ -460,16 +365,10 @@ fn process_tuple_elements(
 
 /// Generate assertion for plain tuples with error collection.
 /// Uses match expressions for consistency with enum tuple handling.
-fn expand_tuple_assertion(
-    value_expr: &TokenStream,
-    pattern: &PatternTuple,
-    field_path: &[String],
-    _node_ident: &Ident,
-) -> TokenStream {
+fn expand_tuple_assertion(value_expr: &TokenStream, pattern: &PatternTuple) -> TokenStream {
     let elements = &pattern.elements;
     // Use helper to process elements with collection strategy
-    let (match_patterns, element_assertions) =
-        process_tuple_elements(elements, "__tuple_elem_", true, field_path);
+    let (match_patterns, element_assertions) = process_tuple_elements(elements, "__tuple_elem_");
 
     quote! {
         #[allow(unreachable_patterns)]
@@ -487,18 +386,17 @@ fn expand_tuple_assertion(
 /// Generate comparison assertion with error collection
 fn expand_comparison_assertion(
     value_expr: &TokenStream,
-    comparison_pattern: &PatternComparison,
-    node_ident: &Ident,
+    pattern: &PatternComparison,
 ) -> TokenStream {
-    let op = &comparison_pattern.op;
-    let expected = &comparison_pattern.expr;
+    let op = &pattern.op;
+    let expected = &pattern.expr;
 
     let is_index_operation = true;
 
     let span = expected.span();
     let comparison = if is_index_operation {
         // For index operations, avoid references on both sides
-        match comparison_pattern.op {
+        match pattern.op {
             ComparisonOp::Less => quote_spanned! {span=> (#value_expr).lt(&(#expected)) },
             ComparisonOp::LessEqual => quote_spanned! {span=> (#value_expr).le(&(#expected)) },
             ComparisonOp::Greater => quote_spanned! {span=> (#value_expr).gt(&(#expected)) },
@@ -525,11 +423,11 @@ fn expand_comparison_assertion(
 
     let error_push = generate_error_push(
         span,
-        &comparison_pattern.to_error_context_string(),
+        &pattern.to_error_context_string(),
         quote!(format!("{:?}", #value_expr)),
         error_type_path,
         expected_value,
-        node_ident,
+        pattern.node_id,
     );
 
     quote_spanned! {span=>
@@ -541,56 +439,30 @@ fn expand_comparison_assertion(
 }
 
 /// Generate assertion for enum tuple variants with error collection
-fn expand_enum_assertion(
-    value_expr: &TokenStream,
-    pattern: &PatternEnum,
-    field_path: &[String],
-    node_ident: &Ident,
-) -> TokenStream {
+fn expand_enum_assertion(value_expr: &TokenStream, pattern: &PatternEnum) -> TokenStream {
     let variant_path = &pattern.path;
     let elements = &pattern.elements;
     let span = variant_path.span();
+
+    let error_push = generate_error_push(
+        span,
+        &quote!(#variant_path).to_string(),
+        quote!(format!("{:?}", #value_expr)),
+        quote!(::assert_struct::__macro_support::ErrorType::EnumVariant),
+        quote!(None),
+        pattern.node_id,
+    );
 
     // Special handling for unit variants (empty elements)
     if elements.is_empty() {
         quote_spanned! {span=>
             if !matches!(#value_expr, #variant_path) {
-                let __line = line!();
-                let __file = file!();
-
-                let __error = ::assert_struct::__macro_support::ErrorContext {
-                    pattern_str: stringify!(#variant_path).to_string(),
-                    actual_value: format!("{:?}", #value_expr),
-                    line_number: __line,
-                    file_name: __file,
-                    error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-                    expected_value: None,
-                    error_node: Some(&#node_ident),
-                };
-                __errors.push(__error);
+                #error_push
             }
         }
     } else {
-        // Tuple variants with elements
-        // Extract variant name from path for better error messages
-        let variant_name = if let Some(segment) = variant_path.segments.last() {
-            segment.ident.to_string()
-        } else {
-            "variant".to_string()
-        };
-
-        // Build path with variant name for single-element tuples
-        let mut base_path = field_path.to_vec();
-        base_path.push(variant_name);
-        let use_variant_name = elements.len() == 1;
-
         // Use helper to process elements with appropriate path
-        let (match_patterns, element_assertions) = if use_variant_name {
-            // base_path.push(variant_name);
-            process_tuple_elements(elements, "__elem_", true, &base_path)
-        } else {
-            process_tuple_elements(elements, "__elem_", true, &base_path)
-        };
+        let (match_patterns, element_assertions) = process_tuple_elements(elements, "__elem_");
 
         quote_spanned! {span=>
             match &#value_expr {
@@ -598,19 +470,7 @@ fn expand_enum_assertion(
                     #(#element_assertions)*
                 },
                 _ => {
-                    let __line = line!();
-                    let __file = file!();
-
-                    let __error = ::assert_struct::__macro_support::ErrorContext {
-                        pattern_str: stringify!(#variant_path).to_string(),
-                        actual_value: format!("{:?}", #value_expr),
-                        line_number: __line,
-                        file_name: __file,
-                        error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-                        expected_value: None,
-                        error_node: Some(&#node_ident),
-                    };
-                    __errors.push(__error);
+                    #error_push
                 }
             }
         }
@@ -618,21 +478,17 @@ fn expand_enum_assertion(
 }
 
 /// Generate range assertion with error collection
-fn expand_range_assertion(
-    value_expr: &TokenStream,
-    range_pattern: &PatternRange,
-    node_ident: &Ident,
-) -> TokenStream {
-    let range = &range_pattern.expr;
+fn expand_range_assertion(value_expr: &TokenStream, pattern: &PatternRange) -> TokenStream {
+    let range = &pattern.expr;
 
     let span = range.span();
     let error_push = generate_error_push(
         span,
-        &range_pattern.to_error_context_string(),
+        &pattern.to_error_context_string(),
         quote!(format!("{:?}", #value_expr)),
         quote!(::assert_struct::__macro_support::ErrorType::Range),
         quote!(None),
-        node_ident,
+        pattern.node_id,
     );
 
     quote_spanned! {span=>
@@ -645,50 +501,21 @@ fn expand_range_assertion(
     }
 }
 
-/// Generate the error context creation and push code
-fn generate_error_push(
-    span: proc_macro2::Span,
-    pattern_str: &str,
-    actual_value: TokenStream,
-    error_type_path: TokenStream,
-    expected_value: TokenStream,
-    node_ident: &Ident,
-) -> TokenStream {
-    quote_spanned! {span=>
-        let __line = line!();
-        let __file = file!();
-        let __error = ::assert_struct::__macro_support::ErrorContext {
-            pattern_str: #pattern_str.to_string(),
-            actual_value: #actual_value,
-            line_number: __line,
-            file_name: __file,
-            error_type: #error_type_path,
-            expected_value: #expected_value,
-            error_node: Some(&#node_ident),
-        };
-        __errors.push(__error);
-    }
-}
-
 /// Generate string literal assertion with error collection
 /// String literals always use .as_ref() to handle String/&str matching
-fn expand_string_assertion(
-    value_expr: &TokenStream,
-    string_pattern: &PatternString,
-    node_ident: &Ident,
-) -> TokenStream {
-    let lit = &string_pattern.lit;
+fn expand_string_assertion(value_expr: &TokenStream, pattern: &PatternString) -> TokenStream {
+    let lit = &pattern.lit;
 
     // String patterns always use .as_ref() to handle String/&str matching
     let span = lit.span();
-    let pattern_str = string_pattern.to_error_context_string();
+    let pattern_str = pattern.to_error_context_string();
     let error_push = generate_error_push(
         span,
         &pattern_str,
         quote!(format!("{:?}", actual)),
         quote!(::assert_struct::__macro_support::ErrorType::Value),
         quote!(None),
-        node_ident,
+        pattern.node_id,
     );
 
     quote_spanned! {span=>
@@ -700,20 +527,16 @@ fn expand_string_assertion(
 }
 
 /// Generate simple assertion with error collection
-fn expand_simple_assertion(
-    actual: &TokenStream,
-    simple_pattern: &PatternSimple,
-    node_ident: &Ident,
-) -> TokenStream {
-    let expected = &simple_pattern.expr;
+fn expand_simple_assertion(actual: &TokenStream, pattern: &PatternSimple) -> TokenStream {
+    let expected = &pattern.expr;
     let span = expected.span();
     let error_push = generate_error_push(
         span,
-        &simple_pattern.to_error_context_string(),
+        &pattern.to_error_context_string(),
         quote!(format!("{:?}", #actual)),
         quote!(::assert_struct::__macro_support::ErrorType::Value),
         quote!(None),
-        node_ident,
+        pattern.node_id,
     );
 
     quote_spanned! {span=>
@@ -724,12 +547,7 @@ fn expand_simple_assertion(
 }
 
 /// Generate slice assertion with error collection
-fn expand_slice_assertion(
-    value_expr: &TokenStream,
-    pattern: &PatternSlice,
-    field_path: &[String],
-    node_ident: &Ident,
-) -> TokenStream {
+fn expand_slice_assertion(value_expr: &TokenStream, pattern: &PatternSlice) -> TokenStream {
     let mut pattern_parts = Vec::new();
     let mut bindings_and_assertions = Vec::new();
 
@@ -750,16 +568,7 @@ fn expand_slice_assertion(
                 let binding = quote::format_ident!("__elem_{}", i);
                 pattern_parts.push(quote! { #binding });
 
-                // Build path for this slice element
-                let mut elem_path = field_path.to_vec();
-                elem_path.push(format!("[{}]", i));
-
-                let assertion = expand_pattern_assertion(
-                    &quote! { #binding },
-                    elem,
-                    true, // elements from slice matching are references
-                    &elem_path,
-                );
+                let assertion = expand_pattern_assertion(&quote! { #binding }, elem);
                 bindings_and_assertions.push(assertion);
             }
         }
@@ -775,7 +584,7 @@ fn expand_slice_assertion(
         quote!(format!("{:?}", &#value_expr)),
         quote!(::assert_struct::__macro_support::ErrorType::Slice),
         quote!(None),
-        node_ident,
+        pattern.node_id,
     );
 
     quote! {
@@ -792,21 +601,17 @@ fn expand_slice_assertion(
 
 #[cfg(feature = "regex")]
 /// Generate regex assertion with error collection
-fn expand_regex_assertion(
-    value_expr: &TokenStream,
-    regex_pattern: &PatternRegex,
-    node_ident: &Ident,
-) -> TokenStream {
-    let pattern_str = &regex_pattern.pattern;
-    let span = regex_pattern.span;
+fn expand_regex_assertion(value_expr: &TokenStream, pattern: &PatternRegex) -> TokenStream {
+    let pattern_str = &pattern.pattern;
+    let span = pattern.span;
 
     let error_push = generate_error_push(
         span,
-        &regex_pattern.to_error_context_string(),
+        &pattern.to_error_context_string(),
         quote!(format!("{:?}", #value_expr)),
         quote!(::assert_struct::__macro_support::ErrorType::Regex),
         quote!(None),
-        node_ident,
+        pattern.node_id,
     );
 
     quote_spanned! {span=>
@@ -823,13 +628,9 @@ fn expand_regex_assertion(
 
 #[cfg(feature = "regex")]
 /// Generate Like trait assertion with error collection
-fn expand_like_assertion(
-    value_expr: &TokenStream,
-    like_pattern: &PatternLike,
-    node_ident: &Ident,
-) -> TokenStream {
-    let pattern_expr = &like_pattern.expr;
-    let pattern_str = like_pattern.to_error_context_string();
+fn expand_like_assertion(value_expr: &TokenStream, pattern: &PatternLike) -> TokenStream {
+    let pattern_expr = &pattern.expr;
+    let pattern_str = pattern.to_error_context_string();
 
     let span = pattern_expr.span();
     let actual_value = quote!(format!("{:?}", #value_expr));
@@ -840,7 +641,7 @@ fn expand_like_assertion(
         actual_value,
         quote!(::assert_struct::__macro_support::ErrorType::Regex),
         quote!(None),
-        node_ident,
+        pattern.node_id,
     );
 
     quote_spanned! {span=>
@@ -854,12 +655,8 @@ fn expand_like_assertion(
 }
 
 /// Generate closure assertion with error collection
-fn expand_closure_assertion(
-    value_expr: &TokenStream,
-    closure_pattern: &PatternClosure,
-    node_ident: &Ident,
-) -> TokenStream {
-    let closure = &closure_pattern.closure;
+fn expand_closure_assertion(value_expr: &TokenStream, pattern: &PatternClosure) -> TokenStream {
+    let closure = &pattern.closure;
     let span = closure.span();
 
     let error_push = generate_error_push(
@@ -868,7 +665,7 @@ fn expand_closure_assertion(
         quote!(format!("{:?}", #value_expr)),
         quote!(::assert_struct::__macro_support::ErrorType::Closure),
         quote!(None),
-        node_ident,
+        pattern.node_id,
     );
 
     quote_spanned! {span=>
@@ -882,15 +679,9 @@ fn expand_closure_assertion(
 
 /// Generate map assertion with error collection using duck typing
 /// Assumes map types have len() -> usize and get(&K) -> Option<&V> methods
-fn expand_map_assertion(
-    value_expr: &TokenStream,
-    map_pattern: &PatternMap,
-    _is_ref: bool,
-    path: &[String],
-    node_ident: &Ident,
-) -> TokenStream {
-    let entries = &map_pattern.entries;
-    let rest = map_pattern.rest;
+fn expand_map_assertion(value_expr: &TokenStream, pattern: &PatternMap) -> TokenStream {
+    let entries = &pattern.entries;
+    let rest = pattern.rest;
 
     // Use span from first entry or default span if empty
     let map_span = entries
@@ -907,7 +698,7 @@ fn expand_map_assertion(
             quote!(format!("map with {} entries", (#value_expr).len())),
             quote!(::assert_struct::__macro_support::ErrorType::Value),
             quote!(Some(format!("{} entries", #expected_len))),
-            node_ident,
+            pattern.node_id,
         );
         quote_spanned! {map_span=>
             // Check exact length for maps without rest pattern
@@ -925,17 +716,9 @@ fn expand_map_assertion(
         .map(|(key, value_pattern)| {
             let key_str = quote! { #key }.to_string();
 
-            // Build path for this key
-            let mut key_path = path.to_vec();
-            key_path.push(key_str.clone());
-
             let span = key.span();
-            let pattern_assertion = expand_pattern_assertion(
-                &quote! { __map_value },
-                value_pattern,
-                true, // map.get() returns Option<&V>, so we have a reference
-                &key_path,
-            );
+            let pattern_assertion =
+                expand_pattern_assertion(&quote! { __map_value }, value_pattern);
 
             let missing_key_error = generate_error_push(
                 span,
@@ -943,7 +726,7 @@ fn expand_map_assertion(
                 quote!("missing key".to_string()),
                 quote!(::assert_struct::__macro_support::ErrorType::Value),
                 quote!(Some(format!("key present: {}", #key_str))),
-                node_ident,
+                pattern.node_id,
             );
 
             // Handle different key types for duck typing
@@ -979,5 +762,31 @@ fn expand_map_assertion(
     quote! {
         #len_check
         #(#key_value_assertions)*
+    }
+}
+
+/// Generate the error context creation and push code
+fn generate_error_push(
+    span: proc_macro2::Span,
+    pattern_str: &str,
+    actual_value: TokenStream,
+    error_type_path: TokenStream,
+    expected_value: TokenStream,
+    node_id: usize,
+) -> TokenStream {
+    let node_ident = expand_pattern_node_ident(node_id);
+    quote_spanned! {span=>
+        let __line = line!();
+        let __file = file!();
+        let __error = ::assert_struct::__macro_support::ErrorContext {
+            pattern_str: #pattern_str.to_string(),
+            actual_value: #actual_value,
+            line_number: __line,
+            file_name: __file,
+            error_type: #error_type_path,
+            expected_value: #expected_value,
+            error_node: Some(&#node_ident),
+        };
+        __errors.push(__error);
     }
 }
