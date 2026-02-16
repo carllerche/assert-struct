@@ -761,11 +761,9 @@ fn generate_error_push(
     let node_ident = expand_pattern_node_ident(node_id);
     quote_spanned! {span=>
         let __line = line!();
-        let __file = file!();
         let __error = ::assert_struct::__macro_support::ErrorContext {
             actual_value: #actual_value,
             line_number: __line,
-            file_name: __file,
             error_type: #error_type_path,
             expected_value: #expected_value,
             error_node: Some(&#node_ident),

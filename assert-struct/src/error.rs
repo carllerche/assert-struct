@@ -27,7 +27,6 @@ use std::fmt;
 pub struct ErrorContext {
     pub actual_value: String,
     pub line_number: u32,
-    pub file_name: &'static str,
     pub error_type: ErrorType,
     pub expected_value: Option<String>, // For equality patterns where we need to show the expected value
     // Tree-based pattern data - only the specific node that failed
