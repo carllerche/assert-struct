@@ -36,7 +36,6 @@ pub struct ErrorContext {
 }
 
 /// Tree-based pattern representation for error formatting
-#[derive(Debug)]
 pub struct PatternNode {
     pub kind: NodeKind,
     pub parent: Option<&'static PatternNode>,
@@ -204,6 +203,15 @@ pub(crate) struct ErrorAnnotation {
     /// Optional range within the pattern string to underline (start, end)
     /// If None, underline the entire pattern
     pub underline_range: Option<(usize, usize)>,
+}
+
+impl fmt::Debug for PatternNode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PatternNode")
+            .field("kind", &self.kind)
+            .field("parent", &self.parent.map(|_| "<parent>"))
+            .finish()
+    }
 }
 
 impl fmt::Display for PatternNode {
@@ -1422,5 +1430,4 @@ pub fn format_errors_with_root(
 ) -> String {
     let display = build_error_display(root, errors, root_name);
     render_error_display(&display)
-    // format!("root={root:#?}; errors={errors:#?}; root_name={root_name=#?}")
 }
