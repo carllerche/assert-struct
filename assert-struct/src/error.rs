@@ -39,6 +39,7 @@ pub struct ErrorContext {
 #[derive(Debug)]
 pub struct PatternNode {
     pub kind: NodeKind,
+    pub parent: Option<&'static PatternNode>,
 }
 
 /// The kind of pattern node
@@ -1421,5 +1422,5 @@ pub fn format_errors_with_root(
 ) -> String {
     let display = build_error_display(root, errors, root_name);
     render_error_display(&display)
-    // format!("root={root:#?}; errors={errors:#?}; root_name={root_name:#?}")
+    // format!("root={root:#?}; errors={errors:#?}; root_name={root_name=#?}")
 }

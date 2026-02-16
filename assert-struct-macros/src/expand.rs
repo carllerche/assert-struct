@@ -21,15 +21,15 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
 
     // Generate pattern nodes using the node IDs from the patterns
     let mut node_defs = Vec::new();
-    let root_ref = generate_pattern_nodes(pattern, &mut node_defs);
+    let root_ref = generate_pattern_nodes(pattern, &mut node_defs, None);
 
-    // Generate constants for all nodes
+    // Generate static declarations for all nodes
     let node_constants: Vec<TokenStream> = node_defs
         .iter()
         .map(|(id, def)| {
             let ident = Ident::new(&format!("__PATTERN_NODE_{}", id), Span::call_site());
             quote! {
-                const #ident: ::assert_struct::__macro_support::PatternNode = #def;
+                static #ident: ::assert_struct::__macro_support::PatternNode = #def;
             }
         })
         .collect();
