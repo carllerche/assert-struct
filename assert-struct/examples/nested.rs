@@ -2,16 +2,17 @@
 use assert_struct::assert_struct;
 
 #[derive(Debug)]
-struct TestStruct {
-    boxed_option: Box<Option<String>>,
+struct Hello {
+    world: String,
 }
 
 pub fn main() {
-    let test = TestStruct {
-        boxed_option: Box::new(Some("hello".to_string())),
+    let actual = Hello {
+        world: "hello world".to_string(),
     };
 
-    assert_struct!(test, TestStruct {
-        *boxed_option: Some("goodbye"),  // Should be "hello", will fail
+    assert_struct!(actual, _ {
+        world: "world",
+        ..
     });
 }

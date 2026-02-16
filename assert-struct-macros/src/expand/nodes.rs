@@ -196,11 +196,9 @@ pub(super) fn generate_pattern_nodes(
                 .map(|elem| generate_pattern_nodes(elem, node_defs))
                 .collect();
 
-            let is_ref = true; // Default for now
             quote! {
                 ::assert_struct::__macro_support::PatternNode::Slice {
                     items: &[#(&#child_refs),*],
-                    is_ref: #is_ref,
                 }
             }
         }

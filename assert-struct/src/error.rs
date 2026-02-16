@@ -18,7 +18,22 @@
 
 use std::fmt;
 
-// ========== CORE DATA STRUCTURES ==========
+/// Context information for a failed assertion.
+///
+/// Contains all the information needed to generate a helpful error message,
+/// including the expected pattern, actual value, and source location.
+/// The field path is reconstructed during error display by traversing the pattern tree.
+#[derive(Debug, Clone)]
+pub struct ErrorContext {
+    pub pattern_str: String,
+    pub actual_value: String,
+    pub line_number: u32,
+    pub file_name: &'static str,
+    pub error_type: ErrorType,
+    pub expected_value: Option<String>, // For equality patterns where we need to show the expected value
+    // Tree-based pattern data - only the specific node that failed
+    pub error_node: Option<&'static PatternNode>,
+}
 
 /// Tree-based pattern representation for error formatting
 #[derive(Debug)]
@@ -32,7 +47,6 @@ pub enum PatternNode {
     // Collection patterns
     Slice {
         items: &'static [&'static PatternNode],
-        is_ref: bool, // Whether it's &[...] or just [...]
     },
     Tuple {
         items: &'static [&'static PatternNode],
@@ -71,55 +85,6 @@ pub enum PatternNode {
     Closure {
         closure: &'static str,
     },
-}
-
-impl fmt::Display for PatternNode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            PatternNode::Struct { name, .. } => write!(f, "{} {{ ... }}", name),
-            PatternNode::Slice { is_ref, .. } => {
-                if *is_ref {
-                    write!(f, "&[...]")
-                } else {
-                    write!(f, "[...]")
-                }
-            }
-            PatternNode::Tuple { items } => write!(f, "({})", ".., ".repeat(items.len())),
-            PatternNode::Map { entries } => write!(f, "#{{ {} entries }}", entries.len()),
-            PatternNode::EnumVariant { path, args } => {
-                if args.is_some() {
-                    write!(f, "{}(...)", path)
-                } else {
-                    write!(f, "{}", path)
-                }
-            }
-            PatternNode::Simple { value } => write!(f, "{}", value),
-            PatternNode::Comparison { op, value } => write!(f, "{} {}", op, value),
-            PatternNode::Range { pattern } => write!(f, "{}", pattern),
-            PatternNode::Regex { pattern } => write!(f, "=~ {}", pattern),
-            PatternNode::Like { expr } => write!(f, "=~ {}", expr),
-            PatternNode::Rest => write!(f, ".."),
-            PatternNode::Wildcard => write!(f, "_"),
-            PatternNode::Closure { closure } => write!(f, "{}", closure),
-        }
-    }
-}
-
-/// Context information for a failed assertion.
-///
-/// Contains all the information needed to generate a helpful error message,
-/// including the expected pattern, actual value, and source location.
-/// The field path is reconstructed during error display by traversing the pattern tree.
-#[derive(Debug, Clone)]
-pub struct ErrorContext {
-    pub pattern_str: String,
-    pub actual_value: String,
-    pub line_number: u32,
-    pub file_name: &'static str,
-    pub error_type: ErrorType,
-    pub expected_value: Option<String>, // For equality patterns where we need to show the expected value
-    // Tree-based pattern data - only the specific node that failed
-    pub error_node: Option<&'static PatternNode>,
 }
 
 /// The type of error that occurred during assertion.
@@ -202,8 +167,6 @@ pub(crate) enum Fragment {
 
     /// Slice patterns
     Slice {
-        /// Whether it's &[...] or just [...]
-        is_ref: bool,
         /// The slice elements
         elements: Vec<Fragment>,
     },
@@ -234,6 +197,34 @@ pub(crate) struct ErrorAnnotation {
     /// Optional range within the pattern string to underline (start, end)
     /// If None, underline the entire pattern
     pub underline_range: Option<(usize, usize)>,
+}
+
+impl fmt::Display for PatternNode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PatternNode::Struct { name, .. } => write!(f, "{} {{ ... }}", name),
+            PatternNode::Slice { .. } => {
+                write!(f, "[...]")
+            }
+            PatternNode::Tuple { items } => write!(f, "({})", ".., ".repeat(items.len())),
+            PatternNode::Map { entries } => write!(f, "#{{ {} entries }}", entries.len()),
+            PatternNode::EnumVariant { path, args } => {
+                if args.is_some() {
+                    write!(f, "{}(...)", path)
+                } else {
+                    write!(f, "{}", path)
+                }
+            }
+            PatternNode::Simple { value } => write!(f, "{}", value),
+            PatternNode::Comparison { op, value } => write!(f, "{} {}", op, value),
+            PatternNode::Range { pattern } => write!(f, "{}", pattern),
+            PatternNode::Regex { pattern } => write!(f, "=~ {}", pattern),
+            PatternNode::Like { expr } => write!(f, "=~ {}", expr),
+            PatternNode::Rest => write!(f, ".."),
+            PatternNode::Wildcard => write!(f, "_"),
+            PatternNode::Closure { closure } => write!(f, "{}", closure),
+        }
+    }
 }
 
 // ========== PASS 1: STRUCTURE BUILDING ==========
@@ -353,13 +344,9 @@ fn traverse_pattern_tree(
     // Check if current node is an error node
     if state.next_error_matches(node) {
         // Extract error data to avoid borrow issues
-        let error_data = state.current_error().map(|e| {
-            (
-                e.line_number,
-                e.actual_value.clone(),
-                e.error_type.clone(),
-            )
-        });
+        let error_data = state
+            .current_error()
+            .map(|e| (e.line_number, e.actual_value.clone(), e.error_type.clone()));
 
         if let Some((error_line, _actual_value, _error_type)) = error_data {
             // Check for tuple element errors (should be handled at parent level)
@@ -627,14 +614,13 @@ fn format_pattern_simple(node: &'static PatternNode) -> String {
         PatternNode::Range { pattern } => pattern.to_string(),
         PatternNode::Regex { pattern } => format!("=~ {}", pattern),
         PatternNode::Like { expr } => format!("=~ {}", expr),
-        PatternNode::Slice { items, is_ref } => {
-            let prefix = if *is_ref { "&" } else { "" };
+        PatternNode::Slice { items } => {
             let content = items
                 .iter()
                 .map(|item| format_pattern_simple(item))
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!("{}[{}]", prefix, content)
+            format!("[{}]", content)
         }
         PatternNode::Tuple { items } => {
             let content = items
@@ -867,9 +853,11 @@ fn build_tuple_fragment_with_errors(
             .iter()
             .map(|item| {
                 // Check if this element has an error by matching the error_node pointer
-                let element_error = errors
-                    .iter()
-                    .find(|e| e.error_node.map(|n| std::ptr::eq(n, *item)).unwrap_or(false));
+                let element_error = errors.iter().find(|e| {
+                    e.error_node
+                        .map(|n| std::ptr::eq(n, *item))
+                        .unwrap_or(false)
+                });
 
                 build_pattern_fragment(item, element_error.copied())
             })
@@ -916,9 +904,11 @@ fn build_enum_tuple_fragment_with_errors(
         let elements = args
             .iter()
             .map(|item| {
-                let element_error = errors
-                    .iter()
-                    .find(|e| e.error_node.map(|n| std::ptr::eq(n, *item)).unwrap_or(false));
+                let element_error = errors.iter().find(|e| {
+                    e.error_node
+                        .map(|n| std::ptr::eq(n, *item))
+                        .unwrap_or(false)
+                });
 
                 build_pattern_fragment(item, element_error.copied())
             })
@@ -1280,10 +1270,7 @@ fn render_fragment<'a>(
 
             output.push(')');
         }
-        Fragment::Slice { is_ref, elements } => {
-            if *is_ref {
-                output.push('&');
-            }
+        Fragment::Slice { elements } => {
             output.push('[');
 
             for (i, element) in elements.iter().enumerate() {
