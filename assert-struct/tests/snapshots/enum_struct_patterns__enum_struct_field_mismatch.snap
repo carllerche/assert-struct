@@ -4,9 +4,8 @@ expression: message
 ---
 assert_struct! failed:
 
-   | Request { ... Query {
+   | Request {
 mismatch:
-  --> `request.statement.Query.0.name` (line 35)
-   |     name: "get_items",
-   |           ^^^^^^^^^^^ actual: "select_users"
-   | } ... }
+  --> `request.statement` (line 35)
+   |     statement: Statement::Query(<complex>),
+   | }

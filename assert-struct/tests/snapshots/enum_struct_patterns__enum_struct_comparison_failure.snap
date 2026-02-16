@@ -6,7 +6,6 @@ assert_struct! failed:
 
    | Request {
 mismatch:
-  --> `request.statement.Query.0.limit.Some` (line 31)
+  --> `request.statement` (line 31)
    |     statement: Statement::Query(<complex>),
-   |                                 ^^^^^^^^^ actual: 25
    | }

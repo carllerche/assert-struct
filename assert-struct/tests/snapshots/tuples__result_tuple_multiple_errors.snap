@@ -6,7 +6,6 @@ assert_struct! failed: 2 mismatches
 
    | Response {
 mismatch:
-  --> `response.data.Ok.0` (line 21)
+  --> `response.data` (line 21)
    |     data: Ok(<complex>),
-   |              ^^^^^^^^^ actual: 42
    | }

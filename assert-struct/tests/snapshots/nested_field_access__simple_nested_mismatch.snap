@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | Outer {
 mismatch:
-  --> `data.inner.value` (line 22)
-   |     value: 100,
+  --> `data.inner` (line 22)
+   |     inner: 100,
    |            ^^^ actual: 42
    | }

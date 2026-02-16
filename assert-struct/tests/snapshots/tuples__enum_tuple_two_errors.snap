@@ -6,7 +6,7 @@ assert_struct! failed: 2 mismatches
 
    | MessageQueue {
 mismatch:
-  --> `queue.current.Pair` (line 25)
+  --> `queue.current` (line 25)
    |     current: Message::Pair(100, "expected"),
    |                            ^^^  ^^^^^^^^^^ actual: "actual"
    |                            └─ actual: 50

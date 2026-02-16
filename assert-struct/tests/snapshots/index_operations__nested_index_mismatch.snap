@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | Data {
 mismatch:
-  --> `data.matrix[0][1]` (line 15)
-   |     matrix[0][1]: 5,
-   |                   ^ actual: 2
+  --> `data.matrix` (line 15)
+   |     matrix: 5,
+   |             ^ actual: 2
    | }

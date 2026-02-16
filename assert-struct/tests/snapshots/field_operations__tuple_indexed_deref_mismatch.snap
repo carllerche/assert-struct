@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | TestStruct {
 mismatch:
-  --> `test.tuple_with_box.*1` (line 17)
-   |     *1: 42,
-   |         ^^ actual: 99
+  --> `test.tuple_with_box` (line 17)
+   |     tuple_with_box: ("test", 42),
+   |                              ^^ actual: 99
    | }

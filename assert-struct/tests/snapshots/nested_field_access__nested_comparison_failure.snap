@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | Container {
 mismatch:
-  --> `container.data.score` (line 22)
-   |     score: > 50,
-   |            ^^^^ actual: 25
+  --> `container.data` (line 22)
+   |     data: > 50,
+   |           ^^^^ actual: 25
    | }

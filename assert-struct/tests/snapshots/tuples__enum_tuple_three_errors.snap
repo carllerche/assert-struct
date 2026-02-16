@@ -6,7 +6,7 @@ assert_struct! failed: 3 mismatches
 
    | MessageQueue {
 mismatch:
-  --> `queue.current.Triple` (line 25)
+  --> `queue.current` (line 25)
    |     current: Message::Triple(100, "expected", false),
    |                              ^^^  ^^^^^^^^^^  ^^^^^ actual: true
    |                              │    └─ actual: "actual"

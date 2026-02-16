@@ -6,7 +6,6 @@ assert_struct! failed: 3 mismatches
 
    | Container {
 mismatch:
-  --> `container.value.Some.0` (line 21)
+  --> `container.value` (line 21)
    |     value: Some(<complex>),
-   |                 ^^^^^^^^^ actual: 75
    | }

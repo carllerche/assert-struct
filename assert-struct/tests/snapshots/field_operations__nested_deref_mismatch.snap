@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | NestedStruct { ... InnerStruct {
 mismatch:
-  --> `test.inner.*rc_value` (line 26)
-   |     *rc_value: "goodbye",
-   |                ^^^^^^^^^ actual: "hello"
+  --> `test.inner.rc_value` (line 26)
+   |     rc_value: "goodbye",
+   |               ^^^^^^^^^ actual: "hello"
    | } ... }

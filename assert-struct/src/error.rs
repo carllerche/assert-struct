@@ -108,10 +108,10 @@ impl fmt::Display for PatternNode {
 /// Context information for a failed assertion.
 ///
 /// Contains all the information needed to generate a helpful error message,
-/// including the field path, expected pattern, actual value, and source location.
+/// including the expected pattern, actual value, and source location.
+/// The field path is reconstructed during error display by traversing the pattern tree.
 #[derive(Debug, Clone)]
 pub struct ErrorContext {
-    pub field_path: String,
     pub pattern_str: String,
     pub actual_value: String,
     pub line_number: u32,
@@ -246,6 +246,7 @@ pub(crate) struct ErrorAnnotation {
 pub(crate) fn build_error_display(
     root: &'static PatternNode,
     errors: Vec<ErrorContext>,
+    root_name: &str,
 ) -> ErrorDisplay {
     if errors.is_empty() {
         return ErrorDisplay {
@@ -275,8 +276,8 @@ pub(crate) fn build_error_display(
         current_depth: 0,
     };
 
-    // Traverse the pattern tree from root
-    traverse_pattern_tree(root, &mut state, vec![]);
+    // Traverse the pattern tree from root, starting with the root variable name
+    traverse_pattern_tree(root, &mut state, vec![root_name.to_string()]);
 
     // Build closing breadcrumbs
     let closing_breadcrumbs = build_closing_breadcrumbs(&state.breadcrumb_stack);
@@ -354,16 +355,16 @@ fn traverse_pattern_tree(
         // Extract error data to avoid borrow issues
         let error_data = state.current_error().map(|e| {
             (
-                e.field_path.clone(),
                 e.line_number,
                 e.actual_value.clone(),
                 e.error_type.clone(),
             )
         });
 
-        if let Some((error_field_path, error_line, _actual_value, _error_type)) = error_data {
+        if let Some((error_line, _actual_value, _error_type)) = error_data {
             // Check for tuple element errors (should be handled at parent level)
-            if is_tuple_element_error(&error_field_path) {
+            let field_path_str = field_path.join(".");
+            if is_tuple_element_error(&field_path_str) {
                 // Skip - will be handled when we reach the tuple itself
                 state.advance_error();
                 return;
@@ -371,7 +372,7 @@ fn traverse_pattern_tree(
 
             // Build the fragment for this error (need to recreate error context)
             let error_ctx = state.current_error().unwrap();
-            let fragment = build_error_fragment(node, error_ctx, state);
+            let fragment = build_error_fragment(node, error_ctx, state, &field_path_str);
 
             // Collect opening breadcrumbs
             let opening_breadcrumbs = collect_opening_breadcrumbs(state);
@@ -380,7 +381,7 @@ fn traverse_pattern_tree(
             let section = ErrorSection {
                 opening_breadcrumbs,
                 location: ErrorLocation {
-                    field_path: error_field_path,
+                    field_path: field_path_str,
                     line_number: error_line,
                 },
                 fragment,
@@ -423,7 +424,6 @@ fn traverse_pattern_tree(
                 // Extract error data to avoid borrow issues
                 let error_count = tuple_errors.len();
                 let first_error_line = tuple_errors[0].line_number;
-                let first_error_path = tuple_errors[0].field_path.clone();
 
                 // Build a tuple fragment with all elements
                 let fragment = build_tuple_fragment_with_errors(node, &tuple_errors, &field_path);
@@ -433,21 +433,8 @@ fn traverse_pattern_tree(
                 // Note: Currently the macro only generates one error at a time,
                 // but the rendering code now handles multiple errors gracefully
 
-                // Use the error's field path, but remove the numeric suffix for display
-                let display_path = {
-                    let path = &first_error_path;
-                    // Remove the numeric index at the end for tuple display
-                    if let Some(dot_pos) = path.rfind('.') {
-                        let (base, suffix) = path.split_at(dot_pos + 1);
-                        if suffix.parse::<usize>().is_ok() {
-                            base[..base.len() - 1].to_string() // Remove the dot too
-                        } else {
-                            path.to_string()
-                        }
-                    } else {
-                        path.to_string()
-                    }
-                };
+                // Use the traversal-built field path (which is the path to the tuple itself)
+                let display_path = field_path.join(".");
 
                 let section = ErrorSection {
                     opening_breadcrumbs,
@@ -494,7 +481,6 @@ fn traverse_pattern_tree(
                 // Extract error data to avoid borrow issues
                 let error_count = tuple_errors.len();
                 let first_error_line = tuple_errors[0].line_number;
-                let first_error_path = tuple_errors[0].field_path.clone();
 
                 let fragment =
                     build_enum_tuple_fragment_with_errors(node, &tuple_errors, &field_path);
@@ -503,21 +489,8 @@ fn traverse_pattern_tree(
                 // Note: Currently the macro only generates one error at a time,
                 // but the rendering code now handles multiple errors gracefully
 
-                // Use the error's field path, but remove the numeric suffix for display
-                let display_path = {
-                    let path = &first_error_path;
-                    // Remove the numeric index at the end for tuple display
-                    if let Some(dot_pos) = path.rfind('.') {
-                        let (base, suffix) = path.split_at(dot_pos + 1);
-                        if suffix.parse::<usize>().is_ok() {
-                            base[..base.len() - 1].to_string() // Remove the dot too
-                        } else {
-                            path.to_string()
-                        }
-                    } else {
-                        path.to_string()
-                    }
-                };
+                // Use the traversal-built field path (which is the path to the enum variant itself)
+                let display_path = field_path.join(".");
 
                 let section = ErrorSection {
                     opening_breadcrumbs,
@@ -610,9 +583,10 @@ fn build_error_fragment(
     node: &'static PatternNode,
     error: &ErrorContext,
     _state: &TraversalState,
+    field_path: &str,
 ) -> Fragment {
     // Extract field name if this is a struct field
-    let field_name = error.field_path.split('.').next_back().unwrap_or("");
+    let field_name = field_path.split('.').next_back().unwrap_or("");
 
     // Check if field_name is all digits to identify tuple element paths
     // This is checking whether the last part of the field path (e.g., "0" in "user.0")
@@ -622,7 +596,7 @@ fn build_error_fragment(
 
     // Check if this is a top-level pattern (field_path contains no dots)
     // Top-level patterns like assert_struct!(value, None) shouldn't be wrapped in Field
-    let is_top_level = !error.field_path.contains('.');
+    let is_top_level = !field_path.contains('.');
 
     // Determine if this is a complex pattern that shouldn't show field names
     // Note: EnumVariant is NOT considered complex here because we want to show
@@ -891,12 +865,11 @@ fn build_tuple_fragment_with_errors(
 
         let elements = items
             .iter()
-            .enumerate()
-            .map(|(i, item)| {
-                // Check if this element has an error
+            .map(|item| {
+                // Check if this element has an error by matching the error_node pointer
                 let element_error = errors
                     .iter()
-                    .find(|e| e.field_path.ends_with(&format!(".{}", i)));
+                    .find(|e| e.error_node.map(|n| std::ptr::eq(n, *item)).unwrap_or(false));
 
                 build_pattern_fragment(item, element_error.copied())
             })
@@ -942,11 +915,10 @@ fn build_enum_tuple_fragment_with_errors(
 
         let elements = args
             .iter()
-            .enumerate()
-            .map(|(i, item)| {
+            .map(|item| {
                 let element_error = errors
                     .iter()
-                    .find(|e| e.field_path.ends_with(&format!(".{}", i)));
+                    .find(|e| e.error_node.map(|n| std::ptr::eq(n, *item)).unwrap_or(false));
 
                 build_pattern_fragment(item, element_error.copied())
             })
@@ -993,11 +965,9 @@ fn collect_tuple_child_errors<'a>(
     for i in state.error_index..state.errors.len() {
         let error = &state.errors[i];
 
-        if is_tuple_element_error(&error.field_path) {
-            if let Some(error_node) = error.error_node {
-                if node_contains_recursive(tuple_node, error_node) {
-                    tuple_errors.push(error);
-                }
+        if let Some(error_node) = error.error_node {
+            if node_contains_recursive(tuple_node, error_node) {
+                tuple_errors.push(error);
             }
         }
     }
@@ -1451,7 +1421,11 @@ fn format_expr(expr: &syn::Expr) -> String {
 // ========== PUBLIC API ==========
 
 /// Main entry point for formatting errors with the pattern tree
-pub fn format_errors_with_root(root: &'static PatternNode, errors: Vec<ErrorContext>) -> String {
-    let display = build_error_display(root, errors);
+pub fn format_errors_with_root(
+    root: &'static PatternNode,
+    errors: Vec<ErrorContext>,
+    root_name: &str,
+) -> String {
+    let display = build_error_display(root, errors, root_name);
     render_error_display(&display)
 }

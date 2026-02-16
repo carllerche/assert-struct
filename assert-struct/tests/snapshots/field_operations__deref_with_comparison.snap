@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | TestStruct {
 mismatch:
-  --> `test.*arc_value` (line 18)
-   |     *arc_value: > 60,
-   |                 ^^^^ actual: 50
+  --> `test.arc_value` (line 18)
+   |     arc_value: > 60,
+   |                ^^^^ actual: 50
    | }

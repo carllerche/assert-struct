@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | Level1 {
 mismatch:
-  --> `data.level2.level3.value` (line 29)
-   |     value: "expected",
-   |            ^^^^^^^^^^ actual: "actual"
+  --> `data.level2` (line 29)
+   |     level2: "expected",
+   |             ^^^^^^^^^^ actual: "actual"
    | }

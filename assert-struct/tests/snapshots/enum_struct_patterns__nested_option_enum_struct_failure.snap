@@ -4,9 +4,8 @@ expression: message
 ---
 assert_struct! failed:
 
-   | Container { ... Query {
+   | Container {
 mismatch:
-  --> `container.data.Some.0.Query.0.limit` (line 31)
-   |     limit: > 100,
-   |            ^^^^^ actual: 10
-   | } ... }
+  --> `container.data` (line 31)
+   |     data: Some(Statement::Query(Query { ... })),
+   | }

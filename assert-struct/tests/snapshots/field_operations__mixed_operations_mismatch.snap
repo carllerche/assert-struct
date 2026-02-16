@@ -8,5 +8,6 @@ assert_struct! failed: 2 mismatches
 mismatch:
   --> `test.tuple_mix` (line 18)
    |     tuple_mix: ("hello", 200, 30),
-   |                               ^^ actual: 25
+   |                          ^^^  ^^ actual: 25
+   |                          └─ actual: 100
    | }

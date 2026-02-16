@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | Data {
 mismatch:
-  --> `data.items[0].tags[0]` (line 25)
-   |     tags[0]: "python",
-   |              ^^^^^^^^ actual: "rust"
+  --> `data.items` (line 25)
+   |     items: "python",
+   |            ^^^^^^^^ actual: "rust"
    | }

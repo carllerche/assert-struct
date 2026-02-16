@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | TestStruct {
 mismatch:
-  --> `test.**double_box` (line 18)
-   |     **double_box: 99,
-   |                   ^^ actual: 42
+  --> `test.double_box` (line 18)
+   |     double_box: 99,
+   |                 ^^ actual: 42
    | }

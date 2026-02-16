@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | Data {
 mismatch:
-  --> `data.values[1]` (line 15)
-   |     values[1]: > 20,
-   |                ^^^^ actual: 15
+  --> `data.values` (line 15)
+   |     values: > 20,
+   |             ^^^^ actual: 15
    | }

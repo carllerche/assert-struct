@@ -6,7 +6,7 @@ assert_struct! failed:
 
    | TestStruct {
 mismatch:
-  --> `test.*boxed_option.Some` (line 15)
+  --> `test.boxed_option` (line 15)
    |     boxed_option: Some("goodbye"),
    |                        ^^^^^^^^^ actual: "hello"
    | }
