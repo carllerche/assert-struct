@@ -128,19 +128,19 @@ pub(super) fn generate_pattern_nodes(
             }
         }
         Pattern::Comparison(PatternComparison { op, expr, .. }) => {
-            let op_str = match op {
-                ComparisonOp::Less => "<",
-                ComparisonOp::LessEqual => "<=",
-                ComparisonOp::Greater => ">",
-                ComparisonOp::GreaterEqual => ">=",
-                ComparisonOp::Equal => "==",
-                ComparisonOp::NotEqual => "!=",
+            let op_variant = match op {
+                ComparisonOp::Less => quote!(::assert_struct::__macro_support::ComparisonOp::Less),
+                ComparisonOp::LessEqual => quote!(::assert_struct::__macro_support::ComparisonOp::LessEqual),
+                ComparisonOp::Greater => quote!(::assert_struct::__macro_support::ComparisonOp::Greater),
+                ComparisonOp::GreaterEqual => quote!(::assert_struct::__macro_support::ComparisonOp::GreaterEqual),
+                ComparisonOp::Equal => quote!(::assert_struct::__macro_support::ComparisonOp::Equal),
+                ComparisonOp::NotEqual => quote!(::assert_struct::__macro_support::ComparisonOp::NotEqual),
             };
             let value_str = quote! { #expr }.to_string();
             quote! {
                 ::assert_struct::__macro_support::PatternNode {
                     kind: ::assert_struct::__macro_support::NodeKind::Comparison {
-                        op: #op_str,
+                        op: #op_variant,
                         value: #value_str,
                     },
                     parent: #parent_ref,

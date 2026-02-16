@@ -170,7 +170,6 @@ fn expand_struct_assertion(value_expr: &TokenStream, pattern: &PatternStruct) ->
     let error_push = generate_error_push(
         span,
         quote!(format!("{:?}", #value_expr)),
-        quote!(::assert_struct::__macro_support::ErrorType::EnumVariant),
         quote!(None),
         pattern.node_id,
     );
@@ -407,12 +406,6 @@ fn expand_comparison_assertion(
         todo!()
     };
 
-    let error_type_path = if matches!(op, ComparisonOp::Equal) {
-        quote!(::assert_struct::__macro_support::ErrorType::Equality)
-    } else {
-        quote!(::assert_struct::__macro_support::ErrorType::Comparison)
-    };
-
     let expected_value = if matches!(op, ComparisonOp::Equal) {
         let expected_str = quote! { #expected }.to_string();
         quote!(Some(#expected_str.to_string()))
@@ -423,7 +416,6 @@ fn expand_comparison_assertion(
     let error_push = generate_error_push(
         span,
         quote!(format!("{:?}", #value_expr)),
-        error_type_path,
         expected_value,
         pattern.node_id,
     );
@@ -445,7 +437,6 @@ fn expand_enum_assertion(value_expr: &TokenStream, pattern: &PatternEnum) -> Tok
     let error_push = generate_error_push(
         span,
         quote!(format!("{:?}", #value_expr)),
-        quote!(::assert_struct::__macro_support::ErrorType::EnumVariant),
         quote!(None),
         pattern.node_id,
     );
@@ -482,7 +473,6 @@ fn expand_range_assertion(value_expr: &TokenStream, pattern: &PatternRange) -> T
     let error_push = generate_error_push(
         span,
         quote!(format!("{:?}", #value_expr)),
-        quote!(::assert_struct::__macro_support::ErrorType::Range),
         quote!(None),
         pattern.node_id,
     );
@@ -507,7 +497,6 @@ fn expand_string_assertion(value_expr: &TokenStream, pattern: &PatternString) ->
     let error_push = generate_error_push(
         span,
         quote!(format!("{:?}", actual)),
-        quote!(::assert_struct::__macro_support::ErrorType::Value),
         quote!(None),
         pattern.node_id,
     );
@@ -527,7 +516,6 @@ fn expand_simple_assertion(actual: &TokenStream, pattern: &PatternSimple) -> Tok
     let error_push = generate_error_push(
         span,
         quote!(format!("{:?}", #actual)),
-        quote!(::assert_struct::__macro_support::ErrorType::Value),
         quote!(None),
         pattern.node_id,
     );
@@ -573,7 +561,6 @@ fn expand_slice_assertion(value_expr: &TokenStream, pattern: &PatternSlice) -> T
     let error_push = generate_error_push(
         proc_macro2::Span::call_site(),
         quote!(format!("{:?}", &#value_expr)),
-        quote!(::assert_struct::__macro_support::ErrorType::Slice),
         quote!(None),
         pattern.node_id,
     );
@@ -599,7 +586,6 @@ fn expand_regex_assertion(value_expr: &TokenStream, pattern: &PatternRegex) -> T
     let error_push = generate_error_push(
         span,
         quote!(format!("{:?}", #value_expr)),
-        quote!(::assert_struct::__macro_support::ErrorType::Regex),
         quote!(None),
         pattern.node_id,
     );
@@ -627,7 +613,6 @@ fn expand_like_assertion(value_expr: &TokenStream, pattern: &PatternLike) -> Tok
     let error_push = generate_error_push(
         span,
         actual_value,
-        quote!(::assert_struct::__macro_support::ErrorType::Regex),
         quote!(None),
         pattern.node_id,
     );
@@ -650,7 +635,6 @@ fn expand_closure_assertion(value_expr: &TokenStream, pattern: &PatternClosure) 
     let error_push = generate_error_push(
         span,
         quote!(format!("{:?}", #value_expr)),
-        quote!(::assert_struct::__macro_support::ErrorType::Closure),
         quote!(None),
         pattern.node_id,
     );
@@ -682,7 +666,6 @@ fn expand_map_assertion(value_expr: &TokenStream, pattern: &PatternMap) -> Token
         let error_push = generate_error_push(
             map_span,
             quote!(format!("map with {} entries", (#value_expr).len())),
-            quote!(::assert_struct::__macro_support::ErrorType::Value),
             quote!(Some(format!("{} entries", #expected_len))),
             pattern.node_id,
         );
@@ -709,7 +692,6 @@ fn expand_map_assertion(value_expr: &TokenStream, pattern: &PatternMap) -> Token
             let missing_key_error = generate_error_push(
                 span,
                 quote!("missing key".to_string()),
-                quote!(::assert_struct::__macro_support::ErrorType::Value),
                 quote!(Some(format!("key present: {}", #key_str))),
                 pattern.node_id,
             );
@@ -754,7 +736,6 @@ fn expand_map_assertion(value_expr: &TokenStream, pattern: &PatternMap) -> Token
 fn generate_error_push(
     span: proc_macro2::Span,
     actual_value: TokenStream,
-    error_type_path: TokenStream,
     expected_value: TokenStream,
     node_id: usize,
 ) -> TokenStream {
@@ -764,7 +745,6 @@ fn generate_error_push(
         let __error = ::assert_struct::__macro_support::ErrorContext {
             actual_value: #actual_value,
             line_number: __line,
-            error_type: #error_type_path,
             expected_value: #expected_value,
             error_node: &#node_ident,
         };

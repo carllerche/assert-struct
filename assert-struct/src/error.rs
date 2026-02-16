@@ -18,6 +18,31 @@
 
 use std::fmt;
 
+/// Comparison operators used in patterns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ComparisonOp {
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+    Equal,
+    NotEqual,
+}
+
+impl ComparisonOp {
+    /// Get the string representation of this operator
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ComparisonOp::Less => "<",
+            ComparisonOp::LessEqual => "<=",
+            ComparisonOp::Greater => ">",
+            ComparisonOp::GreaterEqual => ">=",
+            ComparisonOp::Equal => "==",
+            ComparisonOp::NotEqual => "!=",
+        }
+    }
+}
+
 /// Context information for a failed assertion.
 ///
 /// Contains all the information needed to generate a helpful error message,
@@ -27,10 +52,36 @@ use std::fmt;
 pub struct ErrorContext {
     pub actual_value: String,
     pub line_number: u32,
-    pub error_type: ErrorType,
     pub expected_value: Option<String>, // For equality patterns where we need to show the expected value
     // Tree-based pattern data - only the specific node that failed
     pub error_node: &'static PatternNode,
+}
+
+impl ErrorContext {
+    /// Infer the error type from the pattern node.
+    ///
+    /// This moves the error type determination from compile-time (in the macro)
+    /// to runtime, simplifying the macro code and keeping it as a pure pattern tree builder.
+    pub fn error_type(&self) -> ErrorType {
+        match &self.error_node.kind {
+            NodeKind::Comparison { op, .. } => {
+                if matches!(op, ComparisonOp::Equal) {
+                    ErrorType::Equality
+                } else {
+                    ErrorType::Comparison
+                }
+            }
+            NodeKind::Range { .. } => ErrorType::Range,
+            NodeKind::Regex { .. } => ErrorType::Regex,
+            NodeKind::Like { .. } => ErrorType::Regex,
+            NodeKind::Simple { .. } => ErrorType::Value,
+            NodeKind::EnumVariant { .. } => ErrorType::EnumVariant,
+            NodeKind::Slice { .. } => ErrorType::Slice,
+            NodeKind::Closure { .. } => ErrorType::Closure,
+            // For structural patterns that shouldn't generate errors directly
+            _ => ErrorType::Value,
+        }
+    }
 }
 
 /// Tree-based pattern representation for error formatting
@@ -72,7 +123,7 @@ pub enum NodeKind {
         value: &'static str,
     },
     Comparison {
-        op: &'static str,
+        op: ComparisonOp,
         value: &'static str,
     },
     Range {
@@ -233,7 +284,7 @@ impl fmt::Display for PatternNode {
                 }
             }
             NodeKind::Simple { value } => write!(f, "{}", value),
-            NodeKind::Comparison { op, value } => write!(f, "{} {}", op, value),
+            NodeKind::Comparison { op, value } => write!(f, "{} {}", op.as_str(), value),
             NodeKind::Range { pattern } => write!(f, "{}", pattern),
             NodeKind::Regex { pattern } => write!(f, "=~ {}", pattern),
             NodeKind::Like { expr } => write!(f, "=~ {}", expr),
@@ -359,7 +410,7 @@ fn traverse_pattern_tree(
         // Extract error data to avoid borrow issues
         let error_data = state
             .current_error()
-            .map(|e| (e.line_number, e.actual_value.clone(), e.error_type.clone()));
+            .map(|e| (e.line_number, e.actual_value.clone(), e.error_type()));
 
         if let Some((error_line, _actual_value, _error_type)) = error_data {
             // Check for tuple element errors (should be handled at parent level)
@@ -623,7 +674,7 @@ fn build_error_fragment(
 fn format_pattern_simple(node: &'static PatternNode) -> String {
     match &node.kind {
         NodeKind::Simple { value } => value.to_string(),
-        NodeKind::Comparison { op, value } => format!("{} {}", op, value),
+        NodeKind::Comparison { op, value } => format!("{} {}", op.as_str(), value),
         NodeKind::Range { pattern } => pattern.to_string(),
         NodeKind::Regex { pattern } => format!("=~ {}", pattern),
         NodeKind::Like { expr } => format!("=~ {}", expr),
@@ -677,40 +728,40 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
         NodeKind::Simple { value } => Fragment::Annotated {
             pattern: value.to_string(),
             annotation: error.map(|e| ErrorAnnotation {
-                actual_value: format_actual_value(&e.actual_value, &e.error_type),
-                error_type: e.error_type.clone(),
+                actual_value: format_actual_value(&e.actual_value, &e.error_type()),
+                error_type: e.error_type(),
                 underline_range: None, // Underline entire pattern
             }),
         },
         NodeKind::Comparison { op, value } => Fragment::Annotated {
-            pattern: format!("{} {}", op, value),
+            pattern: format!("{} {}", op.as_str(), value),
             annotation: error.map(|e| ErrorAnnotation {
-                actual_value: format_actual_value(&e.actual_value, &e.error_type),
-                error_type: e.error_type.clone(),
+                actual_value: format_actual_value(&e.actual_value, &e.error_type()),
+                error_type: e.error_type(),
                 underline_range: None,
             }),
         },
         NodeKind::Range { pattern } => Fragment::Annotated {
             pattern: pattern.to_string(),
             annotation: error.map(|e| ErrorAnnotation {
-                actual_value: format_actual_value(&e.actual_value, &e.error_type),
-                error_type: e.error_type.clone(),
+                actual_value: format_actual_value(&e.actual_value, &e.error_type()),
+                error_type: e.error_type(),
                 underline_range: None,
             }),
         },
         NodeKind::Regex { pattern } => Fragment::Annotated {
             pattern: format!("=~ {}", pattern),
             annotation: error.map(|e| ErrorAnnotation {
-                actual_value: format_actual_value(&e.actual_value, &e.error_type),
-                error_type: e.error_type.clone(),
+                actual_value: format_actual_value(&e.actual_value, &e.error_type()),
+                error_type: e.error_type(),
                 underline_range: None,
             }),
         },
         NodeKind::Like { expr } => Fragment::Annotated {
             pattern: format!("=~ {}", expr),
             annotation: error.map(|e| ErrorAnnotation {
-                actual_value: format_actual_value(&e.actual_value, &e.error_type),
-                error_type: e.error_type.clone(),
+                actual_value: format_actual_value(&e.actual_value, &e.error_type()),
+                error_type: e.error_type(),
                 underline_range: None,
             }),
         },
@@ -719,7 +770,7 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
             // When the error is an EnumVariant error, we want to only underline the variant name
             let is_variant_error = error
                 .as_ref()
-                .map(|e| matches!(e.error_type, ErrorType::EnumVariant))
+                .map(|e| matches!(e.error_type(), ErrorType::EnumVariant))
                 .unwrap_or(false);
 
             if is_variant_error && args.is_some() && !args.as_ref().unwrap().is_empty() {
@@ -748,8 +799,8 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
                         return Fragment::Annotated {
                             pattern: full_pattern,
                             annotation: error.map(|e| ErrorAnnotation {
-                                actual_value: format_actual_value(&e.actual_value, &e.error_type),
-                                error_type: e.error_type.clone(),
+                                actual_value: format_actual_value(&e.actual_value, &e.error_type()),
+                                error_type: e.error_type(),
                                 underline_range: Some((0, variant_end)),
                             }),
                         };
@@ -769,8 +820,8 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
                 Fragment::Annotated {
                     pattern: full_pattern,
                     annotation: error.map(|e| ErrorAnnotation {
-                        actual_value: format_actual_value(&e.actual_value, &e.error_type),
-                        error_type: e.error_type.clone(),
+                        actual_value: format_actual_value(&e.actual_value, &e.error_type()),
+                        error_type: e.error_type(),
                         underline_range: Some((0, variant_end)),
                     }),
                 }
@@ -785,8 +836,8 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
                     Fragment::Annotated {
                         pattern: format!("{}({})", path, arg_str),
                         annotation: error.map(|e| ErrorAnnotation {
-                            actual_value: format_actual_value(&e.actual_value, &e.error_type),
-                            error_type: e.error_type.clone(),
+                            actual_value: format_actual_value(&e.actual_value, &e.error_type()),
+                            error_type: e.error_type(),
                             underline_range: None,
                         }),
                     }
@@ -795,8 +846,8 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
                     Fragment::Annotated {
                         pattern: path.to_string(),
                         annotation: error.map(|e| ErrorAnnotation {
-                            actual_value: format_actual_value(&e.actual_value, &e.error_type),
-                            error_type: e.error_type.clone(),
+                            actual_value: format_actual_value(&e.actual_value, &e.error_type()),
+                            error_type: e.error_type(),
                             underline_range: None,
                         }),
                     }
@@ -806,8 +857,8 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
                 Fragment::Annotated {
                     pattern: path.to_string(),
                     annotation: error.map(|e| ErrorAnnotation {
-                        actual_value: format_actual_value(&e.actual_value, &e.error_type),
-                        error_type: e.error_type.clone(),
+                        actual_value: format_actual_value(&e.actual_value, &e.error_type()),
+                        error_type: e.error_type(),
                         underline_range: None,
                     }),
                 }
@@ -822,8 +873,8 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
             Fragment::Annotated {
                 pattern: format!("#{{{}}}", content),
                 annotation: error.map(|e| ErrorAnnotation {
-                    actual_value: format_actual_value(&e.actual_value, &e.error_type),
-                    error_type: e.error_type.clone(),
+                    actual_value: format_actual_value(&e.actual_value, &e.error_type()),
+                    error_type: e.error_type(),
                     underline_range: None,
                 }),
             }
@@ -833,16 +884,16 @@ fn build_pattern_fragment(node: &'static PatternNode, error: Option<&ErrorContex
         NodeKind::Closure { closure } => Fragment::Annotated {
             pattern: closure.to_string(),
             annotation: error.map(|e| ErrorAnnotation {
-                actual_value: format_actual_value(&e.actual_value, &e.error_type),
-                error_type: e.error_type.clone(),
+                actual_value: format_actual_value(&e.actual_value, &e.error_type()),
+                error_type: e.error_type(),
                 underline_range: None,
             }),
         },
         _ => Fragment::Annotated {
             pattern: "<complex>".to_string(),
             annotation: error.map(|e| ErrorAnnotation {
-                actual_value: format_actual_value(&e.actual_value, &e.error_type),
-                error_type: e.error_type.clone(),
+                actual_value: format_actual_value(&e.actual_value, &e.error_type()),
+                error_type: e.error_type(),
                 underline_range: None,
             }),
         },
