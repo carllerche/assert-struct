@@ -766,7 +766,7 @@ fn generate_error_push(
             line_number: __line,
             error_type: #error_type_path,
             expected_value: #expected_value,
-            error_node: Some(&#node_ident),
+            error_node: &#node_ident,
         };
         __errors.push(__error);
     }

@@ -30,7 +30,7 @@ pub struct ErrorContext {
     pub error_type: ErrorType,
     pub expected_value: Option<String>, // For equality patterns where we need to show the expected value
     // Tree-based pattern data - only the specific node that failed
-    pub error_node: Option<&'static PatternNode>,
+    pub error_node: &'static PatternNode,
 }
 
 /// Tree-based pattern representation for error formatting
@@ -330,11 +330,7 @@ impl TraversalState {
 
     /// Check if the current node matches the next error
     fn next_error_matches(&self, node: &'static PatternNode) -> bool {
-        self.has_next_error()
-            && self.errors[self.error_index]
-                .error_node
-                .map(|error_node| std::ptr::eq(error_node, node))
-                .unwrap_or(false)
+        self.has_next_error() && std::ptr::eq(self.errors[self.error_index].error_node, node)
     }
 
     /// Get the current error being processed
@@ -870,11 +866,9 @@ fn build_tuple_fragment_with_errors(
             .iter()
             .map(|item| {
                 // Check if this element has an error by matching the error_node pointer
-                let element_error = errors.iter().find(|e| {
-                    e.error_node
-                        .map(|n| std::ptr::eq(n, *item))
-                        .unwrap_or(false)
-                });
+                let element_error = errors
+                    .iter()
+                    .find(|e| std::ptr::eq(e.error_node, *item));
 
                 build_pattern_fragment(item, element_error.copied())
             })
@@ -921,11 +915,9 @@ fn build_enum_tuple_fragment_with_errors(
         let elements = args
             .iter()
             .map(|item| {
-                let element_error = errors.iter().find(|e| {
-                    e.error_node
-                        .map(|n| std::ptr::eq(n, *item))
-                        .unwrap_or(false)
-                });
+                let element_error = errors
+                    .iter()
+                    .find(|e| std::ptr::eq(e.error_node, *item));
 
                 build_pattern_fragment(item, element_error.copied())
             })
@@ -971,11 +963,8 @@ fn collect_tuple_child_errors<'a>(
 
     for i in state.error_index..state.errors.len() {
         let error = &state.errors[i];
-
-        if let Some(error_node) = error.error_node {
-            if node_contains_recursive(tuple_node, error_node) {
-                tuple_errors.push(error);
-            }
+        if node_contains_recursive(tuple_node, error.error_node) {
+            tuple_errors.push(error);
         }
     }
 
@@ -985,10 +974,8 @@ fn collect_tuple_child_errors<'a>(
 /// Check if a node contains any future errors
 fn contains_future_errors(node: &'static PatternNode, state: &TraversalState) -> bool {
     for i in state.error_index..state.errors.len() {
-        if let Some(error_node) = state.errors[i].error_node {
-            if node_contains_recursive(node, error_node) {
-                return true;
-            }
+        if node_contains_recursive(node, state.errors[i].error_node) {
+            return true;
         }
     }
     false
