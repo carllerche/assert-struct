@@ -1,0 +1,7 @@
+---
+source: assert-struct/tests/basic.rs
+assertion_line: 126
+expression: message
+---
+assert_struct! failed:
+expected 50 to match 60

@@ -1,0 +1,7 @@
+---
+source: assert-struct/tests/basic.rs
+assertion_line: 53
+expression: message
+---
+assert_struct! failed:
+expected "Alice" to match "Bob"

@@ -1,0 +1,7 @@
+---
+source: assert-struct/tests/basic.rs
+assertion_line: 89
+expression: message
+---
+assert_struct! failed:
+expected 3 to match 4
