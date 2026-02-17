@@ -99,15 +99,18 @@ struct ErrorContext {
 #[derive(Debug)]
 pub struct ErrorReport {
     errors: Vec<ErrorContext>,
-    /// Absolute path to the source file, derived at construction time.
-    file_path: PathBuf,
+    /// Absolute path used to read the file from disk.
+    abs_path: PathBuf,
+    /// Workspace-relative path used for display (the raw `file!()` value).
+    rel_path: String,
 }
 
 impl ErrorReport {
     pub fn new(manifest_dir: &str, file_path: &str) -> Self {
         ErrorReport {
             errors: Vec::new(),
-            file_path: absolute_source_path(manifest_dir, file_path),
+            abs_path: absolute_source_path(manifest_dir, file_path),
+            rel_path: file_path.to_string(),
         }
     }
 
@@ -249,13 +252,12 @@ impl fmt::Display for ErrorReport {
             return Ok(());
         }
 
-        let source_content = cached_source(&self.file_path);
+        let source_content = cached_source(&self.abs_path);
 
         // Pre-compute labels so their lifetimes outlive the report construction.
         let labels: Vec<String> = self.errors.iter().map(error_label).collect();
 
         let renderer = Renderer::styled();
-        let file_path_str = self.file_path.to_string_lossy();
 
         if let Some(source) = &source_content {
             let annotations: Vec<_> = self
@@ -276,7 +278,7 @@ impl fmt::Display for ErrorReport {
 
             let snippet = Snippet::source(&**source)
                 .line_start(1)
-                .path(&file_path_str)
+                .path(&self.rel_path)
                 .annotations(annotations);
 
             let report = Level::ERROR
@@ -288,11 +290,7 @@ impl fmt::Display for ErrorReport {
             // Fallback when the source file cannot be read: show location + description.
             write!(f, "assert_struct! failed:")?;
             for (error, label) in self.errors.iter().zip(labels.iter()) {
-                write!(
-                    f,
-                    "\n  --> {}:{}\n  {label}",
-                    file_path_str, error.line_number,
-                )?;
+                write!(f, "\n  --> {}:{}\n  {label}", self.rel_path, error.line_number)?;
             }
         }
 
