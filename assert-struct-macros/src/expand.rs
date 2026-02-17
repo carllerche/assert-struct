@@ -50,14 +50,14 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
                 // Store the pattern tree root
                 const __PATTERN_TREE: &::assert_struct::__macro_support::PatternNode = &#root_ref;
 
-                // Create error collection vector
-                let mut __errors: Vec<::assert_struct::__macro_support::ErrorContext> = Vec::new();
+                // Create error report
+                let mut __report = ::assert_struct::__macro_support::ErrorReport::new();
 
                 #assertion
 
                 // Check if any errors were collected
-                if !__errors.is_empty() {
-                    panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, __errors, stringify!(#value)));
+                if !__report.is_empty() {
+                    panic!("{}", __report);
                 }
             };
             __assert_struct_result
@@ -741,13 +741,6 @@ fn generate_error_push(
 ) -> TokenStream {
     let node_ident = expand_pattern_node_ident(node_id);
     quote_spanned! {span=>
-        let __line = line!();
-        let __error = ::assert_struct::__macro_support::ErrorContext {
-            actual_value: #actual_value,
-            line_number: __line,
-            expected_value: #expected_value,
-            error_node: &#node_ident,
-        };
-        __errors.push(__error);
+        __report.push(&#node_ident, line!(), #actual_value, #expected_value);
     }
 }

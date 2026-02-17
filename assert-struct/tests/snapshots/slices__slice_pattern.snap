@@ -3,10 +3,4 @@ source: assert-struct/tests/slices.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | Data {
-mismatch:
-  --> `data.values.[1]` (line 15)
-   |     [1]: 5,
-   |          ^ actual: 2
-   | }
+expected 2 to match 5

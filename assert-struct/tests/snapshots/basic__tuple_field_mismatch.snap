@@ -3,10 +3,4 @@ source: assert-struct/tests/basic.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | TupleHolder {
-mismatch:
-  --> `holder.data` (line 22)
-   |     data: (60, "test"),
-   |            ^^ actual: 50
-   | }
+expected 50 to match 60

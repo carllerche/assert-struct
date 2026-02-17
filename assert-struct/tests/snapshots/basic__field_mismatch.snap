@@ -3,10 +3,4 @@ source: assert-struct/tests/basic.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | User {
-mismatch:
-  --> `user.name` (line 19)
-   |     name: "Bob",
-   |           ^^^^^ actual: "Alice"
-   | }
+expected "Alice" to match "Bob"

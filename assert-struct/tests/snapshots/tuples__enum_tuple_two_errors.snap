@@ -2,12 +2,6 @@
 source: assert-struct/tests/tuples.rs
 expression: message
 ---
-assert_struct! failed: 2 mismatches
-
-   | MessageQueue {
-mismatch:
-  --> `queue.current` (line 25)
-   |     current: Message::Pair(100, "expected"),
-   |                            ^^^  ^^^^^^^^^^ actual: "actual"
-   |                            └─ actual: 50
-   | }
+assert_struct! failed:
+expected 50 to match 100
+expected "actual" to match "expected"

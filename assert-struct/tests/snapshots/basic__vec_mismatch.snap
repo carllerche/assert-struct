@@ -3,10 +3,4 @@ source: assert-struct/tests/basic.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | DataHolder {
-mismatch:
-  --> `data.values.[2]` (line 19)
-   |     [2]: 4,
-   |          ^ actual: 3
-   | }
+expected 3 to match 4

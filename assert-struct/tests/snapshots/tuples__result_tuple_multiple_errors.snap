@@ -2,10 +2,6 @@
 source: assert-struct/tests/tuples.rs
 expression: message
 ---
-assert_struct! failed: 2 mismatches
-
-   | Response {
-mismatch:
-  --> `response.data` (line 21)
-   |     data: Ok(<complex>),
-   | }
+assert_struct! failed:
+expected 42 to match 100
+expected "success" to match "different"

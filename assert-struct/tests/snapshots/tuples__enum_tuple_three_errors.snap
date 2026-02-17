@@ -2,13 +2,7 @@
 source: assert-struct/tests/tuples.rs
 expression: message
 ---
-assert_struct! failed: 3 mismatches
-
-   | MessageQueue {
-mismatch:
-  --> `queue.current` (line 25)
-   |     current: Message::Triple(100, "expected", false),
-   |                              ^^^  ^^^^^^^^^^  ^^^^^ actual: true
-   |                              │    └─ actual: "actual"
-   |                              └─ actual: 42
-   | }
+assert_struct! failed:
+expected 42 to match 100
+expected "actual" to match "expected"
+expected true to match false

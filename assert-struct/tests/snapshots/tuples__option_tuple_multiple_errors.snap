@@ -2,10 +2,7 @@
 source: assert-struct/tests/tuples.rs
 expression: message
 ---
-assert_struct! failed: 3 mismatches
-
-   | Container {
-mismatch:
-  --> `container.value` (line 21)
-   |     value: Some(<complex>),
-   | }
+assert_struct! failed:
+expected 75 to match 100
+expected "test" to match "other"
+expected false to match true

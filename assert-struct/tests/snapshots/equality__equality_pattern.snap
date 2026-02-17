@@ -3,10 +3,4 @@ source: assert-struct/tests/equality.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | Config {
-mismatch:
-  --> `config.timeout` (line 14)
-   |     timeout: == expected_timeout,
-   |              ^^^^^^^^^^^^^^^^^^^ actual: 30
-   | }
+expected expected_timeout, got 30

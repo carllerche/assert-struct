@@ -3,9 +3,4 @@ source: assert-struct/tests/enum_struct_patterns.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | Request {
-mismatch:
-  --> `request.statement` (line 31)
-   |     statement: Statement::Query(<complex>),
-   | }
+expected 25 to match > 50

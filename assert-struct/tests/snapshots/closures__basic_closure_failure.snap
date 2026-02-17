@@ -3,10 +3,4 @@ source: assert-struct/tests/closures.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | TestData {
-mismatch:
-  --> `data.value` (line 45)
-   |     value: | x | * x > 40,
-   |            ^^^^^^^^^^^^^^ actual: 30
-   | }
+closure condition not satisfied, got 30

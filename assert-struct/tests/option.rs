@@ -205,7 +205,7 @@ fn test_option_none_with_collections() {
 // Failure cases
 
 #[test]
-#[should_panic(expected = "mismatch")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_some_none_mismatch() {
     let user = User {
         id: 7,
@@ -228,7 +228,7 @@ fn test_some_none_mismatch() {
 }
 
 #[test]
-#[should_panic(expected = "mismatch")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_none_some_mismatch() {
     let user = User {
         id: 8,
@@ -251,7 +251,7 @@ fn test_none_some_mismatch() {
 }
 
 #[test]
-#[should_panic(expected = "mismatch")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_some_value_mismatch() {
     let user = User {
         id: 9,
@@ -405,7 +405,7 @@ fn test_mixed_option_patterns() {
 }
 
 #[test]
-#[should_panic(expected = "mismatch")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_option_comparison_failure() {
     let user = UserAdvanced {
         name: "Grace".to_string(),
@@ -423,7 +423,7 @@ fn test_option_comparison_failure() {
 }
 
 #[test]
-#[should_panic(expected = "mismatch")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_option_comparison_none_failure() {
     let user = UserAdvanced {
         name: "Henry".to_string(),
@@ -442,7 +442,7 @@ fn test_option_comparison_none_failure() {
 
 #[test]
 #[cfg(feature = "regex")]
-#[should_panic(expected = "mismatch")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_option_regex_failure() {
     let user = UserAdvanced {
         name: "Iris".to_string(),
@@ -600,7 +600,7 @@ fn test_deeply_nested_with_partial_matching() {
 }
 
 #[test]
-#[should_panic(expected = "mismatch")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_nested_field_mismatch() {
     let profile = Profile {
         bio: Some("Developer".to_string()),
@@ -625,7 +625,7 @@ fn test_nested_field_mismatch() {
 }
 
 #[test]
-#[should_panic(expected = "mismatch")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_expected_some_got_none_nested() {
     let profile = Profile {
         bio: Some("Developer".to_string()),

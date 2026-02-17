@@ -3,10 +3,4 @@ source: assert-struct/tests/field_operations.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | TestStruct {
-mismatch:
-  --> `test.boxed_vec.[2]` (line 16)
-   |     [2]: 4,
-   |          ^ actual: 3
-   | }
+expected 3 to match 4

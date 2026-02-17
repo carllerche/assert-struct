@@ -3,10 +3,4 @@ source: assert-struct/tests/option.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | Data {
-mismatch:
-  --> `data.value` (line 13)
-   |     value: Some(> 30),
-   |                 ^^^^ actual: 25
-   | }
+expected 25 to match > 30

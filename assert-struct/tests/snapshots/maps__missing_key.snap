@@ -3,10 +3,4 @@ source: assert-struct/tests/maps.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | TestData {
-mismatch:
-  --> `data.string_map` (line 19)
-   |     string_map: #{"missing_key": "value", ..: ..},
-   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ actual: missing key
-   | }
+expected missing key to match #{ 2 entries }

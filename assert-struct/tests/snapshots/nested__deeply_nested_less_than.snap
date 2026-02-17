@@ -3,10 +3,4 @@ source: assert-struct/tests/nested.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | Pod { ... Container { ... Metrics {
-mismatch:
-  --> `pod.container.metrics.cpu_usage` (line 39)
-   |     cpu_usage: < 50.0,
-   |                ^^^^^^ actual: 75.5
-   | } ... } ... }
+expected 75.5 to match < 50.0

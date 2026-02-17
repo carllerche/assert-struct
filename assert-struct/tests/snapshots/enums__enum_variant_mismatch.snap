@@ -3,10 +3,4 @@ source: assert-struct/tests/enums.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | Account {
-mismatch:
-  --> `account.status` (line 28)
-   |     status: Status::Active,
-   |             ^^^^^^^^^^^^^^ actual: Inactive
-   | }
+expected variant Status::Active, got Inactive

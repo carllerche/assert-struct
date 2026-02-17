@@ -3,10 +3,4 @@ source: assert-struct/tests/field_operations.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | TestStruct {
-mismatch:
-  --> `test.arc_value` (line 18)
-   |     arc_value: > 60,
-   |                ^^^^ actual: 50
-   | }
+expected 50 to match > 60

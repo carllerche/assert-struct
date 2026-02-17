@@ -3,3 +3,4 @@ source: assert-struct/tests/maps.rs
 expression: message
 ---
 assert_struct! failed:
+expected "actual_value" to match "expected_value"

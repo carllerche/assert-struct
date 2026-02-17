@@ -3,10 +3,4 @@ source: assert-struct/tests/repeated_field_patterns.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | User {
-mismatch:
-  --> `user.age` (line 17)
-   |     age: <= 99,
-   |          ^^^^^ actual: 105
-   | }
+expected 105 to match <= 99

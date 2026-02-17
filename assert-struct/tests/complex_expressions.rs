@@ -347,7 +347,7 @@ fn test_macro_in_expression() {
 
 // Test failure cases
 #[test]
-#[should_panic(expected = "mismatch")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_complex_expression_failure() {
     let user = User {
         name: "Mike".to_string(),

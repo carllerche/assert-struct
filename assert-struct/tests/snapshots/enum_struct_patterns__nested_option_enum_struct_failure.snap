@@ -3,9 +3,4 @@ source: assert-struct/tests/enum_struct_patterns.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | Container {
-mismatch:
-  --> `container.data` (line 31)
-   |     data: Some(Statement::Query(Query { ... })),
-   | }
+expected 10 to match > 100

@@ -3,10 +3,4 @@ source: assert-struct/tests/nested.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | User { ... Profile {
-mismatch:
-  --> `user.profile.age` (line 25)
-   |     age: >= 18,
-   |          ^^^^^ actual: 17
-   | } ... }
+expected 17 to match >= 18

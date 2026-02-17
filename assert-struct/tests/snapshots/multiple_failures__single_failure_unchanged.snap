@@ -3,10 +3,4 @@ source: assert-struct/tests/multiple_failures.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | User {
-mismatch:
-  --> `user.age` (line 23)
-   |     age: > 30,
-   |          ^^^^ actual: 25
-   | }
+expected 25 to match > 30

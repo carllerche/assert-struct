@@ -3,8 +3,4 @@ source: assert-struct/tests/enums.rs
 expression: message
 ---
 assert_struct! failed:
-
-mismatch:
-  --> `value` (line 7)
-   | None
-   | ^^^^ actual: Some(10)
+expected variant None, got Some(10)

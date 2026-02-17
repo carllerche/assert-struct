@@ -3,10 +3,4 @@ source: assert-struct/tests/enums.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | UserData {
-mismatch:
-  --> `data.login_result` (line 30)
-   |     login_result: Ok("user123"),
-   |                   ^^ actual: Err("Failed")
-   | }
+expected variant Ok(...), got Err("Failed")

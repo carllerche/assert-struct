@@ -3,10 +3,4 @@ source: assert-struct/tests/index_operations.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | Data {
-mismatch:
-  --> `data.matrix` (line 15)
-   |     matrix: 5,
-   |             ^ actual: 2
-   | }
+expected 2 to match 5

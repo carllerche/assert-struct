@@ -2,14 +2,8 @@
 source: assert-struct/tests/tuples.rs
 expression: message
 ---
-assert_struct! failed: 4 mismatches
-
-   | MessageQueue {
-mismatch:
-  --> `queue.current` (line 25)
-   |     current: Message::Quad(1, 2, 3, 4),
-   |                            ^  ^  ^  ^ actual: 40
-   |                            │  │  └─ actual: 30
-   |                            │  └─ actual: 20
-   |                            └─ actual: 10
-   | }
+assert_struct! failed:
+expected 10 to match 1
+expected 20 to match 2
+expected 30 to match 3
+expected 40 to match 4

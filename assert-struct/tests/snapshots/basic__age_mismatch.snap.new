@@ -1,7 +1,0 @@
----
-source: assert-struct/tests/basic.rs
-assertion_line: 55
-expression: message
----
-assert_struct! failed:
-expected 30 to match 25

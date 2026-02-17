@@ -3,10 +3,4 @@ source: assert-struct/tests/field_operations.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | TestStruct {
-mismatch:
-  --> `test.tuple_with_box` (line 17)
-   |     tuple_with_box: ("test", 42),
-   |                              ^^ actual: 99
-   | }
+expected 99 to match 42

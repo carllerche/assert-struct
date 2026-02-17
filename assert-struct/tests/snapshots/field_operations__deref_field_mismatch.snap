@@ -3,10 +3,4 @@ source: assert-struct/tests/field_operations.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | TestStruct {
-mismatch:
-  --> `test.boxed_value` (line 17)
-   |     boxed_value: 99,
-   |                  ^^ actual: 42
-   | }
+expected 42 to match 99

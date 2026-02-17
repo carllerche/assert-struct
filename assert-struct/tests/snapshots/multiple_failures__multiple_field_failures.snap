@@ -2,15 +2,6 @@
 source: assert-struct/tests/multiple_failures.rs
 expression: message
 ---
-assert_struct! failed: 2 mismatches
-
-   | User {
-mismatch:
-  --> `user.age` (line 23)
-   |     age: > 18,
-   |          ^^^^ actual: 17
-mismatch:
-  --> `user.email` (line 24)
-   |     email: "alice@example.com",
-   |            ^^^^^^^^^^^^^^^^^^^ actual: "alice@wrong.com"
-   | }
+assert_struct! failed:
+expected 17 to match > 18
+expected "alice@wrong.com" to match "alice@example.com"

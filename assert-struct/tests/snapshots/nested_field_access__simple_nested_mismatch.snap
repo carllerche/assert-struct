@@ -3,10 +3,4 @@ source: assert-struct/tests/nested_field_access.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | Outer {
-mismatch:
-  --> `data.inner` (line 22)
-   |     inner: 100,
-   |            ^^^ actual: 42
-   | }
+expected 42 to match 100

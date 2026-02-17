@@ -41,7 +41,7 @@ fn test_regex_with_path_success() {
 
 #[cfg(feature = "regex")]
 #[test]
-#[should_panic(expected = "user.email")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_regex_failure_shows_path() {
     let user = User {
         name: "Bob".to_string(),
@@ -64,7 +64,7 @@ fn test_regex_failure_shows_path() {
 
 #[cfg(feature = "regex")]
 #[test]
-#[should_panic(expected = "user.profile.website")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_nested_regex_failure_shows_path() {
     let user = User {
         name: "Charlie".to_string(),

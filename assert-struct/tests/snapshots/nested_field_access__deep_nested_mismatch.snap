@@ -3,10 +3,4 @@ source: assert-struct/tests/nested_field_access.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | Level1 {
-mismatch:
-  --> `data.level2` (line 29)
-   |     level2: "expected",
-   |             ^^^^^^^^^^ actual: "actual"
-   | }
+expected "actual" to match "expected"

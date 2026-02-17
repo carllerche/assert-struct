@@ -3,10 +3,4 @@ source: assert-struct/tests/wildcard.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | TestStruct {
-mismatch:
-  --> `test.data` (line 27)
-   |     data: Some(_),
-   |           ^^^^ actual: None
-   | }
+expected variant Some(...), got None

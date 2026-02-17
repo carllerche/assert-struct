@@ -2,10 +2,7 @@
 source: assert-struct/tests/enum_struct_patterns.rs
 expression: message
 ---
-assert_struct! failed: 3 mismatches
-
-   | Request {
-mismatch:
-  --> `request.statement` (line 30)
-   |     statement: Statement::Query(<complex>),
-   | }
+assert_struct! failed:
+expected "select_users" to match "get_items"
+slice length or structure mismatch, got ["id"]
+expected 25 to match > 50

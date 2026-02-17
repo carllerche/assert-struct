@@ -3,10 +3,4 @@ source: assert-struct/tests/nested.rs
 expression: message
 ---
 assert_struct! failed:
-
-   | Company { ... CompanyLocation { ... Office {
-mismatch:
-  --> `company.location.office.rooms` (line 41)
-   | 10 ..= 20
-   | ^^^^^^^^^ actual: 5
-   | } ... } ... }
+expected 5 to match 10 ..= 20
