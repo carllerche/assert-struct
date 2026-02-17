@@ -5,24 +5,48 @@ use std::path::PathBuf;
 
 use annotate_snippets::{AnnotationKind, Level, Renderer, Snippet};
 
-/// Find the absolute path for a workspace-relative source file path.
-/// `file!()` in a Rust workspace returns a path relative to the workspace root,
-/// but the CWD at test runtime is the package root (one level deeper).
-/// Walk up from CWD until we find a base directory where the relative path exists.
-fn resolve_source_file(relative: &str) -> Option<PathBuf> {
-    let rel = std::path::Path::new(relative);
-    if rel.is_absolute() {
-        return rel.exists().then(|| rel.to_owned());
-    }
-    let cwd = std::env::current_dir().ok()?;
-    let mut dir = cwd.as_path();
-    loop {
-        let candidate = dir.join(rel);
-        if candidate.exists() {
-            return Some(candidate);
+/// Derive the absolute source file path from two compile-time constants:
+/// - `manifest_dir`: value of `env!("CARGO_MANIFEST_DIR")` — absolute path to the package root
+/// - `file_path`: value of `file!()` — path relative to the workspace root
+///
+/// In a Rust workspace, `file!()` is workspace-root-relative while `CARGO_MANIFEST_DIR`
+/// is package-root-absolute. The package dir name(s) appear as a suffix of `manifest_dir`
+/// and as a matching prefix of `file_path`. By stripping that overlap we get the workspace
+/// root, then join with `file_path` for a fully absolute path.
+///
+/// Example (flat workspace):
+///   manifest_dir = /workspace/my-crate
+///   file_path    = my-crate/src/lib.rs
+///   overlap      = my-crate  →  workspace root = /workspace
+///   result       = /workspace/my-crate/src/lib.rs
+///
+/// Works for nested members too (overlap spans multiple path components).
+fn absolute_source_path(manifest_dir: &str, file_path: &str) -> PathBuf {
+    use std::path::Path;
+
+    let manifest = Path::new(manifest_dir);
+    let file = Path::new(file_path);
+
+    // Collect path components for each side.
+    let manifest_components: Vec<_> = manifest.components().collect();
+    let file_components: Vec<_> = file.components().collect();
+
+    // Find the longest suffix of manifest_components that matches a prefix of file_components.
+    let mut overlap = 0;
+    for len in 1..=manifest_components.len().min(file_components.len()) {
+        let suffix = &manifest_components[manifest_components.len() - len..];
+        let prefix = &file_components[..len];
+        if suffix == prefix {
+            overlap = len;
         }
-        dir = dir.parent()?;
     }
+
+    // Workspace root = manifest_dir minus the overlapping suffix.
+    let workspace_root: PathBuf = manifest_components[..manifest_components.len() - overlap]
+        .iter()
+        .collect();
+
+    workspace_root.join(file)
 }
 
 /// Compute the byte offset of a (line, col) position within a source string.
@@ -52,14 +76,15 @@ struct ErrorContext {
 #[derive(Debug)]
 pub struct ErrorReport {
     errors: Vec<ErrorContext>,
-    file_path: String,
+    /// Absolute path to the source file, derived at construction time.
+    file_path: PathBuf,
 }
 
 impl ErrorReport {
-    pub fn new(file_path: &str) -> Self {
+    pub fn new(manifest_dir: &str, file_path: &str) -> Self {
         ErrorReport {
             errors: Vec::new(),
-            file_path: file_path.to_string(),
+            file_path: absolute_source_path(manifest_dir, file_path),
         }
     }
 
@@ -201,13 +226,13 @@ impl fmt::Display for ErrorReport {
             return Ok(());
         }
 
-        let source_content = resolve_source_file(&self.file_path)
-            .and_then(|p| std::fs::read_to_string(p).ok());
+        let source_content = std::fs::read_to_string(&self.file_path).ok();
 
         // Pre-compute labels so their lifetimes outlive the report construction.
         let labels: Vec<String> = self.errors.iter().map(error_label).collect();
 
         let renderer = Renderer::styled();
+        let file_path_str = self.file_path.to_string_lossy();
 
         if let Some(source) = &source_content {
             let annotations: Vec<_> = self
@@ -228,7 +253,7 @@ impl fmt::Display for ErrorReport {
 
             let snippet = Snippet::source(source.as_str())
                 .line_start(1)
-                .path(&self.file_path)
+                .path(&file_path_str)
                 .annotations(annotations);
 
             let report = Level::ERROR

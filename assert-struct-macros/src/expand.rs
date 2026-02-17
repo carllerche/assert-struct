@@ -50,9 +50,14 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
                 // Store the pattern tree root
                 const __PATTERN_TREE: &::assert_struct::__macro_support::PatternNode = &#root_ref;
 
-                // Create error report with the source-relative file path
+                // Create error report. Both values are compile-time constants:
+                // - CARGO_MANIFEST_DIR: absolute path to this package's root
+                // - file!(): path relative to the workspace root
+                // Together they let us derive the absolute source path at runtime
+                // without relying on the working directory.
                 let mut __report = ::assert_struct::__macro_support::ErrorReport::new(
-                    ::std::file!()
+                    ::std::env!("CARGO_MANIFEST_DIR"),
+                    ::std::file!(),
                 );
 
                 #assertion
