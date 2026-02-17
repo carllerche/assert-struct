@@ -15,15 +15,17 @@ struct ErrorContext {
 }
 
 /// Collected assertion errors for reporting.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ErrorReport {
     errors: Vec<ErrorContext>,
+    file_path: String,
 }
 
 impl ErrorReport {
-    pub fn new() -> Self {
+    pub fn new(file_path: &str) -> Self {
         ErrorReport {
             errors: Vec::new(),
+            file_path: file_path.to_string(),
         }
     }
 

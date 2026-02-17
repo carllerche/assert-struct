@@ -50,8 +50,10 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
                 // Store the pattern tree root
                 const __PATTERN_TREE: &::assert_struct::__macro_support::PatternNode = &#root_ref;
 
-                // Create error report
-                let mut __report = ::assert_struct::__macro_support::ErrorReport::new();
+                // Create error report with the absolute path to the calling file
+                let mut __report = ::assert_struct::__macro_support::ErrorReport::new(
+                    ::std::concat!(::std::env!("CARGO_MANIFEST_DIR"), "/", ::std::file!())
+                );
 
                 #assertion
 
