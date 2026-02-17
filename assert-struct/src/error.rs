@@ -1,6 +1,40 @@
 //! Error types and formatting for assert_struct macro failures.
 
 use std::fmt;
+use std::path::PathBuf;
+
+use annotate_snippets::{AnnotationKind, Level, Renderer, Snippet};
+
+/// Find the absolute path for a workspace-relative source file path.
+/// `file!()` in a Rust workspace returns a path relative to the workspace root,
+/// but the CWD at test runtime is the package root (one level deeper).
+/// Walk up from CWD until we find a base directory where the relative path exists.
+fn resolve_source_file(relative: &str) -> Option<PathBuf> {
+    let rel = std::path::Path::new(relative);
+    if rel.is_absolute() {
+        return rel.exists().then(|| rel.to_owned());
+    }
+    let cwd = std::env::current_dir().ok()?;
+    let mut dir = cwd.as_path();
+    loop {
+        let candidate = dir.join(rel);
+        if candidate.exists() {
+            return Some(candidate);
+        }
+        dir = dir.parent()?;
+    }
+}
+
+/// Compute the byte offset of a (line, col) position within a source string.
+/// Both `line` and `col` are 1-indexed (as returned by Rust's `line!()` / `column!()`).
+fn byte_offset_of(source: &str, line: u32, col: u32) -> usize {
+    let line_start: usize = source
+        .split('\n')
+        .take((line - 1) as usize)
+        .map(|l| l.len() + 1) // +1 for the '\n'
+        .sum();
+    (line_start + col.saturating_sub(1) as usize).min(source.len())
+}
 
 /// Context information for a failed assertion.
 #[derive(Debug, Clone)]
@@ -46,6 +80,33 @@ impl ErrorReport {
             expected_value: expected,
             error_node,
         });
+    }
+}
+
+/// Build a human-readable annotation label for a failed assertion.
+fn error_label(error: &ErrorContext) -> String {
+    match &error.error_node.kind {
+        NodeKind::Comparison {
+            op: ComparisonOp::Equal,
+            ..
+        } => format!(
+            "expected {}, got {}",
+            error.expected_value.as_deref().unwrap_or("?"),
+            error.actual_value,
+        ),
+        NodeKind::EnumVariant { .. } => format!(
+            "expected variant {}, got {}",
+            error.error_node, error.actual_value,
+        ),
+        NodeKind::Slice { .. } => format!(
+            "slice length or structure mismatch, got {}",
+            error.actual_value,
+        ),
+        NodeKind::Closure { .. } => format!(
+            "closure condition not satisfied, got {}",
+            error.actual_value,
+        ),
+        _ => format!("got {}", error.actual_value),
     }
 }
 
@@ -140,37 +201,47 @@ impl fmt::Display for ErrorReport {
             return Ok(());
         }
 
-        write!(f, "assert_struct! failed:")?;
+        let source_content = resolve_source_file(&self.file_path)
+            .and_then(|p| std::fs::read_to_string(p).ok());
 
-        for error in &self.errors {
-            let msg = match &error.error_node.kind {
-                NodeKind::Comparison {
-                    op: ComparisonOp::Equal,
-                    ..
-                } => format!(
-                    "\nexpected {}, got {}",
-                    error.expected_value.as_deref().unwrap_or("?"),
-                    error.actual_value,
-                ),
-                NodeKind::EnumVariant { .. } => format!(
-                    "\nexpected variant {}, got {}",
-                    error.error_node, error.actual_value,
-                ),
-                NodeKind::Slice { .. } => format!(
-                    "\nslice length or structure mismatch, got {}",
-                    error.actual_value,
-                ),
-                NodeKind::Closure { .. } => format!(
-                    "\nclosure condition not satisfied, got {}",
-                    error.actual_value,
-                ),
-                _ => format!(
-                    "\nexpected {} to match {}",
-                    error.actual_value, error.error_node,
-                ),
-            };
+        // Pre-compute labels so their lifetimes outlive the report construction.
+        let labels: Vec<String> = self.errors.iter().map(error_label).collect();
 
-            write!(f, "{}", msg)?;
+        let renderer = Renderer::styled();
+
+        if let Some(source) = &source_content {
+            let annotations: Vec<_> = self
+                .errors
+                .iter()
+                .zip(labels.iter())
+                .map(|(error, label)| {
+                    let start =
+                        byte_offset_of(source, error.line_number, error.error_node.column);
+                    // Use the pattern's display text length to size the highlight span.
+                    let pattern_len = error.error_node.to_string().len().max(1);
+                    let end = (start + pattern_len).min(source.len());
+                    AnnotationKind::Primary
+                        .span(start..end)
+                        .label(label.as_str())
+                })
+                .collect();
+
+            let snippet = Snippet::source(source.as_str())
+                .line_start(1)
+                .path(&self.file_path)
+                .annotations(annotations);
+
+            let report = Level::ERROR
+                .primary_title("assert_struct! failed")
+                .element(snippet);
+
+            write!(f, "{}", renderer.render(&[report]))?;
+        } else {
+            // Fallback when the source file cannot be read.
+            write!(f, "assert_struct! failed:")?;
+            for label in &labels {
+                write!(f, "\n  {label}")?;
+            }
         }
 
         Ok(())

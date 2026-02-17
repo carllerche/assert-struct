@@ -24,6 +24,7 @@ regex = ["assert-struct-macros/regex", "dep:regex"]
 
 [dependencies]
 assert-struct-macros = { version = "0.2.0", path = "../assert-struct-macros" }
+annotate-snippets = "0.12"
 regex = { workspace = true, optional = true }
 
 [dev-dependencies]

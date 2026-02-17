@@ -50,9 +50,9 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
                 // Store the pattern tree root
                 const __PATTERN_TREE: &::assert_struct::__macro_support::PatternNode = &#root_ref;
 
-                // Create error report with the absolute path to the calling file
+                // Create error report with the source-relative file path
                 let mut __report = ::assert_struct::__macro_support::ErrorReport::new(
-                    ::std::concat!(::std::env!("CARGO_MANIFEST_DIR"), "/", ::std::file!())
+                    ::std::file!()
                 );
 
                 #assertion
@@ -503,12 +503,12 @@ fn expand_string_assertion(value_expr: &TokenStream, pattern: &PatternString) ->
         pattern.node_id,
     );
 
-    quote_spanned! {span=>
+    quote_spanned! {span=> {
         let actual = (#value_expr).as_ref();
         if !matches!(actual, #lit) {
             #error_push
         }
-    }
+    }}
 }
 
 /// Generate simple assertion with error collection
@@ -612,12 +612,7 @@ fn expand_like_assertion(value_expr: &TokenStream, pattern: &PatternLike) -> Tok
     let span = pattern_expr.span();
     let actual_value = quote!(format!("{:?}", #value_expr));
 
-    let error_push = generate_error_push(
-        span,
-        actual_value,
-        quote!(None),
-        pattern.node_id,
-    );
+    let error_push = generate_error_push(span, actual_value, quote!(None), pattern.node_id);
 
     quote_spanned! {span=>
         {

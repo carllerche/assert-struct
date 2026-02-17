@@ -2,17 +2,20 @@
 use assert_struct::assert_struct;
 
 #[derive(Debug)]
-struct Hello {
-    world: String,
+struct User {
+    name: String,
+    age: u32,
 }
 
 pub fn main() {
-    let actual = Hello {
-        world: "hello world".to_string(),
+    let actual = User {
+        name: "Alice".to_string(),
+        age: 20,
     };
 
     assert_struct!(actual, _ {
-        world: "world",
+        name: "Bob",
+        age: 21,
         ..
     });
 }
