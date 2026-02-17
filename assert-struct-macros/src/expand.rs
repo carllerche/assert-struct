@@ -517,8 +517,7 @@ fn generate_wildcard_struct_assertion_with_collection(
                 // Apply operations - pass false for in_ref_context since we're not taking a reference
                 let expr = apply_field_operations(&base_field_access, ops, false);
 
-                // Operations change the reference level based on their type
-                let is_ref = field_operation_returns_reference(ops);
+                let is_ref = false;
                 (expr, is_ref)
             } else {
                 // No operations - we need a reference to the field for comparison
@@ -604,8 +603,8 @@ fn generate_struct_match_assertion_with_collection(
             let (value_expr, is_ref_after_operations) = if let Some(ops) = field_operations {
                 // We're always in a reference context for struct destructuring (match &value)
                 let expr = apply_field_operations(&quote! { #field_name }, ops, true);
-                // Operations change the reference level based on their type
-                let is_ref = field_operation_returns_reference(ops);
+
+                let is_ref = false;
                 (expr, is_ref)
             } else {
                 (quote! { #field_name }, true)
@@ -798,26 +797,6 @@ fn apply_field_operations(
         }
     }
 }
-
-/// Helper function to determine if a field operation returns a reference
-fn field_operation_returns_reference(operation: &FieldOperation) -> bool {
-    match operation {
-        FieldOperation::Deref { .. } => false, // Dereferencing removes reference level
-        FieldOperation::Method { .. } => false, // Method calls return owned values
-        FieldOperation::Await { .. } => false, // Await returns owned values
-        FieldOperation::Nested { .. } => false, // Nested field access auto-derefs to get field value
-        FieldOperation::Index { .. } => false,  // Index operations behave like place expressions
-        FieldOperation::Combined { .. } => false, // Combined with deref also removes reference level
-        FieldOperation::Chained { operations, .. } => {
-            // For chained operations, the reference level is determined by the last operation
-            operations
-                .last()
-                .map(field_operation_returns_reference)
-                .unwrap_or(false)
-        }
-    }
-}
-
 /// Helper function to process tuple elements and generate match patterns and assertions.
 ///
 /// This function handles the common pattern of iterating through elements and:
@@ -885,11 +864,7 @@ fn process_tuple_elements(
                 };
 
                 // Apply the same reference level logic as for struct fields
-                let is_ref_after_operations = if let Some(ops) = operations {
-                    field_operation_returns_reference(ops)
-                } else {
-                    is_ref
-                };
+                let is_ref_after_operations = if operations.is_some() { false } else { is_ref };
 
                 // Generate assertion with error collection
                 let assertion = generate_pattern_assertion_with_collection(
