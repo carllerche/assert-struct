@@ -257,7 +257,13 @@ impl fmt::Display for ErrorReport {
         // Pre-compute labels so their lifetimes outlive the report construction.
         let labels: Vec<String> = self.errors.iter().map(error_label).collect();
 
-        let renderer = Renderer::styled();
+        let renderer = if std::env::var_os("NO_COLOR").is_some()
+            || !std::io::IsTerminal::is_terminal(&std::io::stderr())
+        {
+            Renderer::plain()
+        } else {
+            Renderer::styled()
+        };
 
         if let Some(source) = &source_content {
             let annotations: Vec<_> = self

@@ -2,5 +2,8 @@
 source: assert-struct/tests/field_operations.rs
 expression: message
 ---
-assert_struct! failed:
-expected 99 to match 42
+error: assert_struct! failed
+  --> assert-struct/tests/field_operations_errors/tuple_indexed_deref_mismatch.rs:17:38
+   |
+17 |         tuple_with_box: ("test", *1: 42),  // Should be 99, will fail
+   |                                      ^^ got 99

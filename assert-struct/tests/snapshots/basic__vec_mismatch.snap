@@ -2,5 +2,8 @@
 source: assert-struct/tests/basic.rs
 expression: message
 ---
-assert_struct! failed:
-expected 3 to match 4
+error: assert_struct! failed
+  --> assert-struct/tests/basic_errors/vec_mismatch.rs:19:28
+   |
+19 |             values: [1, 2, 4], // Wrong last element
+   |                            ^ got 3

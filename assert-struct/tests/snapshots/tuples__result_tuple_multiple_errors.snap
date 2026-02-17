@@ -2,6 +2,10 @@
 source: assert-struct/tests/tuples.rs
 expression: message
 ---
-assert_struct! failed:
-expected 42 to match 100
-expected "success" to match "different"
+error: assert_struct! failed
+  --> assert-struct/tests/tuples_errors/result_multiple_errors.rs:21:23
+   |
+21 |             data: Ok((100, "different")), // Both fields in Ok variant wrong
+   |                       ^^^  ^^^^^^^^^^^ got "success"
+   |                       |
+   |                       got 42

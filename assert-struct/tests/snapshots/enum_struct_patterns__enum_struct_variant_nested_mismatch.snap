@@ -2,5 +2,8 @@
 source: assert-struct/tests/enum_struct_patterns.rs
 expression: message
 ---
-assert_struct! failed:
-expected "update_user" to match "delete_user"
+error: assert_struct! failed
+  --> assert-struct/tests/enum_struct_patterns_errors/enum_struct_variant_nested_mismatch.rs:36:23
+   |
+36 |                 name: "delete_user",  // This will fail
+   |                       ^^^^^^^^^^^^^ got "update_user"

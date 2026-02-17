@@ -2,5 +2,8 @@
 source: assert-struct/tests/nested.rs
 expression: message
 ---
-assert_struct! failed:
-expected "actual" to match "expected"
+error: assert_struct! failed
+  --> assert-struct/tests/nested_errors/deeply_nested_value_mismatch.rs:39:23
+   |
+39 |                 name: "expected",  // Line 38 - should report this line
+   |                       ^^^^^^^^^^ got "actual"

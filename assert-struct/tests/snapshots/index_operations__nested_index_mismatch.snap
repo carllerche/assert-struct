@@ -2,5 +2,8 @@
 source: assert-struct/tests/index_operations.rs
 expression: message
 ---
-assert_struct! failed:
-expected 2 to match 5
+error: assert_struct! failed
+  --> assert-struct/tests/index_operations_errors/nested_index_mismatch.rs:15:23
+   |
+15 |         matrix[0][1]: 5,  // Should be 2, will fail
+   |                       ^ got 2

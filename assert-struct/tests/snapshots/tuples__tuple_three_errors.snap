@@ -2,7 +2,11 @@
 source: assert-struct/tests/tuples.rs
 expression: message
 ---
-assert_struct! failed:
-expected 42 to match 100
-expected "actual" to match "expected"
-expected true to match false
+error: assert_struct! failed
+  --> assert-struct/tests/tuples_errors/three_errors.rs:20:22
+   |
+20 |             triple: (100, "expected", false),  // All three fields wrong
+   |                      ^^^  ^^^^^^^^^^  ^^^^^ got true
+   |                      |    |
+   |                      |    got "actual"
+   |                      got 42

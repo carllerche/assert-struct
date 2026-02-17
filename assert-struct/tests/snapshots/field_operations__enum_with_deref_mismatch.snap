@@ -2,5 +2,8 @@
 source: assert-struct/tests/field_operations.rs
 expression: message
 ---
-assert_struct! failed:
-expected "hello" to match "goodbye"
+error: assert_struct! failed
+  --> assert-struct/tests/field_operations_errors/enum_with_deref_mismatch.rs:15:29
+   |
+15 |         *boxed_option: Some("goodbye"),  // Should be "hello", will fail
+   |                             ^^^^^^^^^ got "hello"

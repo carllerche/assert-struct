@@ -2,5 +2,8 @@
 source: assert-struct/tests/maps.rs
 expression: message
 ---
-assert_struct! failed:
-expected "actual_value" to match "expected_value"
+error: assert_struct! failed
+  --> assert-struct/tests/map_errors/value_mismatch.rs:19:32
+   |
+19 |         string_map: #{ "key1": "expected_value", .. },
+   |                                ^^^^^^^^^^^^^^^^ got "actual_value"

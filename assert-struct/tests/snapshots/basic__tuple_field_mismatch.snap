@@ -2,5 +2,8 @@
 source: assert-struct/tests/basic.rs
 expression: message
 ---
-assert_struct! failed:
-expected 50 to match 60
+error: assert_struct! failed
+  --> assert-struct/tests/basic_errors/tuple_field_mismatch.rs:22:20
+   |
+22 |             data: (60, "test"), // Wrong first element
+   |                    ^^ got 50

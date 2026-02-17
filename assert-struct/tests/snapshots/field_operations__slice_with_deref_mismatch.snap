@@ -2,5 +2,8 @@
 source: assert-struct/tests/field_operations.rs
 expression: message
 ---
-assert_struct! failed:
-expected 3 to match 4
+error: assert_struct! failed
+  --> assert-struct/tests/field_operations_errors/slice_with_deref_mismatch.rs:16:28
+   |
+16 |         *boxed_vec: [1, 2, 4],  // Should be [1, 2, 3], will fail
+   |                            ^ got 3

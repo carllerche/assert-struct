@@ -2,6 +2,11 @@
 source: assert-struct/tests/multiple_failures.rs
 expression: message
 ---
-assert_struct! failed:
-expected 25 to match 30
-expected "Springfield" to match "Shelbyville"
+error: assert_struct! failed
+  --> assert-struct/tests/multiple_failures_errors/mixed_level_failures.rs:33:14
+   |
+33 |         age: 30,  // Line 32 - root level failure (25 != 30)
+   |              ^^ got 25
+...
+37 |             city: "Shelbyville",  // Line 36 - nested failure
+   |                   ^^^^^^^^^^^^^ got "Springfield"

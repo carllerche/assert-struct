@@ -2,5 +2,8 @@
 source: assert-struct/tests/enum_struct_patterns.rs
 expression: message
 ---
-assert_struct! failed:
-expected "select_users" to match "get_items"
+error: assert_struct! failed
+  --> assert-struct/tests/enum_struct_patterns_errors/enum_struct_field_mismatch.rs:35:23
+   |
+35 |                 name: "get_items", // This will fail
+   |                       ^^^^^^^^^^^ got "select_users"

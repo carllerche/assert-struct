@@ -2,7 +2,12 @@
 source: assert-struct/tests/tuples.rs
 expression: message
 ---
-assert_struct! failed:
-expected 999 to match 1000
-expected "this_is_a_very_long_string_that_should_be_truncated_in_the_error_output" to match "different_but_also_very_long_string_that_needs_truncation"
-expected false to match true
+error: assert_struct! failed
+  --> assert-struct/tests/tuples_errors/long_values.rs:25:17
+   |
+25 |                 1000,
+   |                 ^^^^ got 999
+26 |                 "different_but_also_very_long_string_that_needs_truncation",
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ got "this_is_a_very_long_string_that_should_be_truncated_in_the_error_output"
+27 |                 true
+   |                 ^^^^ got false

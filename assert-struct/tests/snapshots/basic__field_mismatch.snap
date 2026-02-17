@@ -2,5 +2,8 @@
 source: assert-struct/tests/basic.rs
 expression: message
 ---
-assert_struct! failed:
-expected "Alice" to match "Bob"
+error: assert_struct! failed
+  --> assert-struct/tests/basic_errors/field_mismatch.rs:19:19
+   |
+19 |             name: "Bob",
+   |                   ^^^^^ got "Alice"

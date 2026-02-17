@@ -2,7 +2,11 @@
 source: assert-struct/tests/tuples.rs
 expression: message
 ---
-assert_struct! failed:
-expected 75 to match 100
-expected "test" to match "other"
-expected false to match true
+error: assert_struct! failed
+  --> assert-struct/tests/tuples_errors/option_multiple_errors.rs:21:26
+   |
+21 |             value: Some((100, "other", true)), // All three fields wrong
+   |                          ^^^  ^^^^^^^  ^^^^ got false
+   |                          |    |
+   |                          |    got "test"
+   |                          got 75

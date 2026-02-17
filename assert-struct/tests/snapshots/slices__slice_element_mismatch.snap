@@ -2,6 +2,10 @@
 source: assert-struct/tests/slices.rs
 expression: message
 ---
-assert_struct! failed:
-expected 3 to match 4
-expected "b" to match "c"
+error: assert_struct! failed
+  --> assert-struct/tests/slices_errors/slice_element_mismatch.rs:21:27
+   |
+21 |             items: [1, 2, 4],  // Last element wrong
+   |                           ^ got 3
+22 |             names: ["a", "c"], // Second element wrong
+   |                          ^^^ got "b"

@@ -2,5 +2,8 @@
 source: assert-struct/tests/enums.rs
 expression: message
 ---
-assert_struct! failed:
-expected "wrong" to match "test"
+error: assert_struct! failed
+  --> assert-struct/tests/enums_errors/tuple_enum_field_mismatch.rs:26:43
+   |
+26 |             current: Message::Complex(42, "test", true),
+   |                                           ^^^^^^ got "wrong"

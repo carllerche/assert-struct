@@ -2,6 +2,10 @@
 source: assert-struct/tests/tuples.rs
 expression: message
 ---
-assert_struct! failed:
-expected 50 to match 100
-expected "actual" to match "expected"
+error: assert_struct! failed
+  --> assert-struct/tests/tuples_errors/two_errors.rs:20:20
+   |
+20 |             pair: (100, "expected"),  // Both fields wrong
+   |                    ^^^  ^^^^^^^^^^ got "actual"
+   |                    |
+   |                    got 50
