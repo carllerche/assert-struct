@@ -1,9 +1,32 @@
 //! Error types and formatting for assert_struct macro failures.
 
+use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
+use std::sync::{Arc, LazyLock, RwLock};
 
 use annotate_snippets::{AnnotationKind, Level, Renderer, Snippet};
+
+/// Global cache of source file contents, keyed by absolute path.
+/// Shared across all `assert_struct!` failures in a test binary so each
+/// file is read at most once regardless of how many assertions fail.
+static SOURCE_CACHE: LazyLock<RwLock<HashMap<PathBuf, Arc<str>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+
+fn cached_source(path: &PathBuf) -> Option<Arc<str>> {
+    // Fast path: already cached.
+    if let Ok(cache) = SOURCE_CACHE.read() {
+        if let Some(content) = cache.get(path) {
+            return Some(content.clone());
+        }
+    }
+    // Slow path: read file and populate cache.
+    let content: Arc<str> = std::fs::read_to_string(path).ok()?.into();
+    if let Ok(mut cache) = SOURCE_CACHE.write() {
+        cache.entry(path.clone()).or_insert_with(|| content.clone());
+    }
+    Some(content)
+}
 
 /// Derive the absolute source file path from two compile-time constants:
 /// - `manifest_dir`: value of `env!("CARGO_MANIFEST_DIR")` — absolute path to the package root
@@ -226,7 +249,7 @@ impl fmt::Display for ErrorReport {
             return Ok(());
         }
 
-        let source_content = std::fs::read_to_string(&self.file_path).ok();
+        let source_content = cached_source(&self.file_path);
 
         // Pre-compute labels so their lifetimes outlive the report construction.
         let labels: Vec<String> = self.errors.iter().map(error_label).collect();
@@ -251,7 +274,7 @@ impl fmt::Display for ErrorReport {
                 })
                 .collect();
 
-            let snippet = Snippet::source(source.as_str())
+            let snippet = Snippet::source(&**source)
                 .line_start(1)
                 .path(&file_path_str)
                 .annotations(annotations);
