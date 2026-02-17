@@ -81,7 +81,6 @@ fn test_root_field_access_lhs() {
 
     // Root field access
     assert_struct!(test.normal_value, 200);
-    // assert_struct!(test.boxed_value, *_: 42); // Not valid syntax
     assert_struct!(*test.boxed_value, 42);
     assert_struct!(*test.rc_value, "hello");
 }

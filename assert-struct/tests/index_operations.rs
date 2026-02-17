@@ -240,7 +240,6 @@ fn test_complex_expressions_lhs() {
         matrix: vec![],
     }];
 
-    // outer[i].field
     assert_struct!(data_vec[0].values, [10, 20]);
     assert_struct!(data_vec[0].values[0], 10);
     assert_struct!(data_vec[0].names[0], "alice");
@@ -252,13 +251,11 @@ fn test_complex_expressions_lhs() {
         }],
     };
 
-    // outer.field[i]
     assert_struct!(nested_data.items[0], Item {
         tags[0]: "rust",
         ..
     });
 
-    // outer.field[i].inner_field
     assert_struct!(nested_data.items[0].tags[0], "rust");
     assert_struct!(nested_data.items[0].scores[0], > 9.0);
 }
