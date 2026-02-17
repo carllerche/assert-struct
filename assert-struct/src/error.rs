@@ -285,10 +285,14 @@ impl fmt::Display for ErrorReport {
 
             write!(f, "{}", renderer.render(&[report]))?;
         } else {
-            // Fallback when the source file cannot be read.
+            // Fallback when the source file cannot be read: show location + description.
             write!(f, "assert_struct! failed:")?;
-            for label in &labels {
-                write!(f, "\n  {label}")?;
+            for (error, label) in self.errors.iter().zip(labels.iter()) {
+                write!(
+                    f,
+                    "\n  --> {}:{}\n  {label}",
+                    file_path_str, error.line_number,
+                )?;
             }
         }
 
