@@ -166,6 +166,102 @@ fn test_index_with_expressions() {
     });
 }
 
+#[derive(Debug)]
+enum Event {
+    Startup { version: String },
+    Shutdown { reason: i32 },
+}
+
+#[test]
+fn test_root_index_operation_lhs() {
+    let events = [
+        Event::Startup {
+            version: "1.0.0".to_string(),
+        },
+        Event::Shutdown { reason: 0 },
+    ];
+
+    // Root index operation with enum
+    assert_struct!(events[0], Event::Startup { version: "1.0.0" });
+    assert_struct!(events[1], Event::Shutdown { reason: 0 });
+
+    let data_vec = [Data {
+        values: vec![1, 2],
+        names: vec!["a".to_string()],
+        matrix: vec![],
+    }];
+
+    // Root index operation with struct
+    assert_struct!(data_vec[0], Data {
+        values[0]: 1,
+        names[0]: "a",
+        ..
+    });
+}
+
+#[derive(Debug)]
+enum NestedEvent {
+    Outer(Event),
+    Multi(Vec<Event>),
+}
+
+#[test]
+fn test_nested_variant_index_lhs() {
+    let events = [
+        NestedEvent::Outer(Event::Startup {
+            version: "2.0".to_string(),
+        }),
+        NestedEvent::Multi(vec![
+            Event::Shutdown { reason: 1 },
+            Event::Startup {
+                version: "3.0".to_string(),
+            },
+        ]),
+    ];
+
+    assert_struct!(
+        events[0],
+        NestedEvent::Outer(Event::Startup { version: "2.0" })
+    );
+    assert_struct!(
+        events[1],
+        NestedEvent::Multi([
+            Event::Shutdown { reason: 1 },
+            Event::Startup { version: "3.0" },
+        ])
+    );
+}
+
+#[test]
+fn test_complex_expressions_lhs() {
+    let data_vec = [Data {
+        values: vec![10, 20],
+        names: vec!["alice".to_string()],
+        matrix: vec![],
+    }];
+
+    // outer[i].field
+    assert_struct!(data_vec[0].values, [10, 20]);
+    assert_struct!(data_vec[0].values[0], 10);
+    assert_struct!(data_vec[0].names[0], "alice");
+
+    let nested_data = NestedData {
+        items: vec![Item {
+            tags: vec!["rust".to_string()],
+            scores: vec![9.5],
+        }],
+    };
+
+    // outer.field[i]
+    assert_struct!(nested_data.items[0], Item {
+        tags[0]: "rust",
+        ..
+    });
+
+    // outer.field[i].inner_field
+    assert_struct!(nested_data.items[0].tags[0], "rust");
+    assert_struct!(nested_data.items[0].scores[0], > 9.0);
+}
 // Error test cases using snapshot testing
 
 // Error message tests using the error_message_test! macro

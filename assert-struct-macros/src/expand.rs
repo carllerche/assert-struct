@@ -806,7 +806,7 @@ fn field_operation_returns_reference(operation: &FieldOperation) -> bool {
         FieldOperation::Method { .. } => false, // Method calls return owned values
         FieldOperation::Await { .. } => false, // Await returns owned values
         FieldOperation::Nested { .. } => false, // Nested field access auto-derefs to get field value
-        FieldOperation::Index { .. } => true,   // Index operations return references to elements
+        FieldOperation::Index { .. } => false,  // Index operations behave like place expressions
         FieldOperation::Combined { .. } => false, // Combined with deref also removes reference level
         FieldOperation::Chained { operations, .. } => {
             // For chained operations, the reference level is determined by the last operation
@@ -1031,12 +1031,6 @@ fn generate_comparison_assertion_with_collection(
 ) -> TokenStream {
     let field_path = path.join(".");
 
-    // Check if this is an index operation by looking at the path
-    // Exclude slice patterns which start with [
-    let is_index_operation = path
-        .iter()
-        .any(|segment| segment.contains("[") && !segment.starts_with("["));
-
     // Adjust for reference level
     let actual_expr = if is_ref {
         quote! { #value_expr }
@@ -1045,17 +1039,7 @@ fn generate_comparison_assertion_with_collection(
     };
 
     let span = expected.span();
-    let comparison = if is_index_operation {
-        // For index operations, avoid references on both sides
-        match op {
-            ComparisonOp::Less => quote_spanned! {span=> #value_expr < #expected },
-            ComparisonOp::LessEqual => quote_spanned! {span=> #value_expr <= #expected },
-            ComparisonOp::Greater => quote_spanned! {span=> #value_expr > #expected },
-            ComparisonOp::GreaterEqual => quote_spanned! {span=> #value_expr >= #expected },
-            ComparisonOp::Equal => quote_spanned! {span=> #value_expr == #expected },
-            ComparisonOp::NotEqual => quote_spanned! {span=> #value_expr != #expected },
-        }
-    } else if is_ref {
+    let comparison = if is_ref {
         match op {
             ComparisonOp::Less => quote_spanned! {span=> #value_expr < &(#expected) },
             ComparisonOp::LessEqual => quote_spanned! {span=> #value_expr <= &(#expected) },
@@ -1309,35 +1293,8 @@ fn generate_simple_assertion_with_collection(
     let field_path_str = path.join(".");
     let expected_str = quote! { #expected }.to_string();
 
-    // Check if this is an index operation by looking at the path
-    // Exclude slice patterns which start with [
-    let is_index_operation = path
-        .iter()
-        .any(|segment| segment.contains("[") && !segment.starts_with("["));
-
     let span = expected.span();
-    if is_index_operation {
-        // For index operations, avoid references on both sides to fix type inference
-        quote_spanned! {span=>
-            if #value_expr != #transformed {
-                let __line = line!();
-                let __file = file!();
-                let __error = ::assert_struct::__macro_support::ErrorContext {
-                    field_path: #field_path_str.to_string(),
-                    pattern_str: #expected_str.to_string(),
-                    actual_value: format!("{:?}", #value_expr),
-                    line_number: __line,
-                    file_name: __file,
-                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
-
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
-                };
-                __errors.push(__error);
-            }
-        }
-    } else if is_ref {
+    if is_ref {
         quote_spanned! {span=>
             if #value_expr != &(#transformed) {
                 let __line = line!();

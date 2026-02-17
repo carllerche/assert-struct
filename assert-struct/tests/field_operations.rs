@@ -69,6 +69,46 @@ fn test_mixed_tuple_syntax() {
     });
 }
 
+#[test]
+fn test_root_field_access_lhs() {
+    let test = TestStruct {
+        boxed_value: Box::new(42),
+        rc_value: Rc::new("hello".to_string()),
+        arc_value: Arc::new(100),
+        tuple_with_box: ("test".to_string(), Box::new(99)),
+        normal_value: 200,
+    };
+
+    // Root field access
+    assert_struct!(test.normal_value, 200);
+    // assert_struct!(test.boxed_value, *_: 42); // Not valid syntax
+    assert_struct!(*test.boxed_value, 42);
+    assert_struct!(*test.rc_value, "hello");
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+enum FieldEvent {
+    Data(TestStruct),
+    Many(Vec<TestStruct>),
+}
+
+#[test]
+fn test_nested_variant_field_ops_lhs() {
+    let event = FieldEvent::Data(TestStruct {
+        boxed_value: Box::new(10),
+        rc_value: Rc::new("inner".to_string()),
+        arc_value: Arc::new(20),
+        tuple_with_box: ("t".to_string(), Box::new(30)),
+        normal_value: 40,
+    });
+
+    assert_struct!(event, FieldEvent::Data(TestStruct {
+        *boxed_value: 10,
+        *rc_value: "inner",
+        ..
+    }));
+}
 // Error message tests using snapshot testing
 error_message_test!(
     "field_operations_errors/deref_field_mismatch.rs",
