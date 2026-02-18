@@ -118,9 +118,19 @@ impl Pattern {
                 (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
             }
             Pattern::Range(PatternRange { expr, .. }) => {
-                let start = expr.span().start();
-                let end = expr.span().end();
-                (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+                if let syn::Expr::Range(range_expr) = expr {
+                    let start = range_expr.start.as_ref()
+                        .map(|s| s.span().start())
+                        .unwrap_or_else(|| range_expr.limits.span().start());
+                    let end = range_expr.end.as_ref()
+                        .map(|e| e.span().end())
+                        .unwrap_or_else(|| range_expr.limits.span().end());
+                    (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+                } else {
+                    let start = expr.span().start();
+                    let end = expr.span().end();
+                    (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+                }
             }
             #[cfg(feature = "regex")]
             Pattern::Regex(PatternRegex { span, .. }) => {
