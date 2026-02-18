@@ -2,11 +2,8 @@
 source: assert-struct/tests/comparison.rs
 expression: message
 ---
-assert_struct! failed:
-
-   | User {
-mismatch:
-  --> `user.age` (line 18)
-   |     age: > 30,
-   |          ^^^^ actual: 25
-   | }
+error: assert_struct! failed
+  --> assert-struct/tests/comparison_errors/comparison_pattern.rs:18:14
+   |
+18 |         age: > 30,
+   |              ^^^^ got 25

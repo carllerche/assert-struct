@@ -2,11 +2,8 @@
 source: assert-struct/tests/closures.rs
 expression: message
 ---
-assert_struct! failed:
-
-   | TestData {
-mismatch:
-  --> `data.value` (line 40)
-   |     value: | x | * x > 40,
-   |            ^^^^^^^^^^^^^^ actual: 30
-   | }
+error: assert_struct! failed
+  --> assert-struct/tests/closures_errors/basic_closure_failure.rs:21:20
+   |
+21 |             value: |x| *x > 40, // This should fail
+   |                    ^ closure condition not satisfied, got 30

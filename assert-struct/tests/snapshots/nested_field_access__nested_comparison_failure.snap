@@ -2,11 +2,8 @@
 source: assert-struct/tests/nested_field_access.rs
 expression: message
 ---
-assert_struct! failed:
-
-   | Container {
-mismatch:
-  --> `container.data.score` (line 22)
-   |     score: > 50,
-   |            ^^^^ actual: 25
-   | }
+error: assert_struct! failed
+  --> assert-struct/tests/nested_field_access_errors/nested_comparison_failure.rs:22:21
+   |
+22 |         data.score: > 50,  // 25 is not > 50, will fail
+   |                     ^^^^ got 25

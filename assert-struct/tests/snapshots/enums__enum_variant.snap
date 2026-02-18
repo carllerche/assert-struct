@@ -2,9 +2,8 @@
 source: assert-struct/tests/enums.rs
 expression: message
 ---
-assert_struct! failed:
-
-mismatch:
-  --> `value` (line 7)
-   | None
-   | ^^^^ actual: Some(10)
+error: assert_struct! failed
+ --> assert-struct/tests/enums_errors/enum_variant.rs:7:27
+  |
+7 |     assert_struct!(value, None);
+  |                           ^^^^ expected variant None, got Some(10)

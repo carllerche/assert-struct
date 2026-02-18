@@ -2,11 +2,8 @@
 source: assert-struct/tests/wildcard_struct.rs
 expression: message
 ---
-assert_struct! failed:
-
-   | _ { ... _ {
-mismatch:
-  --> `data.inner.value` (line 154)
-   |     value: 20,
-   |            ^^ actual: 10
-   | } ... }
+error: assert_struct! failed
+  --> assert-struct/tests/wildcard_errors/wildcard_struct_failure.rs:28:20
+   |
+28 |             value: 20,  // This should fail
+   |                    ^^ got 10

@@ -2,11 +2,8 @@
 source: assert-struct/tests/nested.rs
 expression: message
 ---
-assert_struct! failed:
-
-   | Deployment { ... Environment { ... Settings {
-mismatch:
-  --> `deploy.env.settings.debug.Some` (line 39)
-   |     debug: Some(true),
-   |                 ^^^^ actual: false
-   | } ... } ... }
+error: assert_struct! failed
+  --> assert-struct/tests/nested_errors/deeply_nested_option_pattern.rs:39:29
+   |
+39 |                 debug: Some(true),  // Line 38 - should report this line (Some(false) != Some(true))
+   |                             ^^^^ got false

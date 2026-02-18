@@ -59,7 +59,7 @@ struct LargeStruct {
 }
 
 #[test]
-#[should_panic(expected = "important_field")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_large_struct_pruning() {
     let large = LargeStruct {
         field01: "a".to_string(),
@@ -180,7 +180,7 @@ fn test_nested_slice_structs() {
 }
 
 #[test]
-#[should_panic(expected = "inventory.items.[1].scores.[1]")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_nested_slice_structs_failure() {
     let inventory = Inventory {
         items: vec![
@@ -275,7 +275,7 @@ struct Level6 {
 }
 
 #[test]
-#[should_panic(expected = "deep.level2.level3.level4.level5.level6.deep_value")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_very_deep_nesting() {
     let deep = Level1 {
         name: "L1".to_string(),
@@ -377,7 +377,7 @@ fn test_same_field_names() {
 }
 
 #[test]
-#[should_panic(expected = "container.inner.name")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_same_field_names_inner_failure() {
     let container = Container {
         name: "outer".to_string(),
@@ -405,7 +405,7 @@ fn test_same_field_names_inner_failure() {
 }
 
 #[test]
-#[should_panic(expected = "container.name")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_same_field_names_outer_failure() {
     let container = Container {
         name: "wrong".to_string(),
@@ -465,7 +465,7 @@ struct Metadata {
 }
 
 #[test]
-#[should_panic(expected = "mixed.complex.items.[1].values.[0]")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_mixed_complexity_deep_failure() {
     let mixed = MixedComplexity {
         simple1: "start".to_string(),

@@ -2,11 +2,8 @@
 source: assert-struct/tests/nested_field_access.rs
 expression: message
 ---
-assert_struct! failed:
-
-   | Level1 {
-mismatch:
-  --> `data.level2.level3.value` (line 29)
-   |     value: "expected",
-   |            ^^^^^^^^^^ actual: "actual"
-   | }
+error: assert_struct! failed
+  --> assert-struct/tests/nested_field_access_errors/deep_nested_mismatch.rs:29:30
+   |
+29 |         level2.level3.value: "expected",  // Should be "actual", will fail
+   |                              ^^^^^^^^^^ got "actual"

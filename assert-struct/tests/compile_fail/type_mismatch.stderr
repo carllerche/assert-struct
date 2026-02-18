@@ -1,10 +1,9 @@
-error[E0277]: can't compare `u32` with `String`
+error[E0599]: the method `as_ref` exists for reference `&u32`, but its trait bounds were not satisfied
   --> tests/compile_fail/type_mismatch.rs:18:14
    |
 18 |         age: "thirty",
-   |              ^^^^^^^^ no implementation for `u32 == String`
+   |              ^^^^^^^^ method cannot be called on `&u32` due to unsatisfied trait bounds
    |
-   = help: the trait `PartialEq<String>` is not implemented for `u32`
-           but trait `PartialEq<u32>` is implemented for it
-   = help: for that trait implementation, expected `u32`, found `String`
-   = note: required for `&u32` to implement `PartialEq<&String>`
+   = note: the following trait bounds were not satisfied:
+           `u32: AsRef<_>`
+           which is required by `&u32: AsRef<_>`

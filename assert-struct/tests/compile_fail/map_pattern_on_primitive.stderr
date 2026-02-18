@@ -10,6 +10,17 @@ help: there is a method `le` with a similar name, but with different arguments
    |     fn le(&self, other: &Rhs) -> bool {
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+error[E0599]: no method named `len` found for reference `&u16` in the current scope
+  --> tests/compile_fail/map_pattern_on_primitive.rs:14:5
+   |
+14 |       assert_struct!(config, Config {
+   |  _____^
+15 | |         port: #{ "key": 443 },
+16 | |     });
+   | |______^
+   |
+   = note: this error originates in the macro `assert_struct` (in Nightly builds, run with -Z macro-backtrace for more info)
+
 error[E0599]: no method named `get` found for reference `&u16` in the current scope
   --> tests/compile_fail/map_pattern_on_primitive.rs:15:18
    |

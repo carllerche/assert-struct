@@ -1,10 +1,18 @@
 use assert_struct::assert_struct;
 
+#[macro_use]
+mod util;
+
 #[derive(Debug)]
 struct TestData {
     value: i32,
     name: String,
     items: Vec<i32>,
+}
+
+#[derive(Debug)]
+struct Container {
+    data: TestData,
 }
 
 #[test]
@@ -25,29 +33,10 @@ fn test_basic_closure_success() {
     );
 }
 
-#[test]
-fn test_basic_closure_failure() {
-    let data = TestData {
-        value: 30,
-        name: "test".to_string(),
-        items: vec![1, 2],
-    };
-
-    let message = std::panic::catch_unwind(|| {
-        assert_struct!(
-            data,
-            TestData {
-                value: |x| *x > 40, // This should fail
-                ..
-            }
-        );
-    })
-    .unwrap_err()
-    .downcast::<String>()
-    .unwrap();
-
-    insta::assert_snapshot!(message);
-}
+error_message_test!(
+    "closures_errors/basic_closure_failure.rs",
+    basic_closure_failure
+);
 
 #[test]
 fn test_closure_with_complex_logic() {
@@ -85,4 +74,22 @@ fn test_move_closure() {
             ..
         }
     );
+}
+
+#[test]
+fn test_closure_nested_struct() {
+    let container = Container {
+        data: TestData {
+            value: 42,
+            name: "test".to_string(),
+            items: vec![3, 4, 5],
+        },
+    };
+
+    assert_struct!(
+        container,
+        Container {
+            data: |data| data.value == 42
+        }
+    )
 }

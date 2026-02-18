@@ -2,11 +2,8 @@
 source: assert-struct/tests/index_operations.rs
 expression: message
 ---
-assert_struct! failed:
-
-   | Data {
-mismatch:
-  --> `data.items[0].tags[0]` (line 25)
-   |     tags[0]: "python",
-   |              ^^^^^^^^ actual: "rust"
-   | }
+error: assert_struct! failed
+  --> assert-struct/tests/index_operations_errors/chained_index_field_mismatch.rs:25:27
+   |
+25 |         items[0].tags[0]: "python",  // Should be "rust", will fail
+   |                           ^^^^^^^^ got "rust"

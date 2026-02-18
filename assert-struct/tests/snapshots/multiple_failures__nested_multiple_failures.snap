@@ -2,19 +2,12 @@
 source: assert-struct/tests/multiple_failures.rs
 expression: message
 ---
-assert_struct! failed: 3 mismatches
-
-   | Account { ... Profile {
-mismatch:
-  --> `account.profile.bio` (line 30)
-   |     bio: "A detailed bio that is much longer",
-   |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ actual: "Hello"
-mismatch:
-  --> `account.profile.verified` (line 31)
-   |     verified: true,
-   |               ^^^^ actual: false
-mismatch:
-  --> `account.profile.followers` (line 32)
-   |     followers: > 100,
-   |                ^^^^^ actual: 5
-   | } ... }
+error: assert_struct! failed
+  --> assert-struct/tests/multiple_failures_errors/nested_multiple_failures.rs:30:18
+   |
+30 |             bio: "A detailed bio that is much longer",
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ got "Hello"
+31 |             verified: true,
+   |                       ^^^^ got false
+32 |             followers: > 100,
+   |                        ^^^^^ got 5

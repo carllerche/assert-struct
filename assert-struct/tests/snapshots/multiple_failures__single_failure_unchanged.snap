@@ -2,11 +2,8 @@
 source: assert-struct/tests/multiple_failures.rs
 expression: message
 ---
-assert_struct! failed:
-
-   | User {
-mismatch:
-  --> `user.age` (line 23)
-   |     age: > 30,
-   |          ^^^^ actual: 25
-   | }
+error: assert_struct! failed
+  --> assert-struct/tests/multiple_failures_errors/single_failure_unchanged.rs:23:14
+   |
+23 |         age: > 30,  // This will fail
+   |              ^^^^ got 25

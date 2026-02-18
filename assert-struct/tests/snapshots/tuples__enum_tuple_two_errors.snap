@@ -2,12 +2,10 @@
 source: assert-struct/tests/tuples.rs
 expression: message
 ---
-assert_struct! failed: 2 mismatches
-
-   | MessageQueue {
-mismatch:
-  --> `queue.current` (line 25)
-   |     current: Message::Pair(100, "expected"),
-   |                            ^^^  ^^^^^^^^^^ actual: "actual"
-   |                            └─ actual: 50
-   | }
+error: assert_struct! failed
+  --> assert-struct/tests/tuples_errors/enum_two_errors.rs:25:36
+   |
+25 |             current: Message::Pair(100, "expected"),  // Both fields wrong
+   |                                    ^^^  ^^^^^^^^^^ got "actual"
+   |                                    |
+   |                                    got 50

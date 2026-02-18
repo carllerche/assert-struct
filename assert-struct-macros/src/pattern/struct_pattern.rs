@@ -102,7 +102,7 @@ impl fmt::Display for PatternStruct {
             if i > 0 {
                 write!(f, ", ")?;
             }
-            write!(f, "{}: {}", field.field_name, field.pattern)?;
+            write!(f, "{}: {}", field.operations, field.pattern)?;
         }
         if self.rest {
             if !self.fields.is_empty() {

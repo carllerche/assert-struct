@@ -2,11 +2,12 @@
 source: assert-struct/tests/enum_struct_patterns.rs
 expression: message
 ---
-assert_struct! failed: 3 mismatches
-
-   | Request {
-mismatch:
-  --> `request.statement.Query.0.limit.Some` (line 34)
-   |     statement: Statement::Query(<complex>),
-   |                                 ^^^^^^^^^ actual: 25
-   | }
+error: assert_struct! failed
+  --> assert-struct/tests/enum_struct_patterns_errors/enum_struct_multiple_field_failures.rs:32:19
+   |
+32 |             name: "get_items",  // This will fail
+   |                   ^^^^^^^^^^^ got "select_users"
+33 |             params: ["name", "age"],  // This will also fail (wrong length)
+   |                     ^ expected slice with 2 elements, got ["id"]
+34 |             limit: Some(> 50),  // This will also fail
+   |                         ^^^^ got 25

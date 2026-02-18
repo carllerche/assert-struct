@@ -2,11 +2,8 @@
 source: assert-struct/tests/nested.rs
 expression: message
 ---
-assert_struct! failed:
-
-   | Customer { ... Contact { ... Validation {
-mismatch:
-  --> `customer.contact.validation.email` (line 39)
-   | =~ r".*@company\.com$"
-   | ^^^^^^^^^^^^^^^^^^^^^^ actual: "john@example.com"
-   | } ... } ... }
+error: assert_struct! failed
+  --> assert-struct/tests/nested_errors/deeply_nested_regex_pattern.rs:39:27
+   |
+39 |                 email: =~ r".*@company\.com$",  // Line 39 - should report this line
+   |                           ^^^^^^^^^^^^^^^^^^^ got "john@example.com"

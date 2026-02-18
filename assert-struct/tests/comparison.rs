@@ -113,7 +113,7 @@ fn test_mixed_comparisons() {
 }
 
 #[test]
-#[should_panic(expected = "mismatch")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_greater_than_failure() {
     let person = Person {
         name: "Frank".to_string(),

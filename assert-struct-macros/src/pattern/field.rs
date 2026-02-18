@@ -7,12 +7,79 @@ use syn::{Token, parse::Parse};
 
 use crate::pattern::Pattern;
 
-/// Field assertion - a field name paired with its expected pattern
-/// Supports operations like dereferencing, method calls, and nested access
+/// Represents a field name which can be either an identifier (for structs)
+/// or an index (for tuples)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) enum FieldName {
+    /// Named field: user.name, response.status
+    Ident(syn::Ident),
+
+    /// Indexed field: tuple.0, tuple.1
+    Index(usize),
+}
+
+impl fmt::Display for FieldName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FieldName::Ident(ident) => write!(f, "{}", ident),
+            FieldName::Index(index) => write!(f, "{}", index),
+        }
+    }
+}
+
+impl quote::ToTokens for FieldName {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        match self {
+            FieldName::Ident(ident) => ident.to_tokens(tokens),
+            FieldName::Index(index) => {
+                // Convert index to a syn::Index for proper token generation
+                let idx = syn::Index::from(*index);
+                idx.to_tokens(tokens);
+            }
+        }
+    }
+}
+
+impl Parse for FieldName {
+    /// Parses a field name, which can be either an identifier or a numeric index.
+    ///
+    /// # Examples
+    /// - `name` → `FieldName::Ident("name")`
+    /// - `0` → `FieldName::Index(0)`
+    /// - `42` → `FieldName::Index(42)`
+    ///
+    /// # Note on consecutive indices
+    /// Due to proc macro tokenization, consecutive numeric indices like `.0.0`
+    /// are tokenized as a float literal after the first dot is consumed.
+    /// This is a known limitation - use tuple destructuring syntax instead.
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        // Try to parse as a numeric literal first using fork
+        let fork = input.fork();
+        if let Ok(lit) = fork.parse::<syn::LitInt>() {
+            // Successfully parsed as number, consume from real input
+            let _: syn::LitInt = input.parse()?;
+            let index = lit.base10_parse()?;
+            Ok(FieldName::Index(index))
+        } else {
+            // Try parsing as identifier
+            input
+                .parse::<syn::Ident>()
+                .map(FieldName::Ident)
+                .map_err(|_| {
+                    syn::Error::new(
+                        input.span(),
+                        "expected field name (identifier or numeric index)",
+                    )
+                })
+        }
+    }
+}
+
+/// Field assertion - field operations paired with an expected pattern
+/// The operations represent the full path to the field (e.g., `.name`, `.0.field`, `*field.method()`)
 #[derive(Debug, Clone)]
 pub(crate) struct FieldAssertion {
-    pub field_name: syn::Ident,
-    pub operations: Option<FieldOperation>,
+    pub operations: FieldOperation,
     pub pattern: Pattern,
 }
 
@@ -39,10 +106,17 @@ pub(crate) enum FieldOperation {
     /// For async futures that need to be awaited
     Await { span: proc_macro2::Span },
 
-    /// Nested field access: field.nested, field.inner.value, etc.
-    /// Stores the chain of field names to access
-    Nested {
-        fields: Vec<syn::Ident>,
+    /// Named field access: field.name, field.inner, etc.
+    /// A single step in a field chain accessing a named field
+    NamedField {
+        name: syn::Ident,
+        span: proc_macro2::Span,
+    },
+
+    /// Unnamed field access: field.0, field.1, etc.
+    /// A single step in a field chain accessing a tuple element
+    UnnamedField {
+        index: usize,
         span: proc_macro2::Span,
     },
 
@@ -53,16 +127,8 @@ pub(crate) enum FieldOperation {
         span: proc_macro2::Span,
     },
 
-    /// Combined operation: dereferencing followed by method/nested/index access
-    /// Example: *field.method(), **field.inner, *field\[0\], etc.
-    Combined {
-        deref_count: usize,
-        operation: Box<FieldOperation>,
-        span: proc_macro2::Span,
-    },
-
-    /// Chained operations: nested field followed by index or method
-    /// Example: field.nested\[0\], field.inner.method(), field.sub\[1\].len()
+    /// Chained operations: multiple operations in sequence
+    /// Example: field.nested\[0\], field.inner.method(), *field.len(), **field.inner
     Chained {
         operations: Vec<FieldOperation>,
         span: proc_macro2::Span,
@@ -84,11 +150,11 @@ impl fmt::Display for FieldOperation {
             FieldOperation::Await { .. } => {
                 write!(f, ".await")
             }
-            FieldOperation::Nested { fields, .. } => {
-                for field in fields {
-                    write!(f, ".{}", field)?;
-                }
-                Ok(())
+            FieldOperation::NamedField { name, .. } => {
+                write!(f, ".{}", name)
+            }
+            FieldOperation::UnnamedField { index, .. } => {
+                write!(f, ".{}", index)
             }
             FieldOperation::Index { index, .. } => {
                 write!(f, "[{}]", quote::quote! { #index })
@@ -98,16 +164,6 @@ impl fmt::Display for FieldOperation {
                     write!(f, "{}", op)?;
                 }
                 Ok(())
-            }
-            FieldOperation::Combined {
-                deref_count,
-                operation,
-                ..
-            } => {
-                for _ in 0..*deref_count {
-                    write!(f, "*")?;
-                }
-                write!(f, "{}", operation)
             }
         }
     }
@@ -124,214 +180,244 @@ impl Parse for FieldAssertion {
     /// email: =~ r".*@example\.com"
     /// ```
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        // Check if we have field operations (starting with * for deref)
-        let mut operations = None;
-        let mut deref_count = 0;
-        let span = input.span();
-
-        // Count leading * tokens for dereferencing
-        while input.peek(Token![*]) {
-            let _: Token![*] = input.parse()?;
-            deref_count += 1;
-        }
-
-        if deref_count > 0 {
-            operations = Some(FieldOperation::Deref {
-                count: deref_count,
-                span,
-            });
-        }
-
-        // Parse field name and potential chained operations
-        let field_name: syn::Ident = input.parse()?;
-
-        // Check for chained operations: field.method(), field.nested, field[index], etc.
-        if input.peek(Token![.]) || input.peek(syn::token::Bracket) {
-            operations = Some(parse_field_operations(input, operations)?);
-        }
-
+        let operations = input.parse()?;
         let _: Token![:] = input.parse()?;
         let pattern = input.parse()?;
 
         Ok(FieldAssertion {
-            field_name,
             operations,
             pattern,
         })
     }
 }
 
-/// Parse field operations starting from the first field name
-/// Handles chained operations like .field, \[index\], .method(), .await, etc.
-pub(crate) fn parse_field_operations(
-    input: syn::parse::ParseStream,
-    existing_operations: Option<FieldOperation>,
-) -> syn::Result<FieldOperation> {
-    let span = input.span();
-    let mut operations = vec![];
+impl Parse for FieldOperation {
+    /// Parse a complete field operation sequence: *field.method()\[index\].await
+    ///
+    /// # Example Input
+    /// ```text
+    /// name
+    /// *boxed_value
+    /// field.method()
+    /// tuple.0.inner
+    /// ```
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let span = input.span();
+        let mut operations = Vec::new();
 
-    // Continue parsing operations in the chain using the helper
-    while input.peek(Token![.]) || input.peek(syn::token::Bracket) {
-        operations.push(input.parse()?);
-    }
+        // Parse leading derefs
+        let mut deref_count = 0;
+        while input.peek(Token![*]) {
+            let _: Token![*] = input.parse()?;
+            deref_count += 1;
+        }
+        if deref_count > 0 {
+            operations.push(FieldOperation::Deref {
+                count: deref_count,
+                span,
+            });
+        }
 
-    // Build the final operation
-    let final_operation = if operations.len() == 1 {
-        operations.into_iter().next().unwrap()
-    } else if operations.is_empty() {
-        return Err(syn::Error::new(input.span(), "Expected field operations"));
-    } else {
-        FieldOperation::Chained { operations, span }
-    };
+        // Parse field name (required)
+        let field_name: FieldName = input.parse()?;
+        let field_op = match field_name {
+            FieldName::Ident(ident) => FieldOperation::NamedField { name: ident, span },
+            FieldName::Index(index) => FieldOperation::UnnamedField { index, span },
+        };
+        operations.push(field_op);
 
-    // Combine with existing operations if present
-    if let Some(FieldOperation::Deref {
-        count,
-        span: deref_span,
-    }) = existing_operations
-    {
-        Ok(FieldOperation::Combined {
-            deref_count: count,
-            operation: Box::new(final_operation),
-            span: deref_span,
-        })
-    } else {
+        // Parse additional operations (.field, .method(), [index], .await)
+        while input.peek(Token![.]) || input.peek(syn::token::Bracket) {
+            FieldOperation::parse_one_into(input, &mut operations)?;
+        }
+
+        // Convert Vec to single operation or Chained
+        let final_operation = match operations.len() {
+            0 => unreachable!("Must have at least field name"),
+            1 => operations.into_iter().next().unwrap(),
+            _ => FieldOperation::Chained { operations, span },
+        };
+
         Ok(final_operation)
     }
 }
 
 impl FieldOperation {
-    /// Parse optional operations for tuple elements (currently just dereferencing)
-    /// This is simpler than field operations since we only support * for now
-    /// Returns None if no operations are present
-    pub(crate) fn parse_option(input: syn::parse::ParseStream) -> syn::Result<Option<Self>> {
-        let mut deref_count = 0;
-        let span = input.span();
-
-        // Count leading * tokens for dereferencing
-        while input.peek(Token![*]) {
-            let _: Token![*] = input.parse()?;
-            deref_count += 1;
-        }
-
-        if deref_count > 0 {
-            Ok(Some(FieldOperation::Deref {
-                count: deref_count,
-                span,
-            }))
-        } else {
-            Ok(None)
+    /// Get the root field name from this operation
+    /// For NamedField/UnnamedField, returns that name
+    /// For Chained, recursively finds the first field access (skipping Deref operations)
+    pub(crate) fn root_field_name(&self) -> FieldName {
+        match self {
+            FieldOperation::NamedField { name, .. } => FieldName::Ident(name.clone()),
+            FieldOperation::UnnamedField { index, .. } => FieldName::Index(*index),
+            FieldOperation::Chained { operations, .. } => {
+                // Find the first non-Deref operation and get its root field name
+                operations
+                    .iter()
+                    .find(|op| !matches!(op, FieldOperation::Deref { .. }))
+                    .expect("Chained operation must have at least one non-Deref operation")
+                    .root_field_name()
+            }
+            _ => panic!("Cannot extract root field name from {:?}", self),
         }
     }
 
-    /// Parse a chain of operations: .method().await\[0\].field, etc.
-    /// Returns a FieldOperation with appropriate chaining
-    pub(crate) fn parse_chain(
-        input: syn::parse::ParseStream,
-        existing_operations: Option<Self>,
-    ) -> syn::Result<Self> {
-        let span = input.span();
-        let mut operations = vec![];
+    /// Get operations after the root field access (tail operations)
+    /// For NamedField/UnnamedField alone, returns None (no additional operations)
+    /// For Chained, returns all operations except the first non-Deref field access
+    ///
+    /// Examples:
+    /// - Chained([Deref, NamedField("x")]) → Some(Deref)
+    /// - Chained([NamedField("x"), Method("len")]) → Some(Method("len"))
+    /// - Chained([Deref, NamedField("x"), Method("len")]) → Some(Chained([Deref, Method("len")]))
+    pub(crate) fn tail_operations(&self) -> Option<Self> {
+        match self {
+            FieldOperation::NamedField { .. } | FieldOperation::UnnamedField { .. } => {
+                // Just a field access, no additional operations
+                None
+            }
+            FieldOperation::Chained { operations, span } => {
+                // Find the index of the first non-Deref field access
+                let field_access_idx = operations
+                    .iter()
+                    .position(|op| {
+                        matches!(
+                            op,
+                            FieldOperation::NamedField { .. } | FieldOperation::UnnamedField { .. }
+                        )
+                    })
+                    .expect("Chained operation must have at least one field access");
 
-        // Parse the first operation (which should start with . or [)
-        operations.push(input.parse()?);
+                // Collect all operations except the field access itself
+                let mut tail_ops: Vec<_> = operations[..field_access_idx].to_vec();
+                tail_ops.extend_from_slice(&operations[field_access_idx + 1..]);
 
-        // Continue parsing while we see . or [
-        while input.peek(Token![.]) || input.peek(syn::token::Bracket) {
-            operations.push(input.parse()?);
-        }
-
-        // Build the final operation
-        let final_operation = if operations.len() == 1 {
-            operations.into_iter().next().unwrap()
-        } else {
-            FieldOperation::Chained { operations, span }
-        };
-
-        // Combine with existing operations if present
-        if let Some(FieldOperation::Deref {
-            count,
-            span: deref_span,
-        }) = existing_operations
-        {
-            Ok(FieldOperation::Combined {
-                deref_count: count,
-                operation: Box::new(final_operation),
-                span: deref_span,
-            })
-        } else {
-            Ok(final_operation)
+                if tail_ops.is_empty() {
+                    None
+                } else if tail_ops.len() == 1 {
+                    Some(tail_ops.into_iter().next().unwrap())
+                } else {
+                    Some(FieldOperation::Chained {
+                        operations: tail_ops,
+                        span: *span,
+                    })
+                }
+            }
+            // For other operation types (Method, Await, Index, Deref), they don't have a root field to strip
+            // These should not appear at the root level of a FieldAssertion, but if they do,
+            // return None to indicate no tail
+            _ => None,
         }
     }
 }
 
-impl Parse for FieldOperation {
-    /// Parse a single operation: .await, .field, .method(), or \[index\]
-    /// This parses exactly one operation and returns it
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        if input.peek(Token![.]) {
-            let dot_span = input.span();
-            let _: Token![.] = input.parse()?;
+impl FieldOperation {
+    /// Parse a dot operation: .await, .field, .method(), or .0
+    /// Pushes the parsed operation(s) into the provided Vec
+    fn parse_one_dot_into(
+        input: syn::parse::ParseStream,
+        ops: &mut Vec<FieldOperation>,
+    ) -> syn::Result<()> {
+        let dot_span = input.span();
+        let _: Token![.] = input.parse()?;
 
-            if input.peek(Token![await]) {
-                let await_span = input.span();
-                let _: Token![await] = input.parse()?;
-                Ok(FieldOperation::Await { span: await_span })
-            } else {
-                let ident: syn::Ident = input.parse()?;
-                let method_span = ident.span();
+        if input.peek(Token![await]) {
+            let await_span = input.span();
+            let _: Token![await] = input.parse()?;
+            ops.push(FieldOperation::Await { span: await_span });
+            Ok(())
+        } else if input.peek(syn::LitInt) {
+            // It's a tuple index like .0 or .1
+            let lit_int: syn::LitInt = input.parse()?;
+            let index: usize = lit_int.base10_parse()?;
+            ops.push(FieldOperation::UnnamedField {
+                index,
+                span: dot_span,
+            });
+            Ok(())
+        } else if input.peek(syn::LitFloat) {
+            let lit_float: syn::LitFloat = input.parse()?;
+            // Parse float like "0.0" and split into two UnnamedField operations
+            let float_str = lit_float.to_string();
+            let Some((first, second)) = float_str.split_once('.') else {
+                return Err(syn::Error::new(
+                    dot_span,
+                    "Invalid float literal in field access",
+                ));
+            };
 
-                if input.peek(syn::token::Paren) {
-                    // Method call with args
-                    let args_content;
-                    syn::parenthesized!(args_content in input);
+            let first_idx = first
+                .parse::<usize>()
+                .map_err(|_| syn::Error::new(dot_span, "Invalid numeric index in field access"))?;
+            let second_idx = second
+                .parse::<usize>()
+                .map_err(|_| syn::Error::new(dot_span, "Invalid numeric index in field access"))?;
 
-                    let mut args = Vec::new();
-                    while !args_content.is_empty() {
-                        let arg: syn::Expr = args_content.parse()?;
-                        args.push(arg);
+            // Push two sequential UnnamedField operations
+            ops.push(FieldOperation::UnnamedField {
+                index: first_idx,
+                span: dot_span,
+            });
+            ops.push(FieldOperation::UnnamedField {
+                index: second_idx,
+                span: dot_span,
+            });
+            Ok(())
+        } else {
+            // Parse as identifier for named field
+            let ident: syn::Ident = input.parse()?;
 
-                        if !args_content.peek(Token![,]) {
-                            break;
-                        }
-                        let _: Token![,] = args_content.parse()?;
+            // Check if this is a method call
+            if input.peek(syn::token::Paren) {
+                let args_content;
+                syn::parenthesized!(args_content in input);
+
+                let mut args = Vec::new();
+                while !args_content.is_empty() {
+                    let arg: syn::Expr = args_content.parse()?;
+                    args.push(arg);
+
+                    if !args_content.peek(Token![,]) {
+                        break;
                     }
-
-                    Ok(FieldOperation::Method {
-                        name: ident,
-                        args,
-                        span: method_span,
-                    })
-                } else {
-                    // Field access - might be chained like .field.nested.deep
-                    let mut fields = vec![ident];
-
-                    // Continue parsing consecutive field accesses
-                    while input.peek(Token![.])
-                        && !input.peek2(Token![await])
-                        && !input.peek2(syn::token::Paren)
-                        && !input.peek2(syn::token::Bracket)
-                    {
-                        let _: Token![.] = input.parse()?;
-                        let field: syn::Ident = input.parse()?;
-                        fields.push(field);
-                    }
-
-                    Ok(FieldOperation::Nested {
-                        fields,
-                        span: dot_span,
-                    })
+                    let _: Token![,] = args_content.parse()?;
                 }
+
+                ops.push(FieldOperation::Method {
+                    name: ident,
+                    args,
+                    span: dot_span,
+                });
+                Ok(())
+            } else {
+                // Single named field access
+                ops.push(FieldOperation::NamedField {
+                    name: ident,
+                    span: dot_span,
+                });
+                Ok(())
             }
+        }
+    }
+
+    /// Parse a single operation: .await, .field, .method(), or \[index\]
+    /// Pushes the parsed operation into the provided Vec
+    pub(crate) fn parse_one_into(
+        input: syn::parse::ParseStream,
+        ops: &mut Vec<FieldOperation>,
+    ) -> syn::Result<()> {
+        if input.peek(Token![.]) {
+            Self::parse_one_dot_into(input, ops)
         } else if input.peek(syn::token::Bracket) {
             // Index operation - need to capture the span that encompasses the bracket
             let content;
             let bracket_token = syn::bracketed!(content in input);
             let index: syn::Expr = content.parse()?;
-            Ok(FieldOperation::Index {
+            ops.push(FieldOperation::Index {
                 index,
                 span: bracket_token.span.open(),
-            })
+            });
+            Ok(())
         } else {
             Err(syn::Error::new(
                 input.span(),

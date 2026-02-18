@@ -2,11 +2,8 @@
 source: assert-struct/tests/enum_struct_patterns.rs
 expression: message
 ---
-assert_struct! failed:
-
-   | Request {
-mismatch:
-  --> `request.statement.Query.0.limit.Some` (line 31)
-   |     statement: Statement::Query(<complex>),
-   |                                 ^^^^^^^^^ actual: 25
-   | }
+error: assert_struct! failed
+  --> assert-struct/tests/enum_struct_patterns_errors/enum_struct_comparison_failure.rs:31:25
+   |
+31 |             limit: Some(> 50),  // This will fail: 25 is not > 50
+   |                         ^^^^ got 25

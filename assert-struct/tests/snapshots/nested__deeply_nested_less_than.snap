@@ -2,11 +2,8 @@
 source: assert-struct/tests/nested.rs
 expression: message
 ---
-assert_struct! failed:
-
-   | Pod { ... Container { ... Metrics {
-mismatch:
-  --> `pod.container.metrics.cpu_usage` (line 39)
-   |     cpu_usage: < 50.0,
-   |                ^^^^^^ actual: 75.5
-   | } ... } ... }
+error: assert_struct! failed
+  --> assert-struct/tests/nested_errors/deeply_nested_less_than.rs:39:28
+   |
+39 |                 cpu_usage: < 50.0,  // Line 38 - should report this line (75.5 is not < 50.0)
+   |                            ^^^^^^ got 75.5

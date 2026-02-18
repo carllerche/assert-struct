@@ -49,7 +49,7 @@ fn test_regex_partial_match() {
 }
 
 #[test]
-#[should_panic(expected = "mismatch")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_regex_mismatch() {
     let msg = Message {
         id: "invalid".to_string(),

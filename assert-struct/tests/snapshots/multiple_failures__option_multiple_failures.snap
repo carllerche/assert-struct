@@ -2,15 +2,10 @@
 source: assert-struct/tests/multiple_failures.rs
 expression: message
 ---
-assert_struct! failed: 2 mismatches
-
-   | Settings {
-mismatch:
-  --> `settings.theme.Some` (line 19)
-   |     theme: Some("dark"),
-   |                 ^^^^^^ actual: "light"
-mismatch:
-  --> `settings.font_size.Some` (line 20)
-   |     font_size: Some(> 12),
-   |                     ^^^^ actual: 10
-   | }
+error: assert_struct! failed
+  --> assert-struct/tests/multiple_failures_errors/option_multiple_failures.rs:19:21
+   |
+19 |         theme: Some("dark"),
+   |                     ^^^^^^ got "light"
+20 |         font_size: Some(> 12),
+   |                         ^^^^ got 10

@@ -12,6 +12,7 @@ use crate::pattern::Pattern;
 #[derive(Debug, Clone)]
 pub(crate) struct PatternSlice {
     pub node_id: usize,
+    pub span: proc_macro2::Span,
     pub elements: Vec<Pattern>,
 }
 
@@ -37,7 +38,8 @@ impl Parse for PatternSlice {
     /// [> 0, < 10, == 5]
     /// ```
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        // Parse the bracketed content
+        // Capture the span of the `[` token before consuming it.
+        let span = input.span();
         let content;
         syn::bracketed!(content in input);
 
@@ -46,6 +48,7 @@ impl Parse for PatternSlice {
 
         Ok(PatternSlice {
             node_id: next_node_id(),
+            span,
             elements,
         })
     }

@@ -2,11 +2,8 @@
 source: assert-struct/tests/nested.rs
 expression: message
 ---
-assert_struct! failed:
-
-   | Company { ... CompanyLocation { ... Office {
-mismatch:
-  --> `company.location.office.floor` (line 42)
-   |     floor: > 10,
-   |            ^^^^ actual: 5
-   | } ... } ... }
+error: assert_struct! failed
+  --> assert-struct/tests/nested_errors/deeply_nested_comparison_failure.rs:42:24
+   |
+42 |                 floor: > 10,  // Should fail: 5 is not > 10
+   |                        ^^^^ got 5

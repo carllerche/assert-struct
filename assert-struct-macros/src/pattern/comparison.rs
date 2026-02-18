@@ -3,7 +3,9 @@
 //! This module defines comparison operators and patterns like `> 30`, `<= 100`, etc.
 
 use std::fmt;
-use syn::{Token, parse::Parse};
+
+use proc_macro2::Span;
+use syn::{Token, parse::Parse, spanned::Spanned};
 
 use crate::parse::next_node_id;
 
@@ -15,107 +17,72 @@ pub(crate) struct PatternComparison {
     pub expr: syn::Expr,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) enum ComparisonOp {
-    Less,
-    LessEqual,
-    Greater,
-    GreaterEqual,
-    Equal,
-    NotEqual,
+    Less(Token![<]),
+    LessEqual(Token![<=]),
+    Greater(Token![>]),
+    GreaterEqual(Token![>=]),
+    Equal(Token![==]),
+    NotEqual(Token![!=]),
+}
+
+impl ComparisonOp {
+    pub fn span(&self) -> Span {
+        match self {
+            ComparisonOp::Less(t) => t.span(),
+            ComparisonOp::LessEqual(t) => t.span(),
+            ComparisonOp::Greater(t) => t.span(),
+            ComparisonOp::GreaterEqual(t) => t.span(),
+            ComparisonOp::Equal(t) => t.span(),
+            ComparisonOp::NotEqual(t) => t.span(),
+        }
+    }
 }
 
 impl fmt::Display for ComparisonOp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ComparisonOp::Less => write!(f, "<"),
-            ComparisonOp::LessEqual => write!(f, "<="),
-            ComparisonOp::Greater => write!(f, ">"),
-            ComparisonOp::GreaterEqual => write!(f, ">="),
-            ComparisonOp::Equal => write!(f, "=="),
-            ComparisonOp::NotEqual => write!(f, "!="),
+            ComparisonOp::Less(_) => write!(f, "<"),
+            ComparisonOp::LessEqual(_) => write!(f, "<="),
+            ComparisonOp::Greater(_) => write!(f, ">"),
+            ComparisonOp::GreaterEqual(_) => write!(f, ">="),
+            ComparisonOp::Equal(_) => write!(f, "=="),
+            ComparisonOp::NotEqual(_) => write!(f, "!="),
+        }
+    }
+}
+
+impl Parse for ComparisonOp {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        // Check compound operators before their single-char prefixes, since
+        // peek(Token![<]) also matches the `<` in `<=`.
+        if input.peek(Token![<=]) {
+            Ok(ComparisonOp::LessEqual(input.parse()?))
+        } else if input.peek(Token![<]) {
+            Ok(ComparisonOp::Less(input.parse()?))
+        } else if input.peek(Token![>=]) {
+            Ok(ComparisonOp::GreaterEqual(input.parse()?))
+        } else if input.peek(Token![>]) {
+            Ok(ComparisonOp::Greater(input.parse()?))
+        } else if input.peek(Token![==]) {
+            Ok(ComparisonOp::Equal(input.parse()?))
+        } else if input.peek(Token![!=]) {
+            Ok(ComparisonOp::NotEqual(input.parse()?))
+        } else {
+            Err(input.error("expected comparison operator (<, <=, >, >=, ==, !=)"))
         }
     }
 }
 
 impl Parse for PatternComparison {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        // Comparison operators are checked early to capture them before
-        // they could be parsed as part of an expression
-        // Examples:
-        //   `< 100`     -> less than 100
-        //   `>= 18`     -> greater than or equal to 18
-        //   `> compute_threshold()` -> comparison with function result
-        if input.peek(Token![<]) {
-            let _: Token![<] = input.parse()?;
-            if input.peek(Token![=]) {
-                let _: Token![=] = input.parse()?;
-                let value = input.parse()?;
-                return Ok(PatternComparison {
-                    node_id: next_node_id(),
-                    op: ComparisonOp::LessEqual,
-                    expr: value,
-                });
-            } else {
-                let value = input.parse()?;
-                return Ok(PatternComparison {
-                    node_id: next_node_id(),
-                    op: ComparisonOp::Less,
-                    expr: value,
-                });
-            }
-        }
-
-        if input.peek(Token![>]) {
-            let _: Token![>] = input.parse()?;
-            if input.peek(Token![=]) {
-                let _: Token![=] = input.parse()?;
-                let value = input.parse()?;
-                return Ok(PatternComparison {
-                    node_id: next_node_id(),
-                    op: ComparisonOp::GreaterEqual,
-                    expr: value,
-                });
-            } else {
-                let value = input.parse()?;
-                return Ok(PatternComparison {
-                    node_id: next_node_id(),
-                    op: ComparisonOp::Greater,
-                    expr: value,
-                });
-            }
-        }
-
-        // `!=` needs special handling because `!` could start other expressions
-        // Example: `!= "error"` vs `!flag` (not pattern vs boolean negation)
-        if input.peek(Token![!]) {
-            let fork = input.fork();
-            let _: Token![!] = fork.parse()?;
-            if fork.peek(Token![=]) {
-                // Actually consume the tokens from input
-                let _: Token![!] = input.parse()?;
-                let _: Token![=] = input.parse()?;
-                let value = input.parse()?;
-                return Ok(PatternComparison {
-                    node_id: next_node_id(),
-                    op: ComparisonOp::NotEqual,
-                    expr: value,
-                });
-            }
-        }
-
-        // `==` for explicit equality
-        // Example: `== 42` vs just `42` (both mean the same thing, but == is explicit)
-        if input.peek(Token![==]) {
-            let _: Token![==] = input.parse()?;
-            let value = input.parse()?;
-            return Ok(PatternComparison {
-                node_id: next_node_id(),
-                op: ComparisonOp::Equal,
-                expr: value,
-            });
-        }
-
-        Err(input.error("expected comparison operator (<, <=, >, >=, ==, !=)"))
+        let op: ComparisonOp = input.parse()?;
+        let expr: syn::Expr = input.parse()?;
+        Ok(PatternComparison {
+            node_id: next_node_id(),
+            op,
+            expr,
+        })
     }
 }
