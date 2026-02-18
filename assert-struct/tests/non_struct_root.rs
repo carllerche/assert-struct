@@ -138,13 +138,20 @@ fn test_index_into_vec_enum_struct_variant() {
         Startup { version: String, code: u32 },
     }
 
+    #[allow(clippy::useless_vec)]
     let events = vec![SystemEvent::Startup {
         version: "1.0.0".to_string(),
         code: 42,
     }];
 
     // Issue #93: string literal comparison should not require `&"1.0.0"`
-    assert_struct!(events[0], SystemEvent::Startup { version: "1.0.0", .. });
+    assert_struct!(
+        events[0],
+        SystemEvent::Startup {
+            version: "1.0.0",
+            ..
+        }
+    );
 
     // Comparison operators on numeric fields should also work
     assert_struct!(events[0], SystemEvent::Startup { code: > 10, .. });
