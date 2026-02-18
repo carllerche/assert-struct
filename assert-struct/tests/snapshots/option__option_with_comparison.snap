@@ -2,5 +2,8 @@
 source: assert-struct/tests/option.rs
 expression: message
 ---
-assert_struct! failed:
-expected 25 to match > 30
+error: assert_struct! failed
+  --> assert-struct/tests/option_errors/option_with_comparison.rs:13:21
+   |
+13 |         value: Some(> 30),
+   |                     ^^^^ got 25

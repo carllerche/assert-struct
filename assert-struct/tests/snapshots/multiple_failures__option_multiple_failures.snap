@@ -2,6 +2,10 @@
 source: assert-struct/tests/multiple_failures.rs
 expression: message
 ---
-assert_struct! failed:
-expected "light" to match "dark"
-expected 10 to match > 12
+error: assert_struct! failed
+  --> assert-struct/tests/multiple_failures_errors/option_multiple_failures.rs:19:21
+   |
+19 |         theme: Some("dark"),
+   |                     ^^^^^^ got "light"
+20 |         font_size: Some(> 12),
+   |                         ^^^^ got 10

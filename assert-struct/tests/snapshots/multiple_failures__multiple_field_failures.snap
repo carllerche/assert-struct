@@ -2,6 +2,10 @@
 source: assert-struct/tests/multiple_failures.rs
 expression: message
 ---
-assert_struct! failed:
-expected 17 to match > 18
-expected "alice@wrong.com" to match "alice@example.com"
+error: assert_struct! failed
+  --> assert-struct/tests/multiple_failures_errors/multiple_field_failures.rs:23:14
+   |
+23 |         age: > 18,
+   |              ^^^^ got 17
+24 |         email: "alice@example.com",  // Will fail
+   |                ^^^^^^^^^^^^^^^^^^^ got "alice@wrong.com"

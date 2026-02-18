@@ -2,7 +2,12 @@
 source: assert-struct/tests/multiple_failures.rs
 expression: message
 ---
-assert_struct! failed:
-expected "Hello" to match "A detailed bio that is much longer"
-expected false to match true
-expected 5 to match > 100
+error: assert_struct! failed
+  --> assert-struct/tests/multiple_failures_errors/nested_multiple_failures.rs:30:18
+   |
+30 |             bio: "A detailed bio that is much longer",
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ got "Hello"
+31 |             verified: true,
+   |                       ^^^^ got false
+32 |             followers: > 100,
+   |                        ^^^^^ got 5

@@ -2,5 +2,8 @@
 source: assert-struct/tests/index_operations.rs
 expression: message
 ---
-assert_struct! failed:
-expected 15 to match > 20
+error: assert_struct! failed
+  --> assert-struct/tests/index_operations_errors/index_comparison_failure.rs:15:20
+   |
+15 |         values[1]: > 20,  // Should be > 20, but actual is 15
+   |                    ^^^^ got 15

@@ -2,5 +2,8 @@
 source: assert-struct/tests/nested.rs
 expression: message
 ---
-assert_struct! failed:
-expected 80 to match >= 100
+error: assert_struct! failed
+  --> assert-struct/tests/nested_errors/deeply_nested_greater_equal.rs:39:25
+   |
+39 |                 points: >= 100,  // Line 38 - should report this line (80 is not >= 100)
+   |                         ^^^^^^ got 80

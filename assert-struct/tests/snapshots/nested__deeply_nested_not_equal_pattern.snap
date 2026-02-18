@@ -2,5 +2,8 @@
 source: assert-struct/tests/nested.rs
 expression: message
 ---
-assert_struct! failed:
-expected 30 to match != 30
+error: assert_struct! failed
+  --> assert-struct/tests/nested_errors/deeply_nested_not_equal_pattern.rs:39:26
+   |
+39 |                 timeout: != 30,  // Line 38 - should report this line (will fail because it IS 30)
+   |                          ^^^^^ got 30

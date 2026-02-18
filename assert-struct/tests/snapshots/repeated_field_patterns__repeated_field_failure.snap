@@ -2,5 +2,8 @@
 source: assert-struct/tests/repeated_field_patterns.rs
 expression: message
 ---
-assert_struct! failed:
-expected 105 to match <= 99
+error: assert_struct! failed
+  --> assert-struct/tests/repeated_field_patterns_errors/repeated_field_failure.rs:17:14
+   |
+17 |         age: <= 99,   // This should fail: 105 <= 99 ✗
+   |              ^^^^^ got 105

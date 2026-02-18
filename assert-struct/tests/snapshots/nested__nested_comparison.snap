@@ -2,5 +2,8 @@
 source: assert-struct/tests/nested.rs
 expression: message
 ---
-assert_struct! failed:
-expected 17 to match >= 18
+error: assert_struct! failed
+  --> assert-struct/tests/nested_errors/nested_comparison.rs:25:18
+   |
+25 |             age: >= 18,
+   |                  ^^^^^ got 17

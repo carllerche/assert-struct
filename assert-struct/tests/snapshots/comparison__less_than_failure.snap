@@ -2,5 +2,8 @@
 source: assert-struct/tests/comparison.rs
 expression: message
 ---
-assert_struct! failed:
-expected 6.2 to match < 6.0
+error: assert_struct! failed
+  --> assert-struct/tests/comparison_errors/less_than_failure.rs:24:21
+   |
+24 |             height: < 6.0,  // This should fail
+   |                     ^^^^^ got 6.2

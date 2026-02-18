@@ -2,6 +2,10 @@
 source: assert-struct/tests/tuples.rs
 expression: message
 ---
-assert_struct! failed:
-expected 75 to match > 100
-expected "test" to match "other"
+error: assert_struct! failed
+  --> assert-struct/tests/tuples_errors/mixed_patterns.rs:20:20
+   |
+20 |             pair: (> 100, "other"),  // Comparison fails, string fails
+   |                    ^^^^^  ^^^^^^^ got "test"
+   |                    |
+   |                    got 75
