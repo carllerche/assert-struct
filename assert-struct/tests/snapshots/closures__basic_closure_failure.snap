@@ -3,7 +3,7 @@ source: assert-struct/tests/closures.rs
 expression: message
 ---
 error: assert_struct! failed
-  --> assert-struct/tests/closures_errors/basic_closure_failure.rs:20:20
+  --> assert-struct/tests/closures_errors/basic_closure_failure.rs:21:20
    |
-20 |             value: |x| *x > 40, // This should fail
+21 |             value: |x| *x > 40, // This should fail
    |                    ^ closure condition not satisfied, got 30

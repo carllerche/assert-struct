@@ -1,6 +1,7 @@
 use assert_struct::assert_struct;
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct TestData {
     value: i32,
     name: String,

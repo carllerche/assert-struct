@@ -59,7 +59,8 @@ impl Parse for PatternTuple {
 pub(crate) enum TupleElement {
     /// Positional element in sequence order
     /// Example: "foo", > 10, Some(42)
-    Positional(Pattern),
+    /// Boxed to reduce enum size since Pattern is large
+    Positional(Box<Pattern>),
 
     /// Indexed element with explicit numeric field name
     /// The field_name will be a synthetic ident like "_0", "_1", "_2"
@@ -81,7 +82,7 @@ impl TupleElement {
             if fork.parse::<Pattern>().is_ok() && !fork.peek(Token![:]) {
                 // Parse as positional pattern
                 let pattern = input.parse()?;
-                elements.push(TupleElement::Positional(pattern));
+                elements.push(TupleElement::Positional(Box::new(pattern)));
             } else {
                 // Parse as indexed element
                 let operations: FieldOperation = input.parse()?;

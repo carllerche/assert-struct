@@ -18,6 +18,12 @@ thread_local! {
 #[doc(hidden)]
 pub struct PlainOutputGuard;
 
+impl Default for PlainOutputGuard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PlainOutputGuard {
     pub fn new() -> Self {
         PLAIN_OUTPUT.with(|c| c.set(true));

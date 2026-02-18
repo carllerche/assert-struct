@@ -327,7 +327,7 @@ fn process_tuple_elements(
     for (i, tuple_element) in elements.iter().enumerate() {
         match tuple_element {
             TupleElement::Positional(pattern) => {
-                match pattern {
+                match &**pattern {
                     Pattern::Wildcard(PatternWildcard { .. }) => {
                         // Wildcard patterns use `_` in the match pattern
                         match_patterns.push(quote! { _ });

@@ -3,7 +3,7 @@ source: assert-struct/tests/wildcard_struct.rs
 expression: message
 ---
 error: assert_struct! failed
-  --> assert-struct/tests/wildcard_errors/wildcard_struct_failure.rs:26:20
+  --> assert-struct/tests/wildcard_errors/wildcard_struct_failure.rs:28:20
    |
-26 |             value: 20,  // This should fail
+28 |             value: 20,  // This should fail
    |                    ^^ got 10

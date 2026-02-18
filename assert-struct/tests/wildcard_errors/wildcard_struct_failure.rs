@@ -1,12 +1,14 @@
 use assert_struct::assert_struct;
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct Inner {
     value: i32,
     text: String,
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct Outer {
     inner: Inner,
     count: u32,
