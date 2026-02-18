@@ -459,6 +459,7 @@ fn expand_enum_assertion(value_expr: &TokenStream, pattern: &PatternEnum) -> Tok
         let (match_patterns, element_assertions) = process_tuple_elements(elements, "__elem_");
 
         quote_spanned! {span=>
+            #[allow(unreachable_patterns)]
             match &#value_expr {
                 #variant_path(#(#match_patterns),*) => {
                     #(#element_assertions)*
