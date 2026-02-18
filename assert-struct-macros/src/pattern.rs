@@ -38,9 +38,11 @@ pub(crate) use regex::{PatternLike, PatternRegex};
 
 use std::fmt;
 
+use proc_macro2::Span;
 use syn::{
     Token,
     parse::{Parse, ParseStream},
+    spanned::Spanned,
 };
 
 /// Unified pattern type that can represent any pattern
@@ -61,6 +63,31 @@ pub(crate) enum Pattern {
     Wildcard(PatternWildcard),
     Closure(PatternClosure),
     Map(PatternMap),
+}
+
+impl Pattern {
+    pub(crate) fn span(&self) -> Option<Span> {
+        match self {
+            Pattern::Simple(PatternSimple { expr, .. }) => Some(expr.span()),
+            Pattern::String(PatternString { lit, .. }) => Some(lit.span()),
+            Pattern::Comparison(PatternComparison { op, expr, .. }) => {
+                let op_span = op.span();
+                Some(op_span.join(expr.span()).unwrap_or(op_span))
+            }
+            Pattern::Range(PatternRange { expr, .. }) => Some(expr.span()),
+            #[cfg(feature = "regex")]
+            Pattern::Regex(PatternRegex { span, .. }) => Some(*span),
+            #[cfg(feature = "regex")]
+            Pattern::Like(PatternLike { expr, .. }) => Some(expr.span()),
+            Pattern::Struct(PatternStruct { path, .. }) => path.as_ref().map(|p| p.span()),
+            Pattern::Enum(PatternEnum { path, .. }) => Some(path.span()),
+            Pattern::Tuple(PatternTuple { .. })
+            | Pattern::Slice(PatternSlice { .. })
+            | Pattern::Wildcard(PatternWildcard { .. })
+            | Pattern::Map(PatternMap { .. }) => None,
+            Pattern::Closure(PatternClosure { closure, .. }) => Some(closure.span()),
+        }
+    }
 }
 
 impl Parse for Pattern {

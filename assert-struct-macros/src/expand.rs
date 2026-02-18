@@ -13,7 +13,7 @@ use quote::{quote, quote_spanned};
 use std::collections::HashSet;
 use syn::{Token, punctuated::Punctuated, spanned::Spanned};
 
-use nodes::{expand_pattern_node_ident, generate_pattern_nodes, get_pattern_span};
+use nodes::{expand_pattern_node_ident, generate_pattern_nodes};
 
 pub fn expand(assert: &AssertStruct) -> TokenStream {
     let value = &assert.value;
@@ -164,7 +164,7 @@ fn expand_struct_assertion(value_expr: &TokenStream, pattern: &PatternStruct) ->
             let assertion = expand_field_assertion(&quote! { #field_name }, f);
 
             // Wrap the assertion with the span of the field pattern if available
-            if let Some(span) = get_pattern_span(&f.pattern) {
+            if let Some(span) = f.pattern.span() {
                 quote_spanned! {span=> #assertion }
             } else {
                 assertion

@@ -12,36 +12,12 @@ use crate::pattern::{
 use crate::pattern::{PatternLike, PatternRegex};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, quote_spanned};
-use syn::spanned::Spanned;
 
 /// Get the node identifier for a pattern
 pub(super) fn expand_pattern_node_ident(node_id: usize) -> Ident {
     Ident::new(&format!("__PATTERN_NODE_{}", node_id), Span::call_site())
 }
 
-/// Get the span for a pattern (if available)
-pub(super) fn get_pattern_span(pattern: &Pattern) -> Option<Span> {
-    match pattern {
-        Pattern::Simple(PatternSimple { expr, .. }) => Some(expr.span()),
-        Pattern::String(PatternString { lit, .. }) => Some(lit.span()),
-        Pattern::Comparison(PatternComparison { op, expr, .. }) => {
-            let op_span = op.span();
-            Some(op_span.join(expr.span()).unwrap_or(op_span))
-        }
-        Pattern::Range(PatternRange { expr, .. }) => Some(expr.span()),
-        #[cfg(feature = "regex")]
-        Pattern::Regex(PatternRegex { span, .. }) => Some(*span),
-        #[cfg(feature = "regex")]
-        Pattern::Like(PatternLike { expr, .. }) => Some(expr.span()),
-        Pattern::Struct(PatternStruct { path, .. }) => path.as_ref().map(|p| p.span()),
-        Pattern::Enum(PatternEnum { path, .. }) => Some(path.span()),
-        Pattern::Tuple(PatternTuple { .. })
-        | Pattern::Slice(PatternSlice { .. })
-        | Pattern::Wildcard(PatternWildcard { .. })
-        | Pattern::Map(PatternMap { .. }) => None,
-        Pattern::Closure(PatternClosure { closure, .. }) => Some(closure.span()),
-    }
-}
 
 /// Generate pattern nodes using the IDs already in patterns
 pub(super) fn generate_pattern_nodes(
@@ -90,7 +66,7 @@ pub(super) fn generate_pattern_nodes(
     let node_ident = Ident::new(&format!("__PATTERN_NODE_{}", node_id), Span::call_site());
 
     // Get the span for this pattern
-    let span = get_pattern_span(pattern).unwrap_or_else(Span::call_site);
+    let span = pattern.span().unwrap_or_else(Span::call_site);
 
     // Generate parent reference
     let parent_ref = if let Some(parent) = parent_ident {
