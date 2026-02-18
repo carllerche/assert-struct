@@ -18,6 +18,7 @@ use crate::pattern::{FieldAssertion, FieldOperation, Pattern};
 #[derive(Debug, Clone)]
 pub(crate) struct PatternTuple {
     pub node_id: usize,
+    pub span: proc_macro2::Span,
     pub elements: Vec<TupleElement>,
 }
 
@@ -34,6 +35,8 @@ impl Parse for PatternTuple {
     /// This parses parenthesized tuple elements. For enum/tuple variants
     /// with a path prefix (e.g., `Some(> 30)`), use PatternEnum instead.
     fn parse(input: ParseStream) -> syn::Result<Self> {
+        // Capture the span of the `(` token before consuming it.
+        let span = input.span();
         let content;
         syn::parenthesized!(content in input);
 
@@ -41,6 +44,7 @@ impl Parse for PatternTuple {
 
         Ok(PatternTuple {
             node_id: next_node_id(),
+            span,
             elements,
         })
     }

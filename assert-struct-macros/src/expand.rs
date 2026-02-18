@@ -740,6 +740,6 @@ fn generate_error_push(
 ) -> TokenStream {
     let node_ident = expand_pattern_node_ident(node_id);
     quote_spanned! {span=>
-        __report.push(&#node_ident, line!(), #actual_value, #expected_value);
+        __report.push(&#node_ident, #actual_value, #expected_value);
     }
 }

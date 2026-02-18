@@ -73,14 +73,18 @@ fn absolute_source_path(manifest_dir: &str, file_path: &str) -> PathBuf {
 }
 
 /// Compute the byte offset of a (line, col) position within a source string.
-/// Both `line` and `col` are 1-indexed (as returned by Rust's `line!()` / `column!()`).
+/// `line` is 1-indexed; `col` is 0-indexed (as returned by proc_macro2's span locations).
+/// Returns 0 when `line` is 0 (synthetic span with no real source location).
 fn byte_offset_of(source: &str, line: u32, col: u32) -> usize {
+    if line == 0 {
+        return 0;
+    }
     let line_start: usize = source
         .split('\n')
         .take((line - 1) as usize)
         .map(|l| l.len() + 1) // +1 for the '\n'
         .sum();
-    (line_start + col.saturating_sub(1) as usize).min(source.len())
+    (line_start + col as usize).min(source.len())
 }
 
 /// Context information for a failed assertion.
@@ -88,7 +92,6 @@ fn byte_offset_of(source: &str, line: u32, col: u32) -> usize {
 #[allow(dead_code)]
 struct ErrorContext {
     actual_value: String,
-    line_number: u32,
     /// For equality patterns where we need to show the expected value
     expected_value: Option<String>,
     /// The specific pattern node that failed
@@ -109,8 +112,14 @@ pub struct ErrorReport {
 pub struct PatternNode {
     pub kind: NodeKind,
     pub parent: Option<&'static PatternNode>,
-    pub line: u32,
-    pub column: u32,
+    /// 1-indexed line of the first character of this pattern in source.
+    pub line_start: u32,
+    /// 0-indexed column of the first character of this pattern in source.
+    pub col_start: u32,
+    /// 1-indexed line of the last character of this pattern in source.
+    pub line_end: u32,
+    /// 0-indexed column one past the last character of this pattern in source.
+    pub col_end: u32,
 }
 
 /// The kind of pattern node.
@@ -206,13 +215,11 @@ impl ErrorReport {
     pub fn push(
         &mut self,
         error_node: &'static PatternNode,
-        line_number: u32,
         actual: String,
         expected: Option<String>,
     ) {
         self.errors.push(ErrorContext {
             actual_value: actual,
-            line_number,
             expected_value: expected,
             error_node,
         });
@@ -271,10 +278,9 @@ impl fmt::Display for ErrorReport {
                 .iter()
                 .zip(labels.iter())
                 .map(|(error, label)| {
-                    let start = byte_offset_of(source, error.line_number, error.error_node.column);
-                    // Use the pattern's display text length to size the highlight span.
-                    let pattern_len = error.error_node.to_string().len().max(1);
-                    let end = (start + pattern_len).min(source.len());
+                    let start = byte_offset_of(source, error.error_node.line_start, error.error_node.col_start);
+                    let end = byte_offset_of(source, error.error_node.line_end, error.error_node.col_end)
+                        .max(start + 1);
                     AnnotationKind::Primary
                         .span(start..end)
                         .label(label.as_str())
@@ -298,7 +304,7 @@ impl fmt::Display for ErrorReport {
                 write!(
                     f,
                     "\n  --> {}:{}\n  {label}",
-                    self.rel_path, error.line_number
+                    self.rel_path, error.error_node.line_start
                 )?;
             }
         }
@@ -312,8 +318,10 @@ impl fmt::Debug for PatternNode {
         f.debug_struct("PatternNode")
             .field("kind", &self.kind)
             .field("parent", &self.parent.map(|_| "<parent>"))
-            .field("line", &self.line)
-            .field("column", &self.column)
+            .field("line_start", &self.line_start)
+            .field("col_start", &self.col_start)
+            .field("line_end", &self.line_end)
+            .field("col_end", &self.col_end)
             .finish()
     }
 }

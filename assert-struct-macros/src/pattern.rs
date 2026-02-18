@@ -88,6 +88,81 @@ impl Pattern {
             Pattern::Closure(PatternClosure { closure, .. }) => Some(closure.span()),
         }
     }
+
+    /// Compute the source location for the pattern's anchor token(s).
+    ///
+    /// Returns `(line_start, col_start, line_end, col_end)` where lines are 1-indexed
+    /// and columns are 0-indexed (proc_macro2 convention). Returns `(0, 0, 0, 0)` for
+    /// patterns without a meaningful source location.
+    ///
+    /// Computes start and end from constituent tokens independently to avoid
+    /// `Span::join()`, which is nightly-only in proc_macro context. For example,
+    /// a `Comparison` like `> 30` uses the operator for the start and the expression
+    /// for the end. Enum and struct paths highlight only the type path, not the
+    /// arguments or fields that follow.
+    pub(crate) fn location(&self) -> (u32, u32, u32, u32) {
+        match self {
+            Pattern::Simple(PatternSimple { expr, .. }) => {
+                let start = expr.span().start();
+                let end = expr.span().end();
+                (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+            }
+            Pattern::String(PatternString { lit, .. }) => {
+                let start = lit.span().start();
+                let end = lit.span().end();
+                (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+            }
+            Pattern::Comparison(PatternComparison { op, expr, .. }) => {
+                let start = op.span().start();
+                let end = expr.span().end();
+                (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+            }
+            Pattern::Range(PatternRange { expr, .. }) => {
+                let start = expr.span().start();
+                let end = expr.span().end();
+                (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+            }
+            #[cfg(feature = "regex")]
+            Pattern::Regex(PatternRegex { span, .. }) => {
+                let start = span.start();
+                let end = span.end();
+                (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+            }
+            #[cfg(feature = "regex")]
+            Pattern::Like(PatternLike { expr, .. }) => {
+                let start = expr.span().start();
+                let end = expr.span().end();
+                (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+            }
+            // Highlight only the path itself, not the args or fields that follow.
+            // Use first/last segment idents independently to avoid Span::join().
+            Pattern::Struct(PatternStruct { path: Some(path), .. })
+            | Pattern::Enum(PatternEnum { path, .. }) => {
+                let first = path.segments.first().map(|s| s.ident.span().start());
+                let last = path.segments.last().map(|s| s.ident.span().end());
+                match (first, last) {
+                    (Some(start), Some(end)) => {
+                        (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+                    }
+                    _ => (0, 0, 0, 0),
+                }
+            }
+            Pattern::Closure(PatternClosure { closure, .. }) => {
+                let start = closure.span().start();
+                let end = closure.span().end();
+                (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+            }
+            Pattern::Tuple(PatternTuple { span, .. })
+            | Pattern::Slice(PatternSlice { span, .. })
+            | Pattern::Map(PatternMap { span, .. }) => {
+                let start = span.start();
+                let end = span.end();
+                (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+            }
+            // Wildcard struct patterns and plain wildcards have no meaningful location.
+            Pattern::Struct(PatternStruct { path: None, .. }) | Pattern::Wildcard(_) => (0, 0, 0, 0),
+        }
+    }
 }
 
 impl Parse for Pattern {
