@@ -129,3 +129,24 @@ fn test_struct_still_works() {
     assert_struct!(point, Point { x: 10, y: 20 });
     assert_struct!(point, Point { x: > 5, .. });
 }
+
+// Test for issue #93: asserting on array-indexing should not require references
+#[test]
+fn test_index_into_vec_enum_struct_variant() {
+    #[derive(Debug)]
+    enum SystemEvent {
+        Startup { version: String, code: u32 },
+    }
+
+    let events = vec![SystemEvent::Startup {
+        version: "1.0.0".to_string(),
+        code: 42,
+    }];
+
+    // Issue #93: string literal comparison should not require `&"1.0.0"`
+    assert_struct!(events[0], SystemEvent::Startup { version: "1.0.0", .. });
+
+    // Comparison operators on numeric fields should also work
+    assert_struct!(events[0], SystemEvent::Startup { code: > 10, .. });
+    assert_struct!(events[0], SystemEvent::Startup { code: == 42, .. });
+}
