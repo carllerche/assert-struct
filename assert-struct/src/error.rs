@@ -265,10 +265,16 @@ fn error_label(error: &ErrorContext) -> String {
             "expected variant {}, got {}",
             error.error_node, error.actual_value,
         ),
-        NodeKind::Slice { .. } => format!(
-            "slice length or structure mismatch, got {}",
-            error.actual_value,
-        ),
+        NodeKind::Slice { items } => {
+            let has_rest = items.iter().any(|item| matches!(item.kind, NodeKind::Rest));
+            if has_rest {
+                format!("slice pattern mismatch, got {}", error.actual_value)
+            } else {
+                let n = items.len();
+                let suffix = if n == 1 { "element" } else { "elements" };
+                format!("expected slice with {} {}, got {}", n, suffix, error.actual_value)
+            }
+        }
         NodeKind::Closure { .. } => format!(
             "closure condition not satisfied, got {}",
             error.actual_value,

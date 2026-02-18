@@ -2,7 +2,12 @@
 source: assert-struct/tests/enum_struct_patterns.rs
 expression: message
 ---
-assert_struct! failed:
-expected "select_users" to match "get_items"
-slice length or structure mismatch, got ["id"]
-expected 25 to match > 50
+error: assert_struct! failed
+  --> assert-struct/tests/enum_struct_patterns_errors/enum_struct_multiple_field_failures.rs:32:19
+   |
+32 |             name: "get_items",  // This will fail
+   |                   ^^^^^^^^^^^ got "select_users"
+33 |             params: ["name", "age"],  // This will also fail (wrong length)
+   |                     ^ expected slice with 2 elements, got ["id"]
+34 |             limit: Some(> 50),  // This will also fail
+   |                         ^^^^ got 25
