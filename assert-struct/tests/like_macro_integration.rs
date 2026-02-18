@@ -128,7 +128,6 @@ fn test_custom_like_implementation() {
 // Test failure cases
 #[cfg(feature = "regex")]
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_like_pattern_mismatch() {
     let data = TestData {
@@ -147,7 +146,6 @@ fn test_like_pattern_mismatch() {
 
 #[cfg(feature = "regex")]
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_backward_compat_failure() {
     let data = TestData {

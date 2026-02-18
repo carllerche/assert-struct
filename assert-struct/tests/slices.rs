@@ -167,7 +167,6 @@ fn test_empty_slice() {
 }
 
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_slice_length_mismatch() {
     let container = Container {
@@ -538,7 +537,6 @@ fn test_slice_element_comparison_success() {
 }
 
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_slice_element_comparison_failure() {
     let data = SlicePathData {

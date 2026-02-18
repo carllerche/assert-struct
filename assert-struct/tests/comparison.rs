@@ -113,7 +113,6 @@ fn test_mixed_comparisons() {
 }
 
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_greater_than_failure() {
     let person = Person {

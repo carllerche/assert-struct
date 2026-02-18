@@ -225,7 +225,6 @@ fn test_enum_tuple_with_nested_option_patterns() {
 
 // Failure tests
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_tuple_field_mismatch() {
     let coords = Coordinates {
@@ -245,7 +244,6 @@ fn test_tuple_field_mismatch() {
 }
 
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_tuple_comparison_failure() {
     let coords = Coordinates {

@@ -183,7 +183,6 @@ fn test_mixed_range_and_operators() {
 
 // Test failure cases
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_range_failure_below() {
     let person = Person {
@@ -204,7 +203,6 @@ fn test_range_failure_below() {
 }
 
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_range_failure_above() {
     let person = Person {
@@ -225,7 +223,6 @@ fn test_range_failure_above() {
 }
 
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_range_exclusive_boundary_failure() {
     let person = Person {

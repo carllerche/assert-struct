@@ -205,7 +205,6 @@ fn test_option_none_with_collections() {
 // Failure cases
 
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_some_none_mismatch() {
     let user = User {
@@ -229,7 +228,6 @@ fn test_some_none_mismatch() {
 }
 
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_none_some_mismatch() {
     let user = User {
@@ -253,7 +251,6 @@ fn test_none_some_mismatch() {
 }
 
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_some_value_mismatch() {
     let user = User {
@@ -408,7 +405,6 @@ fn test_mixed_option_patterns() {
 }
 
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_option_comparison_failure() {
     let user = UserAdvanced {
@@ -427,7 +423,6 @@ fn test_option_comparison_failure() {
 }
 
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_option_comparison_none_failure() {
     let user = UserAdvanced {
@@ -446,7 +441,6 @@ fn test_option_comparison_none_failure() {
 }
 
 #[test]
-#[ignore = "error message format in flux"]
 #[cfg(feature = "regex")]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_option_regex_failure() {
@@ -606,7 +600,6 @@ fn test_deeply_nested_with_partial_matching() {
 }
 
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_nested_field_mismatch() {
     let profile = Profile {
@@ -632,7 +625,6 @@ fn test_nested_field_mismatch() {
 }
 
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_expected_some_got_none_nested() {
     let profile = Profile {
@@ -662,7 +654,6 @@ fn test_none_success() {
 }
 
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_none_error_message() {
     let value: Option<i32> = Some(42);

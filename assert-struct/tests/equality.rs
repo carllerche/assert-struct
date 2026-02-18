@@ -105,7 +105,6 @@ fn test_equality_in_tuples() {
 
 // Test failure cases
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_equality_failure() {
     let user = User {
@@ -122,7 +121,6 @@ fn test_equality_failure() {
 }
 
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_inequality_failure() {
     let user = User {
@@ -256,7 +254,6 @@ fn test_nested_struct_equality() {
 
 // Test failure cases
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_struct_equality_failure() {
     let shape = Shape {
@@ -271,7 +268,6 @@ fn test_struct_equality_failure() {
 }
 
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_struct_inequality_failure() {
     let shape = Shape {

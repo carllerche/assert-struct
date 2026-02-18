@@ -1,6 +1,9 @@
 /// Tests for wildcard struct patterns that avoid type imports
 use assert_struct::assert_struct;
 
+#[macro_use]
+mod util;
+
 #[derive(Debug)]
 struct Inner {
     value: i32,
@@ -138,32 +141,7 @@ fn test_wildcard_partial_matching() {
     });
 }
 
-#[test]
-#[ignore = "error message format in flux"]
-fn test_wildcard_struct_failure() {
-    let data = Outer {
-        inner: Inner {
-            value: 10,
-            text: "test".to_string(),
-        },
-        count: 5,
-    };
-
-    let message = std::panic::catch_unwind(|| {
-        assert_struct!(data, _ {
-            inner: _ {
-                value: 20,  // This should fail
-                ..
-            },
-            ..
-        });
-    })
-    .unwrap_err()
-    .downcast::<String>()
-    .unwrap();
-
-    insta::assert_snapshot!(message);
-}
+error_message_test!("wildcard_errors/wildcard_struct_failure.rs", wildcard_struct_failure);
 
 #[test]
 fn test_wildcard_with_options() {

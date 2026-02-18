@@ -41,7 +41,6 @@ fn test_regex_with_path_success() {
 
 #[cfg(feature = "regex")]
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_regex_failure_shows_path() {
     let user = User {
@@ -65,7 +64,6 @@ fn test_regex_failure_shows_path() {
 
 #[cfg(feature = "regex")]
 #[test]
-#[ignore = "error message format in flux"]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_nested_regex_failure_shows_path() {
     let user = User {
