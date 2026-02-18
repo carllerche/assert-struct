@@ -2,5 +2,8 @@
 source: assert-struct/tests/wildcard.rs
 expression: message
 ---
-assert_struct! failed:
-expected variant Some(...), got None
+error: assert_struct! failed
+  --> assert-struct/tests/wildcard_errors/wildcard_with_none_fails.rs:27:19
+   |
+27 |             data: Some(_),
+   |                   ^^^^ expected variant Some(...), got None

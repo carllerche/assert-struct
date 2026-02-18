@@ -2,5 +2,8 @@
 source: assert-struct/tests/enums.rs
 expression: message
 ---
-assert_struct! failed:
-expected variant Ok(...), got Err("Failed")
+error: assert_struct! failed
+  --> assert-struct/tests/enums_errors/result_expected_ok_got_err.rs:30:27
+   |
+30 |             login_result: Ok("user123"),
+   |                           ^^ expected variant Ok(...), got Err("Failed")

@@ -2,5 +2,8 @@
 source: assert-struct/tests/nested.rs
 expression: message
 ---
-assert_struct! failed:
-expected "john@example.com" to match =~ r".*@company\.com$"
+error: assert_struct! failed
+  --> assert-struct/tests/nested_errors/deeply_nested_regex_pattern.rs:39:27
+   |
+39 |                 email: =~ r".*@company\.com$",  // Line 39 - should report this line
+   |                           ^^^^^^^^^^^^^^^^^^^ got "john@example.com"

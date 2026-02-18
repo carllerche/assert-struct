@@ -7,6 +7,30 @@ use std::sync::{Arc, LazyLock, RwLock};
 
 use annotate_snippets::{AnnotationKind, Level, Renderer, Snippet};
 
+thread_local! {
+    static PLAIN_OUTPUT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// RAII guard that forces plain (non-colored) `ErrorReport` output on the current thread.
+///
+/// Intended for test utilities that capture panic messages and compare them as strings.
+/// Dropping the guard restores colored output.
+#[doc(hidden)]
+pub struct PlainOutputGuard;
+
+impl PlainOutputGuard {
+    pub fn new() -> Self {
+        PLAIN_OUTPUT.with(|c| c.set(true));
+        PlainOutputGuard
+    }
+}
+
+impl Drop for PlainOutputGuard {
+    fn drop(&mut self) {
+        PLAIN_OUTPUT.with(|c| c.set(false));
+    }
+}
+
 /// Global cache of source file contents, keyed by absolute path.
 /// Shared across all `assert_struct!` failures in a test binary so each
 /// file is read at most once regardless of how many assertions fail.
@@ -264,7 +288,8 @@ impl fmt::Display for ErrorReport {
         // Pre-compute labels so their lifetimes outlive the report construction.
         let labels: Vec<String> = self.errors.iter().map(error_label).collect();
 
-        let renderer = if std::env::var_os("NO_COLOR").is_some()
+        let renderer = if PLAIN_OUTPUT.with(|c| c.get())
+            || std::env::var_os("NO_COLOR").is_some()
             || !std::io::IsTerminal::is_terminal(&std::io::stderr())
         {
             Renderer::plain()

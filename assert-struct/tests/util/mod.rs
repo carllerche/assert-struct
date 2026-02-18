@@ -2,8 +2,10 @@
 
 use std::panic;
 
-/// Captures the panic message from a function that should panic
+/// Captures the panic message from a function that should panic.
+/// Forces plain (non-colored) output so snapshots are stable across environments.
 pub fn capture_panic_message<F: FnOnce() + panic::UnwindSafe>(f: F) -> String {
+    let _guard = assert_struct::__macro_support::PlainOutputGuard::new();
     let result = panic::catch_unwind(f);
     let err = result.unwrap_err();
     err.downcast_ref::<String>()

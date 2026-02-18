@@ -36,7 +36,7 @@ pub fn test_case() {
         contact: Contact {
             name: "John Doe",
             validation: Validation {
-                email: =~ r".*@company\.com$",  // Line 38 - should report this line
+                email: =~ r".*@company\.com$",  // Line 39 - should report this line
                 phone: "+1-555-1234",
             },
         },
