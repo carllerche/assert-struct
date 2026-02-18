@@ -432,6 +432,29 @@ fn test_struct_value_abbreviated_display() {
     assert_struct!(value, None);
 }
 
+// Test for issue #95: single-variant enums should not produce unreachable_patterns warnings
+#[derive(Debug)]
+enum SingleUnitVariant {
+    Lonely,
+}
+
+#[derive(Debug)]
+enum SingleTupleVariant {
+    Only(i32),
+}
+
+#[test]
+fn test_single_unit_variant_no_warning() {
+    let data = SingleUnitVariant::Lonely;
+    assert_struct!(data, SingleUnitVariant::Lonely);
+}
+
+#[test]
+fn test_single_tuple_variant_no_warning() {
+    let data = SingleTupleVariant::Only(42);
+    assert_struct!(data, SingleTupleVariant::Only(== 42));
+}
+
 #[test]
 #[should_panic(expected = "assert_struct! failed")]
 fn test_result_with_struct_abbreviated_display() {
