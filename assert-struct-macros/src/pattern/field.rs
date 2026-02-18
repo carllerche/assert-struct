@@ -192,7 +192,7 @@ impl Parse for FieldAssertion {
 }
 
 impl Parse for FieldOperation {
-    /// Parse a complete field operation sequence: *field.method()[index].await
+    /// Parse a complete field operation sequence: *field.method()\[index\].await
     ///
     /// # Example Input
     /// ```text
