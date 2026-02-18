@@ -2,15 +2,10 @@
 source: assert-struct/tests/slices.rs
 expression: message
 ---
-assert_struct! failed: 2 mismatches
-
-   | Container {
-mismatch:
-  --> `container.items.[2]` (line 21)
-   |     [2]: 4,
-   |          ^ actual: 3
-mismatch:
-  --> `container.names.[1]` (line 22)
-   |     [1]: "c",
-   |          ^^^ actual: "b"
-   | }
+error: assert_struct! failed
+  --> assert-struct/tests/slices_errors/slice_element_mismatch.rs:21:27
+   |
+21 |             items: [1, 2, 4],  // Last element wrong
+   |                           ^ got 3
+22 |             names: ["a", "c"], // Second element wrong
+   |                          ^^^ got "b"

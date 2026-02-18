@@ -2,14 +2,12 @@
 source: assert-struct/tests/tuples.rs
 expression: message
 ---
-assert_struct! failed: 4 mismatches
-
-   | MessageQueue {
-mismatch:
-  --> `queue.current` (line 25)
-   |     current: Message::Quad(1, 2, 3, 4),
-   |                            ^  ^  ^  ^ actual: 40
-   |                            │  │  └─ actual: 30
-   |                            │  └─ actual: 20
-   |                            └─ actual: 10
-   | }
+error: assert_struct! failed
+  --> assert-struct/tests/tuples_errors/enum_four_errors.rs:25:36
+   |
+25 |             current: Message::Quad(1, 2, 3, 4),  // All four fields wrong
+   |                                    ^  ^  ^  ^ got 40
+   |                                    |  |  |
+   |                                    |  |  got 30
+   |                                    |  got 20
+   |                                    got 10

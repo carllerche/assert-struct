@@ -2,11 +2,8 @@
 source: assert-struct/tests/field_operations.rs
 expression: message
 ---
-assert_struct! failed:
-
-   | NestedStruct { ... InnerStruct {
-mismatch:
-  --> `test.inner.*rc_value` (line 26)
-   |     *rc_value: "goodbye",
-   |                ^^^^^^^^^ actual: "hello"
-   | } ... }
+error: assert_struct! failed
+  --> assert-struct/tests/field_operations_errors/nested_deref_mismatch.rs:26:24
+   |
+26 |             *rc_value: "goodbye",  // Should be "hello", will fail
+   |                        ^^^^^^^^^ got "hello"

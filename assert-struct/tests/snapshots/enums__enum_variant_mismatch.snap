@@ -2,11 +2,8 @@
 source: assert-struct/tests/enums.rs
 expression: message
 ---
-assert_struct! failed:
-
-   | Account {
-mismatch:
-  --> `account.status` (line 28)
-   |     status: Status::Active,
-   |             ^^^^^^^^^^^^^^ actual: Inactive
-   | }
+error: assert_struct! failed
+  --> assert-struct/tests/enums_errors/enum_variant_mismatch.rs:28:21
+   |
+28 |             status: Status::Active,
+   |                     ^^^^^^^^^^^^^^ expected variant Status::Active, got Inactive

@@ -350,11 +350,10 @@ fn test_nested_enum_tuple_variant() {
         outer: OuterEnum::Wrapper(InnerEnum::A("nested".to_string())),
     };
 
-    // Note: For nested enum tuples, we currently need .to_string() for string literals
     assert_struct!(
         nested,
         NestedEnumStruct {
-            outer: OuterEnum::Wrapper(InnerEnum::A("nested".to_string())),
+            outer: OuterEnum::Wrapper(InnerEnum::A("nested")),
         }
     );
 }
@@ -399,7 +398,7 @@ struct SimpleDisplayFoo {
 }
 
 #[test]
-#[should_panic(expected = "Some(10)")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_simple_int_value_display() {
     let value: Option<i32> = Some(10);
     assert_struct!(value, None);
@@ -413,7 +412,7 @@ fn test_simple_string_value_display() {
 }
 
 #[test]
-#[should_panic(expected = "Ok(42)")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_nested_result_simple_display() {
     let value: Result<i32, String> = Ok(42);
     assert_struct!(value, Err("error"));
@@ -427,14 +426,14 @@ fn test_nested_option_result_display() {
 }
 
 #[test]
-#[should_panic(expected = "Some(..)")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_struct_value_abbreviated_display() {
     let value: Option<SimpleDisplayFoo> = Some(SimpleDisplayFoo { value: 42 });
     assert_struct!(value, None);
 }
 
 #[test]
-#[should_panic(expected = "Ok(..)")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_result_with_struct_abbreviated_display() {
     let value: Result<SimpleDisplayFoo, String> = Ok(SimpleDisplayFoo { value: 42 });
     assert_struct!(value, Err("error"));

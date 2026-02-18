@@ -12,6 +12,7 @@ use crate::pattern::{Pattern, expr_to_string};
 #[derive(Debug, Clone)]
 pub(crate) struct PatternMap {
     pub node_id: usize,
+    pub span: proc_macro2::Span,
     pub entries: Vec<(syn::Expr, Pattern)>,
     pub rest: bool,
 }
@@ -47,7 +48,8 @@ impl Parse for PatternMap {
         // Consume the # token
         let _: Token![#] = input.parse()?;
 
-        // Parse the braced content
+        // Capture the span of the `{` token before consuming it.
+        let span = input.span();
         let content;
         syn::braced!(content in input);
 
@@ -56,6 +58,7 @@ impl Parse for PatternMap {
 
         Ok(PatternMap {
             node_id: next_node_id(),
+            span,
             entries,
             rest,
         })

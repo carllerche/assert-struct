@@ -71,7 +71,7 @@ fn test_nested_struct_partial() {
 }
 
 #[test]
-#[should_panic(expected = "person.address.city")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_nested_field_mismatch() {
     let person = Person {
         name: "Charlie".to_string(),

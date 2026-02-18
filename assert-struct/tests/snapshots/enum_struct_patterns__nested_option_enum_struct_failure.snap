@@ -2,11 +2,8 @@
 source: assert-struct/tests/enum_struct_patterns.rs
 expression: message
 ---
-assert_struct! failed:
-
-   | Container { ... Query {
-mismatch:
-  --> `container.data.Some.0.Query.0.limit` (line 31)
-   |     limit: > 100,
-   |            ^^^^^ actual: 10
-   | } ... }
+error: assert_struct! failed
+  --> assert-struct/tests/enum_struct_patterns_errors/nested_option_enum_struct_failure.rs:31:20
+   |
+31 |             limit: > 100,  // This will fail: 10 is not > 100
+   |                    ^^^^^ got 10

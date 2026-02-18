@@ -2,11 +2,8 @@
 source: assert-struct/tests/nested.rs
 expression: message
 ---
-assert_struct! failed:
-
-   | User { ... Profile {
-mismatch:
-  --> `user.profile.age` (line 25)
-   |     age: >= 18,
-   |          ^^^^^ actual: 17
-   | } ... }
+error: assert_struct! failed
+  --> assert-struct/tests/nested_errors/nested_comparison.rs:25:18
+   |
+25 |             age: >= 18,
+   |                  ^^^^^ got 17

@@ -2,11 +2,8 @@
 source: assert-struct/tests/nested.rs
 expression: message
 ---
-assert_struct! failed:
-
-   | GameObject { ... Transform { ... Coordinates {
-mismatch:
-  --> `obj.transform.coords.position` (line 39)
-   |     position: (10.0, 25.0, 30.0),
-   |                      ^^^^ actual: 20.0
-   | } ... } ... }
+error: assert_struct! failed
+  --> assert-struct/tests/nested_errors/deeply_nested_tuple_pattern.rs:39:34
+   |
+39 |                 position: (10.0, 25.0, 30.0),  // Line 38 - should report this line (20.0 != 25.0)
+   |                                  ^^^^ got 20.0

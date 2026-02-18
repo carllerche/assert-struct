@@ -2,11 +2,8 @@
 source: assert-struct/tests/enum_struct_patterns.rs
 expression: message
 ---
-assert_struct! failed:
-
-   | Request {
-mismatch:
-  --> `request.statement` (line 34)
-   |     statement: Statement::Query(Query { name: ... }),
-   |                ^^^^^^^^^^^^^^^^ actual: Update(..)
-   | }
+error: assert_struct! failed
+  --> assert-struct/tests/enum_struct_patterns_errors/enum_variant_wrong_struct.rs:34:20
+   |
+34 |         statement: Statement::Query(Query {
+   |                    ^^^^^^^^^^^^^^^^ expected variant Statement::Query(...), got Update(Update { table: "users" })

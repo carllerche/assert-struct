@@ -2,13 +2,11 @@
 source: assert-struct/tests/tuples.rs
 expression: message
 ---
-assert_struct! failed: 3 mismatches
-
-   | MessageQueue {
-mismatch:
-  --> `queue.current` (line 25)
-   |     current: Message::Triple(100, "expected", false),
-   |                              ^^^  ^^^^^^^^^^  ^^^^^ actual: true
-   |                              │    └─ actual: "actual"
-   |                              └─ actual: 42
-   | }
+error: assert_struct! failed
+  --> assert-struct/tests/tuples_errors/enum_three_errors.rs:25:38
+   |
+25 |             current: Message::Triple(100, "expected", false),  // All three fields wrong
+   |                                      ^^^  ^^^^^^^^^^  ^^^^^ got true
+   |                                      |    |
+   |                                      |    got "actual"
+   |                                      got 42

@@ -2,16 +2,11 @@
 source: assert-struct/tests/multiple_failures.rs
 expression: message
 ---
-assert_struct! failed: 2 mismatches
-
-   | User {
-mismatch:
-  --> `user.age` (line 33)
-   |     age: 30,
-   |          ^^ actual: 25
-   | ... Address {
-mismatch:
-  --> `user.address.city` (line 37)
-   |     city: "Shelbyville",
-   |           ^^^^^^^^^^^^^ actual: "Springfield"
-   | } ... }
+error: assert_struct! failed
+  --> assert-struct/tests/multiple_failures_errors/mixed_level_failures.rs:33:14
+   |
+33 |         age: 30,  // Line 32 - root level failure (25 != 30)
+   |              ^^ got 25
+...
+37 |             city: "Shelbyville",  // Line 36 - nested failure
+   |                   ^^^^^^^^^^^^^ got "Springfield"

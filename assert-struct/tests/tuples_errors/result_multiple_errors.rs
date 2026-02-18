@@ -18,7 +18,7 @@ pub fn test_case() {
         response,
         Response {
             id: 5,
-            data: Ok((100, "different".to_string())),  // Both fields in Ok variant wrong
+            data: Ok((100, "different")), // Both fields in Ok variant wrong
         }
     );
 }

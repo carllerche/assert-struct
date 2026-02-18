@@ -2,11 +2,8 @@
 source: assert-struct/tests/maps.rs
 expression: message
 ---
-assert_struct! failed:
-
-   | TestData {
-mismatch:
-  --> `data.string_map` (line 20)
-   |     string_map: #{"key1": "value1"},
-   |                 ^^^^^^^^^^^^^^^^^^^ actual: map with 2 entries
-   | }
+error: assert_struct! failed
+  --> assert-struct/tests/map_errors/exact_length_mismatch.rs:20:22
+   |
+20 |         string_map: #{ "key1": "value1" },
+   |                      ^ got map with 2 entries

@@ -1,15 +1,19 @@
+mod nodes;
+
 use crate::AssertStruct;
 use crate::pattern::{
     ComparisonOp, FieldAssertion, FieldOperation, Pattern, PatternClosure, PatternComparison,
-    PatternMap, PatternRange, PatternSimple, PatternSlice, PatternStruct, PatternTuple,
-    PatternWildcard, TupleElement,
+    PatternEnum, PatternMap, PatternRange, PatternSimple, PatternSlice, PatternString,
+    PatternStruct, PatternTuple, PatternWildcard, TupleElement,
 };
 #[cfg(feature = "regex")]
 use crate::pattern::{PatternLike, PatternRegex};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, quote_spanned};
 use std::collections::HashSet;
-use syn::{Expr, Token, punctuated::Punctuated, spanned::Spanned};
+use syn::{Token, punctuated::Punctuated, spanned::Spanned};
+
+use nodes::{expand_pattern_node_ident, generate_pattern_nodes};
 
 pub fn expand(assert: &AssertStruct) -> TokenStream {
     let value = &assert.value;
@@ -17,45 +21,50 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
 
     // Generate pattern nodes using the node IDs from the patterns
     let mut node_defs = Vec::new();
-    let root_ref = generate_pattern_nodes(pattern, &mut node_defs);
+    let root_ref = generate_pattern_nodes(pattern, &mut node_defs, None);
 
-    // Generate constants for all nodes
+    // Generate static declarations for all nodes
     let node_constants: Vec<TokenStream> = node_defs
         .iter()
         .map(|(id, def)| {
             let ident = Ident::new(&format!("__PATTERN_NODE_{}", id), Span::call_site());
             quote! {
-                const #ident: ::assert_struct::__macro_support::PatternNode = #def;
+                static #ident: ::assert_struct::__macro_support::PatternNode = #def;
             }
         })
         .collect();
 
-    // Generate the assertion for the root pattern
-    // Start with root path containing the variable name
-    let root_path = vec![quote! { #value }.to_string()];
-    let assertion =
-        generate_pattern_assertion_with_collection(&quote! { #value }, pattern, false, &root_path);
+    let assertion = expand_pattern_assertion(&quote! { #value }, pattern);
 
     // Wrap in a block to avoid variable name conflicts
     quote! {
         {
             // Suppress clippy warnings that are expected in macro-generated code
-            #[allow(unused_assignments, clippy::neg_cmp_op_on_partial_ord, clippy::op_ref, clippy::zero_prefixed_literal, clippy::bool_comparison)]
+            #[allow(unused_assignments, clippy::neg_cmp_op_on_partial_ord, clippy::op_ref, clippy::zero_prefixed_literal, clippy::bool_comparison, clippy::redundant_pattern_matching, clippy::useless_asref)]
             let __assert_struct_result = {
+                use std::convert::AsRef;
+
                 // Generate all node constants
                 #(#node_constants)*
 
                 // Store the pattern tree root
                 const __PATTERN_TREE: &::assert_struct::__macro_support::PatternNode = &#root_ref;
 
-                // Create error collection vector
-                let mut __errors: Vec<::assert_struct::__macro_support::ErrorContext> = Vec::new();
+                // Create error report. Both values are compile-time constants:
+                // - CARGO_MANIFEST_DIR: absolute path to this package's root
+                // - file!(): path relative to the workspace root
+                // Together they let us derive the absolute source path at runtime
+                // without relying on the working directory.
+                let mut __report = ::assert_struct::__macro_support::ErrorReport::new(
+                    ::std::env!("CARGO_MANIFEST_DIR"),
+                    ::std::file!(),
+                );
 
                 #assertion
 
                 // Check if any errors were collected
-                if !__errors.is_empty() {
-                    panic!("{}", ::assert_struct::__macro_support::format_errors_with_root(__PATTERN_TREE, __errors));
+                if !__report.is_empty() {
+                    panic!("{}", __report);
                 }
             };
             __assert_struct_result
@@ -63,503 +72,67 @@ pub fn expand(assert: &AssertStruct) -> TokenStream {
     }
 }
 
-/// Get the node identifier for a pattern
-fn get_pattern_node_ident(pattern: &Pattern) -> Ident {
-    let node_id = match pattern {
-        Pattern::Simple(PatternSimple { node_id, .. })
-        | Pattern::Struct(PatternStruct { node_id, .. })
-        | Pattern::Tuple(PatternTuple { node_id, .. })
-        | Pattern::Slice(PatternSlice { node_id, .. })
-        | Pattern::Comparison(PatternComparison { node_id, .. })
-        | Pattern::Range(PatternRange { node_id, .. })
-        | Pattern::Wildcard(PatternWildcard { node_id })
-        | Pattern::Closure(PatternClosure { node_id, .. })
-        | Pattern::Map(PatternMap { node_id, .. }) => *node_id,
-        #[cfg(feature = "regex")]
-        Pattern::Regex(PatternRegex { node_id, .. })
-        | Pattern::Like(PatternLike { node_id, .. }) => *node_id,
-    };
-    Ident::new(&format!("__PATTERN_NODE_{}", node_id), Span::call_site())
-}
-
-/// Get the span for a pattern (if available)
-fn get_pattern_span(pattern: &Pattern) -> Option<Span> {
-    match pattern {
-        Pattern::Simple(PatternSimple { expr, .. }) => Some(expr.span()),
-        Pattern::Comparison(PatternComparison { expr, .. }) => Some(expr.span()),
-        Pattern::Range(PatternRange { expr, .. }) => Some(expr.span()),
-        #[cfg(feature = "regex")]
-        Pattern::Regex(PatternRegex { span, .. }) => Some(*span),
-        #[cfg(feature = "regex")]
-        Pattern::Like(PatternLike { expr, .. }) => Some(expr.span()),
-        Pattern::Struct(PatternStruct { path, .. }) => path.as_ref().map(|p| p.span()),
-        Pattern::Tuple(PatternTuple { path, .. }) => path.as_ref().map(|p| p.span()),
-        Pattern::Slice(PatternSlice { .. })
-        | Pattern::Wildcard(PatternWildcard { .. })
-        | Pattern::Map(PatternMap { .. }) => None,
-        Pattern::Closure(PatternClosure { closure, .. }) => Some(closure.span()),
-    }
-}
-
-/// Generate pattern nodes using the IDs already in patterns
-fn generate_pattern_nodes(
-    pattern: &Pattern,
-    node_defs: &mut Vec<(usize, TokenStream)>,
-) -> TokenStream {
-    // Get the node_id from the pattern itself
-    let node_id = match pattern {
-        Pattern::Simple(PatternSimple { node_id, .. })
-        | Pattern::Struct(PatternStruct { node_id, .. })
-        | Pattern::Tuple(PatternTuple { node_id, .. })
-        | Pattern::Slice(PatternSlice { node_id, .. })
-        | Pattern::Comparison(PatternComparison { node_id, .. })
-        | Pattern::Range(PatternRange { node_id, .. })
-        | Pattern::Wildcard(PatternWildcard { node_id })
-        | Pattern::Closure(PatternClosure { node_id, .. })
-        | Pattern::Map(PatternMap { node_id, .. }) => *node_id,
-        #[cfg(feature = "regex")]
-        Pattern::Regex(PatternRegex { node_id, .. })
-        | Pattern::Like(PatternLike { node_id, .. }) => *node_id,
-    };
-
-    // Special handling for Rest patterns with MAX node_id (shouldn't generate constants)
-    if node_id == usize::MAX {
-        // For rest patterns, return inline node definition without creating a constant
-        return quote! {
-            ::assert_struct::__macro_support::PatternNode::Rest
-        };
-    }
-
-    let node_ident = Ident::new(&format!("__PATTERN_NODE_{}", node_id), Span::call_site());
-
-    let node_def = match pattern {
-        Pattern::Simple(PatternSimple { expr, .. }) => {
-            let value_str = quote! { #expr }.to_string();
-            quote! {
-                ::assert_struct::__macro_support::PatternNode::Simple {
-                    value: #value_str,
-                }
-            }
-        }
-        Pattern::Comparison(PatternComparison { op, expr, .. }) => {
-            let op_str = match op {
-                ComparisonOp::Less => "<",
-                ComparisonOp::LessEqual => "<=",
-                ComparisonOp::Greater => ">",
-                ComparisonOp::GreaterEqual => ">=",
-                ComparisonOp::Equal => "==",
-                ComparisonOp::NotEqual => "!=",
-            };
-            let value_str = quote! { #expr }.to_string();
-            quote! {
-                ::assert_struct::__macro_support::PatternNode::Comparison {
-                    op: #op_str,
-                    value: #value_str,
-                }
-            }
-        }
-        Pattern::Range(PatternRange { expr, .. }) => {
-            let pattern_str = quote! { #expr }.to_string();
-            quote! {
-                ::assert_struct::__macro_support::PatternNode::Range {
-                    pattern: #pattern_str,
-                }
-            }
-        }
-        #[cfg(feature = "regex")]
-        Pattern::Regex(PatternRegex { pattern, .. }) => {
-            let pattern_str = format!("r\"{}\"", pattern);
-            quote! {
-                ::assert_struct::__macro_support::PatternNode::Regex {
-                    pattern: #pattern_str,
-                }
-            }
-        }
-        #[cfg(feature = "regex")]
-        Pattern::Like(PatternLike { expr, .. }) => {
-            let expr_str = quote! { #expr }.to_string();
-            quote! {
-                ::assert_struct::__macro_support::PatternNode::Like {
-                    expr: #expr_str,
-                }
-            }
-        }
-        Pattern::Wildcard(PatternWildcard { .. }) => {
-            quote! {
-                ::assert_struct::__macro_support::PatternNode::Wildcard
-            }
-        }
-        Pattern::Closure(PatternClosure { closure, .. }) => {
-            let closure_str = quote! { #closure }.to_string();
-            quote! {
-                ::assert_struct::__macro_support::PatternNode::Closure {
-                    closure: #closure_str,
-                }
-            }
-        }
-        Pattern::Tuple(PatternTuple { path, elements, .. }) => {
-            let child_refs: Vec<TokenStream> = elements
-                .iter()
-                .map(|elem| {
-                    let pattern = match elem {
-                        TupleElement::Positional { pattern } => pattern,
-                        TupleElement::Indexed { pattern, .. } => pattern,
-                    };
-                    generate_pattern_nodes(pattern, node_defs)
-                })
-                .collect();
-
-            if let Some(enum_path) = path {
-                let path_str = quote!(#enum_path).to_string().replace(" :: ", "::");
-                quote! {
-                    ::assert_struct::__macro_support::PatternNode::EnumVariant {
-                        path: #path_str,
-                        args: Some(&[#(&#child_refs),*]),
-                    }
-                }
-            } else {
-                quote! {
-                    ::assert_struct::__macro_support::PatternNode::Tuple {
-                        items: &[#(&#child_refs),*],
-                    }
-                }
-            }
-        }
-        Pattern::Slice(PatternSlice { elements, .. }) => {
-            let child_refs: Vec<TokenStream> = elements
-                .iter()
-                .map(|elem| generate_pattern_nodes(elem, node_defs))
-                .collect();
-
-            let is_ref = true; // Default for now
-            quote! {
-                ::assert_struct::__macro_support::PatternNode::Slice {
-                    items: &[#(&#child_refs),*],
-                    is_ref: #is_ref,
-                }
-            }
-        }
-        Pattern::Struct(PatternStruct {
-            path, fields, rest, ..
-        }) => {
-            // Handle wildcard struct patterns (path is None)
-            let name_str = if let Some(p) = path {
-                quote! { #p }.to_string().replace(" :: ", "::")
-            } else {
-                "_".to_string() // Use "_" for wildcard struct patterns
-            };
-
-            let field_entries: Vec<TokenStream> = fields
-                .iter()
-                .map(|field| {
-                    let field_name = field.field_name.to_string();
-                    let child_ref = generate_pattern_nodes(&field.pattern, node_defs);
-                    quote! {
-                        (#field_name, &#child_ref)
-                    }
-                })
-                .collect();
-
-            if *rest {
-                // Rest patterns are handled inline, no need for a separate node
-                quote! {
-                    ::assert_struct::__macro_support::PatternNode::Struct {
-                        name: #name_str,
-                        fields: &[
-                            #(#field_entries,)*
-                            ("..", &::assert_struct::__macro_support::PatternNode::Rest)
-                        ],
-                    }
-                }
-            } else {
-                quote! {
-                    ::assert_struct::__macro_support::PatternNode::Struct {
-                        name: #name_str,
-                        fields: &[#(#field_entries),*],
-                    }
-                }
-            }
-        }
-        Pattern::Map(PatternMap { entries, rest, .. }) => {
-            let entry_refs: Vec<TokenStream> = entries
-                .iter()
-                .map(|(key, value)| {
-                    let key_str = quote! { #key }.to_string();
-                    let value_ref = generate_pattern_nodes(value, node_defs);
-                    quote! {
-                        (#key_str, &#value_ref)
-                    }
-                })
-                .collect();
-
-            if *rest {
-                quote! {
-                    ::assert_struct::__macro_support::PatternNode::Map {
-                        entries: &[
-                            #(#entry_refs,)*
-                            ("..", &::assert_struct::__macro_support::PatternNode::Rest)
-                        ],
-                    }
-                }
-            } else {
-                quote! {
-                    ::assert_struct::__macro_support::PatternNode::Map {
-                        entries: &[#(#entry_refs),*],
-                    }
-                }
-            }
-        }
-    };
-
-    node_defs.push((node_id, node_def));
-    quote! { #node_ident }
-}
-
 /// Generate assertion code with error collection instead of immediate panic.
-fn generate_pattern_assertion_with_collection(
-    value_expr: &TokenStream,
-    pattern: &Pattern,
-    is_ref: bool,
-    path: &[String],
-) -> TokenStream {
-    // Capture pattern string representation for error messages
-    let pattern_str = pattern_to_string(pattern);
-
-    // Get the node identifier for this pattern
-    let node_ident = get_pattern_node_ident(pattern);
-
+fn expand_pattern_assertion(value_expr: &TokenStream, pattern: &Pattern) -> TokenStream {
     match pattern {
-        Pattern::Simple(PatternSimple { expr: expected, .. }) => {
-            generate_simple_assertion_with_collection(
-                value_expr,
-                expected,
-                is_ref,
-                path,
-                &node_ident,
-            )
+        Pattern::Simple(simple_pattern) => expand_simple_assertion(value_expr, simple_pattern),
+        Pattern::String(string_pattern) => expand_string_assertion(value_expr, string_pattern),
+        Pattern::Struct(struct_pattern) => expand_struct_assertion(value_expr, struct_pattern),
+        Pattern::Comparison(comparison_pattern) => {
+            expand_comparison_assertion(value_expr, comparison_pattern)
         }
-        Pattern::Struct(PatternStruct {
-            path: struct_path,
-            fields,
-            rest,
-            ..
-        }) => generate_struct_match_assertion_with_collection(
-            value_expr,
-            struct_path, // Now passing &Option<syn::Path>
-            fields,
-            *rest,
-            is_ref,
-            path,
-            &node_ident,
-        ),
-        Pattern::Comparison(PatternComparison {
-            op, expr: expected, ..
-        }) => generate_comparison_assertion_with_collection(
-            value_expr,
-            op,
-            expected,
-            is_ref,
-            path,
-            &pattern_str,
-            &node_ident,
-        ),
-        Pattern::Tuple(PatternTuple {
-            path: variant_path,
-            elements,
-            ..
-        }) => {
-            // Handle enum tuples with error collection
-            if let Some(vpath) = variant_path {
-                if elements.is_empty() {
-                    // Unit variant like None - use collection version for proper error collection
-                    generate_enum_tuple_assertion_with_collection(
-                        value_expr,
-                        vpath,
-                        &[], // Empty elements for unit variant
-                        is_ref,
-                        path,
-                        &node_ident,
-                    )
-                } else {
-                    // Tuple variant with data - use collection version
-                    generate_enum_tuple_assertion_with_collection(
-                        value_expr,
-                        vpath,
-                        elements,
-                        is_ref,
-                        path,
-                        &node_ident,
-                    )
-                }
-            } else {
-                // Plain tuple - use collection version for proper error collection
-                generate_plain_tuple_assertion_with_collection(
-                    value_expr,
-                    elements,
-                    is_ref,
-                    path,
-                    &node_ident,
-                )
-            }
+        Pattern::Enum(enum_pattern) => {
+            // Enum tuple variant - use collection version
+            expand_enum_assertion(value_expr, enum_pattern)
         }
-        Pattern::Wildcard(PatternWildcard { .. }) => {
+        Pattern::Tuple(tuple_pattern) => {
+            // Plain tuple - use collection version for proper error collection
+            expand_tuple_assertion(value_expr, tuple_pattern)
+        }
+        Pattern::Wildcard(_) => {
             // Wildcard patterns generate no assertions - they just verify the field exists
             // which is already handled by the struct/tuple destructuring
             quote! {}
         }
-        Pattern::Range(PatternRange { expr: range, .. }) => {
+        Pattern::Range(range_pattern) => {
             // Generate improved range assertion with error collection
-            generate_range_assertion_with_collection(
-                value_expr,
-                range,
-                is_ref,
-                path,
-                &pattern_str,
-                &node_ident,
-            )
+            expand_range_assertion(value_expr, range_pattern)
         }
-        Pattern::Slice(PatternSlice { elements, .. }) => {
+        Pattern::Slice(slice_pattern) => {
             // Generate slice assertion with error collection
-            generate_slice_assertion_with_collection(
-                value_expr,
-                elements,
-                is_ref,
-                path,
-                &node_ident,
-            )
+            expand_slice_assertion(value_expr, slice_pattern)
         }
         #[cfg(feature = "regex")]
-        Pattern::Regex(PatternRegex {
-            pattern: regex_str,
-            span,
-            ..
-        }) => {
+        Pattern::Regex(regex_pattern) => {
             // Generate regex assertion with error collection
-            generate_regex_assertion_with_collection(
-                value_expr,
-                regex_str,
-                *span,
-                is_ref,
-                path,
-                &pattern_str,
-                &node_ident,
-            )
+            expand_regex_assertion(value_expr, regex_pattern)
         }
         #[cfg(feature = "regex")]
-        Pattern::Like(PatternLike {
-            expr: pattern_expr, ..
-        }) => {
+        Pattern::Like(like_pattern) => {
             // Generate Like trait assertion with error collection
-            generate_like_assertion_with_collection(
-                value_expr,
-                pattern_expr,
-                is_ref,
-                path,
-                &node_ident,
-            )
+            expand_like_assertion(value_expr, like_pattern)
         }
-        Pattern::Closure(PatternClosure { closure, .. }) => {
+        Pattern::Closure(closure_pattern) => {
             // Generate closure assertion with error collection
-            generate_closure_assertion_with_collection(
-                value_expr,
-                closure,
-                is_ref,
-                path,
-                &node_ident,
-            )
+            expand_closure_assertion(value_expr, closure_pattern)
         }
-        Pattern::Map(PatternMap { entries, rest, .. }) => {
+        Pattern::Map(map_pattern) => {
             // Generate map assertion with error collection
-            // Use span from first entry or default span if empty
-            let map_span = entries
-                .first()
-                .map(|(key, _)| key.span())
-                .unwrap_or_else(proc_macro2::Span::call_site);
-
-            generate_map_assertion_with_collection(
-                value_expr,
-                entries,
-                *rest,
-                is_ref,
-                path,
-                &node_ident,
-                map_span,
-            )
+            expand_map_assertion(value_expr, map_pattern)
         }
-    }
-}
-
-/// Generate wildcard struct assertion using direct field access
-fn generate_wildcard_struct_assertion_with_collection(
-    value_expr: &TokenStream,
-    fields: &Punctuated<FieldAssertion, Token![,]>,
-    _is_ref: bool,
-    field_path: &[String],
-    _node_ident: &Ident,
-) -> TokenStream {
-    let field_assertions: Vec<_> = fields
-        .iter()
-        .map(|f| {
-            let field_name = &f.field_name;
-            let field_pattern = &f.pattern;
-            let field_operations = &f.operations;
-
-            // Build path for this field
-            let mut new_path = field_path.to_vec();
-            new_path.push(field_name.to_string());
-
-            // Apply operations if any and determine reference level
-            let (accessed_value, is_ref_after) = if let Some(ops) = field_operations {
-                // For method calls, we need to access the field without taking a reference
-                // since the method call will operate on the field directly
-                let base_field_access = quote! { (#value_expr).#field_name };
-
-                // Apply operations - pass false for in_ref_context since we're not taking a reference
-                let expr = apply_field_operations(&base_field_access, ops, false);
-
-                // Operations change the reference level based on their type
-                let is_ref = field_operation_returns_reference(ops);
-                (expr, is_ref)
-            } else {
-                // No operations - we need a reference to the field for comparison
-                let field_access = quote! { &(#value_expr).#field_name };
-                // field_access is already a reference, so is_ref = true
-                (field_access, true)
-            };
-
-            // Recursively expand the pattern for this field
-            generate_pattern_assertion_with_collection(
-                &accessed_value,
-                field_pattern,
-                is_ref_after,
-                &new_path,
-            )
-        })
-        .collect();
-
-    quote! {
-        #(#field_assertions)*
     }
 }
 
 /// Generate struct assertion with error collection for multiple field failures
-fn generate_struct_match_assertion_with_collection(
-    value_expr: &TokenStream,
-    struct_path: &Option<syn::Path>,
-    fields: &Punctuated<FieldAssertion, Token![,]>,
-    rest: bool,
-    is_ref: bool,
-    field_path: &[String],
-    node_ident: &Ident,
-) -> TokenStream {
-    // If struct_path is None, it's a wildcard pattern - use field access
-    if struct_path.is_none() {
-        return generate_wildcard_struct_assertion_with_collection(
-            value_expr, fields, is_ref, field_path, node_ident,
-        );
-    }
+fn expand_struct_assertion(value_expr: &TokenStream, pattern: &PatternStruct) -> TokenStream {
+    let struct_path = &pattern.path;
+    let fields = &pattern.fields;
+    let rest = pattern.rest;
 
-    let struct_path = struct_path.as_ref().unwrap();
+    // If struct_path is None, it's a wildcard pattern - use field access
+    let Some(struct_path) = struct_path.as_ref() else {
+        return expand_struct_wildcard_assertion(value_expr, fields);
+    };
 
     // For nested field access, we need to collect unique field names only
     // If we have middle.inner.value and middle.count, we only want "middle" once
@@ -567,15 +140,14 @@ fn generate_struct_match_assertion_with_collection(
     let field_names: Vec<_> = fields
         .iter()
         .filter_map(|f| {
-            if unique_field_names.insert(f.field_name.clone()) {
-                Some(&f.field_name)
+            let field_name = f.operations.root_field_name();
+            if unique_field_names.insert(field_name.clone()) {
+                Some(field_name)
             } else {
                 None
             }
         })
         .collect();
-
-    let field_path_str = field_path.join(".");
 
     let rest_pattern = if rest {
         quote! { , .. }
@@ -586,41 +158,13 @@ fn generate_struct_match_assertion_with_collection(
     let field_assertions: Vec<_> = fields
         .iter()
         .map(|f| {
-            let field_name = &f.field_name;
-            let field_pattern = &f.pattern;
-            let field_operations = &f.operations;
+            let field_name = f.operations.root_field_name();
 
-            // Build path for this field - include operations if present
-            let mut new_path = field_path.to_vec();
-            let field_path_str = if let Some(ops) = field_operations {
-                // Include operation in path for better error messages
-                generate_field_operation_path(field_name.to_string(), ops)
-            } else {
-                field_name.to_string()
-            };
-            new_path.push(field_path_str);
-
-            // Generate the value expression with operations applied
-            let (value_expr, is_ref_after_operations) = if let Some(ops) = field_operations {
-                // We're always in a reference context for struct destructuring (match &value)
-                let expr = apply_field_operations(&quote! { #field_name }, ops, true);
-                // Operations change the reference level based on their type
-                let is_ref = field_operation_returns_reference(ops);
-                (expr, is_ref)
-            } else {
-                (quote! { #field_name }, true)
-            };
-
-            // Generate assertion with appropriate reference handling
-            let assertion = generate_pattern_assertion_with_collection(
-                &value_expr,
-                field_pattern,
-                is_ref_after_operations,
-                &new_path,
-            );
+            // Expand the FieldAssertion starting from the bound field name
+            let assertion = expand_field_assertion(&quote! { #field_name }, f);
 
             // Wrap the assertion with the span of the field pattern if available
-            if let Some(span) = get_pattern_span(field_pattern) {
+            if let Some(span) = f.pattern.span() {
                 quote_spanned! {span=> #assertion }
             } else {
                 assertion
@@ -629,104 +173,83 @@ fn generate_struct_match_assertion_with_collection(
         .collect();
 
     let span = struct_path.span();
-    if is_ref {
-        quote_spanned! {span=>
-            #[allow(unreachable_patterns)]
-            match #value_expr {
-                #struct_path { #(#field_names),* #rest_pattern } => {
-                    #(#field_assertions)*
-                },
-                _ => {
-                    let __line = line!();
-                    let __file = file!();
 
-                    let __error = ::assert_struct::__macro_support::ErrorContext {
-                        field_path: #field_path_str.to_string(),
-                        pattern_str: stringify!(#struct_path).to_string(),
-                        actual_value: format!("{:?}", #value_expr),
-                        line_number: __line,
-                        file_name: __file,
-                        error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
+    let error_push = generate_error_push(
+        span,
+        quote!(format!("{:?}", #value_expr)),
+        quote!(None),
+        pattern.node_id,
+    );
 
-                        expected_value: None,
-
-                        error_node: Some(&#node_ident),
-                    };
-                    __errors.push(__error);
-                }
-            }
-        }
-    } else {
-        quote_spanned! {span=>
-            #[allow(unreachable_patterns)]
-            match &#value_expr {
-                #struct_path { #(#field_names),* #rest_pattern } => {
-                    #(#field_assertions)*
-                },
-                _ => {
-                    let __line = line!();
-                    let __file = file!();
-
-                    let __error = ::assert_struct::__macro_support::ErrorContext {
-                        field_path: #field_path_str.to_string(),
-                        pattern_str: stringify!(#struct_path).to_string(),
-                        actual_value: format!("{:?}", &#value_expr),
-                        line_number: __line,
-                        file_name: __file,
-                        error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-
-                        expected_value: None,
-
-                        error_node: Some(&#node_ident),
-                    };
-                    __errors.push(__error);
-                }
+    quote_spanned! {span=>
+        #[allow(unreachable_patterns)]
+        match &#value_expr {
+            #struct_path { #(#field_names),* #rest_pattern } => {
+                #(#field_assertions)*
+            },
+            _ => {
+                #error_push
             }
         }
     }
 }
 
-/// Generate a readable path string for a field operation for error messages
-fn generate_field_operation_path(base_field: String, operation: &FieldOperation) -> String {
-    match operation {
-        FieldOperation::Deref { count, .. } => {
-            let stars = "*".repeat(*count);
-            format!("{}{}", stars, base_field)
-        }
-        FieldOperation::Method { name, .. } => {
-            format!("{}.{}()", base_field, name)
-        }
-        FieldOperation::Await { .. } => {
-            format!("{}.await", base_field)
-        }
-        FieldOperation::Nested { fields, .. } => {
-            let nested = fields
-                .iter()
-                .map(|f| f.to_string())
-                .collect::<Vec<_>>()
-                .join(".");
-            format!("{}.{}", base_field, nested)
-        }
-        FieldOperation::Index { index, .. } => {
-            format!("{}[{}]", base_field, quote! { #index })
-        }
-        FieldOperation::Combined {
-            deref_count,
-            operation,
-            ..
-        } => {
-            let stars = "*".repeat(*deref_count);
-            let base_with_deref = format!("{}{}", stars, base_field);
-            generate_field_operation_path(base_with_deref, operation)
-        }
-        FieldOperation::Chained { operations, .. } => {
-            let mut result = base_field;
-            for op in operations {
-                result = generate_field_operation_path(result, op);
-            }
-            result
-        }
+/// Generate wildcard struct assertion using direct field access
+fn expand_struct_wildcard_assertion(
+    value_expr: &TokenStream,
+    fields: &Punctuated<FieldAssertion, Token![,]>,
+) -> TokenStream {
+    let field_assertions: Vec<_> = fields
+        .iter()
+        .map(|f| {
+            let field_name = f.operations.root_field_name();
+            let field_pattern = &f.pattern;
+            let field_operations = &f.operations;
+
+            // Access the field and apply tail operations
+            let base_field_access = quote! { (#value_expr).#field_name };
+
+            let expr = if let Some(tail_ops) = field_operations.tail_operations() {
+                // Apply remaining operations after the field access
+                apply_field_operations(&base_field_access, &tail_ops)
+            } else {
+                // No additional operations, take a reference to the field for comparison
+                quote! { &#base_field_access }
+            };
+
+            // Recursively expand the pattern for this field
+            expand_pattern_assertion(&expr, field_pattern)
+        })
+        .collect();
+
+    quote! {
+        #(#field_assertions)*
     }
+}
+
+/// Expand a FieldAssertion starting from a bound field name
+///
+/// This assumes the base field (root field name from the FieldOperation) is already bound
+/// to `base`. It applies any tail operations and generates the pattern assertion.
+///
+/// # Parameters
+/// - `base`: Expression for the bound field (e.g., `field_name` or `__tuple_elem_0`)
+/// - `field_assertion`: The FieldAssertion to expand
+/// - `is_ref_context`: Whether we're in a reference context (from destructuring)
+/// - `base_field_path`: The field path up to the base field
+fn expand_field_assertion(base: &TokenStream, field_assertion: &FieldAssertion) -> TokenStream {
+    let field_operations = &field_assertion.operations;
+    let field_pattern = &field_assertion.pattern;
+
+    // Apply tail operations and determine final reference context
+    let expr = if let Some(tail_ops) = field_operations.tail_operations() {
+        apply_field_operations(base, &tail_ops)
+    } else {
+        base.clone()
+    };
+
+    // Generate the pattern assertion
+    expand_pattern_assertion(&expr, field_pattern)
 }
 
 /// Apply field operations to a value expression
@@ -736,16 +259,12 @@ fn generate_field_operation_path(base_field: String, operation: &FieldOperation)
 /// - `base_expr`: The base expression to apply operations to
 /// - `operation`: The field operation to apply
 /// - `in_ref_context`: Whether we're in a reference context (from destructuring `&value`)
-fn apply_field_operations(
-    base_expr: &TokenStream,
-    operation: &FieldOperation,
-    in_ref_context: bool,
-) -> TokenStream {
+fn apply_field_operations(base_expr: &TokenStream, operation: &FieldOperation) -> TokenStream {
     match operation {
         FieldOperation::Deref { count, span } => {
             let mut expr = base_expr.clone();
             // In reference context, we need one extra dereference
-            let total_count = if in_ref_context { count + 1 } else { *count };
+            let total_count = count + 1;
             for _ in 0..total_count {
                 expr = quote_spanned! { *span=> *#expr };
             }
@@ -761,59 +280,22 @@ fn apply_field_operations(
         FieldOperation::Await { span } => {
             quote_spanned! { *span=> #base_expr.await }
         }
-        FieldOperation::Nested { fields, span } => {
-            let mut expr = base_expr.clone();
-            for field in fields {
-                expr = quote_spanned! { *span=> #expr.#field };
-            }
-            expr
+        FieldOperation::NamedField { name, span } => {
+            quote_spanned! { *span=> #base_expr.#name }
+        }
+        FieldOperation::UnnamedField { index, span } => {
+            let idx = syn::Index::from(*index);
+            quote_spanned! { *span=> #base_expr.#idx }
         }
         FieldOperation::Index { index, span } => {
             quote_spanned! { *span=> #base_expr[#index] }
         }
-        FieldOperation::Combined {
-            deref_count,
-            operation,
-            span,
-        } => {
-            // First apply dereferencing with reference context awareness
-            let mut expr = base_expr.clone();
-            let total_count = if in_ref_context {
-                deref_count + 1
-            } else {
-                *deref_count
-            };
-            for _ in 0..total_count {
-                expr = quote_spanned! { *span=> *#expr };
-            }
-            // Then apply the nested operation (no longer in ref context after deref)
-            apply_field_operations(&expr, operation, false)
-        }
         FieldOperation::Chained { operations, .. } => {
             let mut expr = base_expr.clone();
             for op in operations {
-                expr = apply_field_operations(&expr, op, false);
+                expr = apply_field_operations(&expr, op);
             }
             expr
-        }
-    }
-}
-
-/// Helper function to determine if a field operation returns a reference
-fn field_operation_returns_reference(operation: &FieldOperation) -> bool {
-    match operation {
-        FieldOperation::Deref { .. } => false, // Dereferencing removes reference level
-        FieldOperation::Method { .. } => false, // Method calls return owned values
-        FieldOperation::Await { .. } => false, // Await returns owned values
-        FieldOperation::Nested { .. } => false, // Nested field access auto-derefs to get field value
-        FieldOperation::Index { .. } => true,   // Index operations return references to elements
-        FieldOperation::Combined { .. } => false, // Combined with deref also removes reference level
-        FieldOperation::Chained { operations, .. } => {
-            // For chained operations, the reference level is determined by the last operation
-            operations
-                .last()
-                .map(field_operation_returns_reference)
-                .unwrap_or(false)
         }
     }
 }
@@ -838,67 +320,47 @@ fn field_operation_returns_reference(operation: &FieldOperation) -> bool {
 fn process_tuple_elements(
     elements: &[TupleElement],
     prefix: &str,
-    is_ref: bool,
-    field_path: &[String],
 ) -> (Vec<TokenStream>, Vec<TokenStream>) {
     let mut match_patterns = Vec::new();
     let mut assertions = Vec::new();
 
     for (i, tuple_element) in elements.iter().enumerate() {
-        let (pattern, operations) = match tuple_element {
-            TupleElement::Positional { pattern } => (pattern, &None),
-            TupleElement::Indexed {
-                pattern,
-                operations,
-                ..
-            } => (pattern, operations),
-        };
+        match tuple_element {
+            TupleElement::Positional(pattern) => {
+                match &**pattern {
+                    Pattern::Wildcard(PatternWildcard { .. }) => {
+                        // Wildcard patterns use `_` in the match pattern
+                        match_patterns.push(quote! { _ });
+                    }
+                    _ => {
+                        // Non-wildcard patterns need a binding and assertion
+                        let name = quote::format_ident!("{}{}", prefix, i);
+                        match_patterns.push(quote! { #name });
 
-        match pattern {
-            Pattern::Wildcard(PatternWildcard { .. }) => {
-                // Wildcard patterns use `_` in the match pattern.
-                // No assertion is generated because wildcards only verify
-                // that the element exists (handled by the match itself).
-                match_patterns.push(quote! { _ });
+                        // Generate assertion with error collection
+                        let assertion = expand_pattern_assertion(&quote! { #name }, pattern);
+                        assertions.push(assertion);
+                    }
+                }
             }
-            _ => {
-                // Non-wildcard patterns need a binding and assertion
-                let name = quote::format_ident!("{}{}", prefix, i);
-                match_patterns.push(quote! { #name });
+            TupleElement::Indexed(boxed_elem) => {
+                let pattern = &boxed_elem.pattern;
 
-                // Build path for error messages - include operations if present
-                let mut elem_path = field_path.to_vec();
-                let elem_path_str = if let Some(ops) = operations {
-                    // Include operation in path for better error messages
-                    generate_field_operation_path(i.to_string(), ops)
-                } else {
-                    i.to_string()
-                };
-                elem_path.push(elem_path_str);
+                match pattern {
+                    Pattern::Wildcard(PatternWildcard { .. }) => {
+                        // Wildcard patterns use `_` in the match pattern
+                        match_patterns.push(quote! { _ });
+                    }
+                    _ => {
+                        // Non-wildcard patterns need a binding and assertion
+                        let name = quote::format_ident!("{}{}", prefix, i);
+                        match_patterns.push(quote! { #name });
 
-                // Generate the value expression with operations applied
-                let value_expr = if let Some(ops) = operations {
-                    // Tuple elements are in reference context when destructured
-                    apply_field_operations(&quote! { #name }, ops, true)
-                } else {
-                    quote! { #name }
-                };
-
-                // Apply the same reference level logic as for struct fields
-                let is_ref_after_operations = if let Some(ops) = operations {
-                    field_operation_returns_reference(ops)
-                } else {
-                    is_ref
-                };
-
-                // Generate assertion with error collection
-                let assertion = generate_pattern_assertion_with_collection(
-                    &value_expr,
-                    pattern,
-                    is_ref_after_operations,
-                    &elem_path,
-                );
-                assertions.push(assertion);
+                        // Expand the indexed FieldAssertion starting from the bound element name
+                        let assertion = expand_field_assertion(&quote! { #name }, boxed_elem);
+                        assertions.push(assertion);
+                    }
+                }
             }
         }
     }
@@ -908,345 +370,101 @@ fn process_tuple_elements(
 
 /// Generate assertion for plain tuples with error collection.
 /// Uses match expressions for consistency with enum tuple handling.
-fn generate_plain_tuple_assertion_with_collection(
-    value_expr: &TokenStream,
-    elements: &[TupleElement],
-    is_ref: bool,
-    field_path: &[String],
-    _node_ident: &Ident,
-) -> TokenStream {
+fn expand_tuple_assertion(value_expr: &TokenStream, pattern: &PatternTuple) -> TokenStream {
+    let elements = &pattern.elements;
     // Use helper to process elements with collection strategy
-    let (match_patterns, element_assertions) =
-        process_tuple_elements(elements, "__tuple_elem_", true, field_path);
+    let (match_patterns, element_assertions) = process_tuple_elements(elements, "__tuple_elem_");
 
-    // Use match expression for consistency with enum tuples
-    // The unreachable _ arm is acceptable for plain tuples
-    if is_ref {
-        quote! {
-            #[allow(unreachable_patterns)]
-            match #value_expr {
-                (#(#match_patterns),*) => {
-                    #(#element_assertions)*
-                },
-                _ => unreachable!("Plain tuple match should always succeed"),
-            }
+    quote! {
+        #[allow(unreachable_patterns)]
+        match #value_expr {
+            (#(#match_patterns),*) => {
+                #(#element_assertions)*
+            },
+            _ => unreachable!("Plain tuple match should always succeed"),
         }
-    } else {
-        quote! {
-            #[allow(unreachable_patterns)]
-            match &#value_expr {
-                (#(#match_patterns),*) => {
-                    #(#element_assertions)*
-                },
-                _ => unreachable!("Plain tuple match should always succeed"),
-            }
-        }
-    }
-}
-
-/// Transform expected values for better ergonomics.
-///
-/// WHY: This allows users to write `name: "Alice"` instead of `name: "Alice".to_string()`
-/// when comparing against String fields. The macro automatically adds `.to_string()`
-/// to string literals, making the syntax cleaner.
-///
-/// # Example
-/// ```text
-/// // User writes: name: "Alice"
-/// // We transform to: name: "Alice".to_string()
-/// // So it can compare with String fields
-/// ```
-fn transform_expected_value(expr: &Expr) -> Expr {
-    match expr {
-        Expr::Lit(lit) if matches!(lit.lit, syn::Lit::Str(_)) => {
-            // Transform string literal to String for comparison
-            syn::parse_quote! { #expr.to_string() }
-        }
-        _ => expr.clone(),
     }
 }
 
 // Check if a path refers to Option::Some
 
-/// Convert a pattern to its string representation for error messages
-fn pattern_to_string(pattern: &Pattern) -> String {
-    match pattern {
-        Pattern::Simple(PatternSimple { expr, .. }) => quote! { #expr }.to_string(),
-        Pattern::Comparison(PatternComparison { op, expr, .. }) => {
-            let op_str = match op {
-                ComparisonOp::Less => "<",
-                ComparisonOp::LessEqual => "<=",
-                ComparisonOp::Greater => ">",
-                ComparisonOp::GreaterEqual => ">=",
-                ComparisonOp::Equal => "==",
-                ComparisonOp::NotEqual => "!=",
-            };
-            format!("{} {}", op_str, quote! { #expr })
-        }
-        Pattern::Range(PatternRange { expr: range, .. }) => quote! { #range }.to_string(),
-        #[cfg(feature = "regex")]
-        Pattern::Regex(PatternRegex { pattern, .. }) => format!("=~ r\"{}\"", pattern),
-        #[cfg(feature = "regex")]
-        Pattern::Like(PatternLike { expr, .. }) => format!("=~ {}", quote! { #expr }),
-        Pattern::Wildcard(PatternWildcard { .. }) => "_".to_string(),
-        Pattern::Closure(PatternClosure { closure, .. }) => quote! { #closure }.to_string(),
-        Pattern::Struct(PatternStruct { path, .. }) => {
-            if let Some(p) = path {
-                quote! { #p { .. } }.to_string()
-            } else {
-                "_ { .. }".to_string()
-            }
-        }
-        Pattern::Tuple(PatternTuple { path, elements, .. }) => {
-            if let Some(p) = path {
-                if elements.is_empty() {
-                    quote! { #p }.to_string()
-                } else {
-                    format!("{}(...)", quote! { #p })
-                }
-            } else {
-                format!("({} elements)", elements.len())
-            }
-        }
-        Pattern::Map(PatternMap { entries, rest, .. }) => {
-            if *rest {
-                format!("#{{ {} entries, .. }}", entries.len())
-            } else {
-                format!("#{{ {} entries }}", entries.len())
-            }
-        }
-        Pattern::Slice(PatternSlice { elements, .. }) => format!("[{} elements]", elements.len()),
-    }
-}
-
 /// Generate comparison assertion with error collection
-fn generate_comparison_assertion_with_collection(
+fn expand_comparison_assertion(
     value_expr: &TokenStream,
-    op: &ComparisonOp,
-    expected: &Expr,
-    is_ref: bool,
-    path: &[String],
-    pattern_str: &str,
-    node_ident: &Ident,
+    pattern: &PatternComparison,
 ) -> TokenStream {
-    let field_path = path.join(".");
-
-    // Check if this is an index operation by looking at the path
-    // Exclude slice patterns which start with [
-    let is_index_operation = path
-        .iter()
-        .any(|segment| segment.contains("[") && !segment.starts_with("["));
-
-    // Adjust for reference level
-    let actual_expr = if is_ref {
-        quote! { #value_expr }
-    } else {
-        quote! { &#value_expr }
-    };
+    let op = &pattern.op;
+    let expected = &pattern.expr;
 
     let span = expected.span();
-    let comparison = if is_index_operation {
+
+    let comparison = {
         // For index operations, avoid references on both sides
-        match op {
-            ComparisonOp::Less => quote_spanned! {span=> #value_expr < #expected },
-            ComparisonOp::LessEqual => quote_spanned! {span=> #value_expr <= #expected },
-            ComparisonOp::Greater => quote_spanned! {span=> #value_expr > #expected },
-            ComparisonOp::GreaterEqual => quote_spanned! {span=> #value_expr >= #expected },
-            ComparisonOp::Equal => quote_spanned! {span=> #value_expr == #expected },
-            ComparisonOp::NotEqual => quote_spanned! {span=> #value_expr != #expected },
-        }
-    } else if is_ref {
-        match op {
-            ComparisonOp::Less => quote_spanned! {span=> #value_expr < &(#expected) },
-            ComparisonOp::LessEqual => quote_spanned! {span=> #value_expr <= &(#expected) },
-            ComparisonOp::Greater => quote_spanned! {span=> #value_expr > &(#expected) },
-            ComparisonOp::GreaterEqual => quote_spanned! {span=> #value_expr >= &(#expected) },
-            ComparisonOp::Equal => quote_spanned! {span=> #value_expr == &(#expected) },
-            ComparisonOp::NotEqual => quote_spanned! {span=> #value_expr != &(#expected) },
-        }
-    } else {
-        match op {
-            ComparisonOp::Less => quote_spanned! {span=> &#value_expr < &(#expected) },
-            ComparisonOp::LessEqual => quote_spanned! {span=> &#value_expr <= &(#expected) },
-            ComparisonOp::Greater => quote_spanned! {span=> &#value_expr > &(#expected) },
-            ComparisonOp::GreaterEqual => quote_spanned! {span=> &#value_expr >= &(#expected) },
-            ComparisonOp::Equal => quote_spanned! {span=> &#value_expr == &(#expected) },
-            ComparisonOp::NotEqual => quote_spanned! {span=> &#value_expr != &(#expected) },
+        match &pattern.op {
+            ComparisonOp::Less(_) => quote_spanned! {span=> (#value_expr).lt(&(#expected)) },
+            ComparisonOp::LessEqual(_) => quote_spanned! {span=> (#value_expr).le(&(#expected)) },
+            ComparisonOp::Greater(_) => quote_spanned! {span=> (#value_expr).gt(&(#expected)) },
+            ComparisonOp::GreaterEqual(_) => {
+                quote_spanned! {span=> (#value_expr).ge(&(#expected)) }
+            }
+            ComparisonOp::Equal(_) => quote_spanned! {span=> (#value_expr).eq(&(#expected)) },
+            ComparisonOp::NotEqual(_) => quote_spanned! {span=> (#value_expr).ne(&(#expected)) },
         }
     };
 
-    let error_type = if matches!(op, ComparisonOp::Equal) {
-        quote! { ::assert_struct::__macro_support::ErrorType::Equality }
+    let expected_value = if matches!(op, ComparisonOp::Equal(_)) {
+        let expected_str = quote! { #expected }.to_string();
+        quote!(Some(#expected_str.to_string()))
     } else {
-        quote! { ::assert_struct::__macro_support::ErrorType::Comparison }
+        quote!(None)
     };
 
-    let expected_value = if matches!(op, ComparisonOp::Equal) {
-        quote! { Some(format!("{:?}", #expected)) }
-    } else {
-        quote! { None }
-    };
+    let error_push = generate_error_push(
+        span,
+        quote!(format!("{:?}", #value_expr)),
+        expected_value,
+        pattern.node_id,
+    );
 
     quote_spanned! {span=>
         #[allow(clippy::nonminimal_bool)]
         if !(#comparison) {
-            // Capture line number using proper spanning
-            let __line = line!();
-            let __file = file!();
-
-            // Build error context
-            let mut __error = ::assert_struct::__macro_support::ErrorContext {
-                field_path: #field_path.to_string(),
-                pattern_str: #pattern_str.to_string(),
-                actual_value: format!("{:?}", #actual_expr),
-                line_number: __line,
-                file_name: __file,
-                error_type: #error_type,
-
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
-            };
-
-            // Add expected value for equality patterns
-            if let Some(expected) = #expected_value {
-                __error.expected_value = Some(expected);
-            }
-
-            __errors.push(__error);
+            #error_push
         }
     }
 }
 
 /// Generate assertion for enum tuple variants with error collection
-fn generate_enum_tuple_assertion_with_collection(
-    value_expr: &TokenStream,
-    variant_path: &syn::Path,
-    elements: &[TupleElement],
-    is_ref: bool,
-    field_path: &[String],
-    node_ident: &Ident,
-) -> TokenStream {
-    let field_path_str = field_path.join(".");
+fn expand_enum_assertion(value_expr: &TokenStream, pattern: &PatternEnum) -> TokenStream {
+    let variant_path = &pattern.path;
+    let elements = &pattern.elements;
     let span = variant_path.span();
+
+    let error_push = generate_error_push(
+        span,
+        quote!(format!("{:?}", #value_expr)),
+        quote!(None),
+        pattern.node_id,
+    );
 
     // Special handling for unit variants (empty elements)
     if elements.is_empty() {
-        // Unit variants don't have parentheses
-        if is_ref {
-            quote_spanned! {span=>
-                match #value_expr {
-                    #variant_path => {},
-                    _ => {
-                        let __line = line!();
-                        let __file = file!();
-
-                        let __error = ::assert_struct::__macro_support::ErrorContext {
-                            field_path: #field_path_str.to_string(),
-                            pattern_str: stringify!(#variant_path).to_string(),
-                            actual_value: format!("{:?}", #value_expr),
-                            line_number: __line,
-                            file_name: __file,
-                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-                            expected_value: None,
-                            error_node: Some(&#node_ident),
-                        };
-                        __errors.push(__error);
-                    }
-                }
-            }
-        } else {
-            quote_spanned! {span=>
-                #[allow(unreachable_patterns)]
-                match &#value_expr {
-                    #variant_path => {},
-                    _ => {
-                        let __line = line!();
-                        let __file = file!();
-
-                        let __error = ::assert_struct::__macro_support::ErrorContext {
-                            field_path: #field_path_str.to_string(),
-                            pattern_str: stringify!(#variant_path).to_string(),
-                            actual_value: format!("{:?}", &#value_expr),
-                            line_number: __line,
-                            file_name: __file,
-                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-                            expected_value: None,
-                            error_node: Some(&#node_ident),
-                        };
-                        __errors.push(__error);
-                    }
-                }
+        quote_spanned! {span=>
+            if !matches!(#value_expr, #variant_path) {
+                #error_push
             }
         }
     } else {
-        // Tuple variants with elements
-        // Extract variant name from path for better error messages
-        let variant_name = if let Some(segment) = variant_path.segments.last() {
-            segment.ident.to_string()
-        } else {
-            "variant".to_string()
-        };
-
-        // Build path with variant name for single-element tuples
-        let mut base_path = field_path.to_vec();
-        let use_variant_name = elements.len() == 1;
-
         // Use helper to process elements with appropriate path
-        let (match_patterns, element_assertions) = if use_variant_name {
-            base_path.push(variant_name);
-            process_tuple_elements(elements, "__elem_", true, &base_path)
-        } else {
-            process_tuple_elements(elements, "__elem_", true, field_path)
-        };
+        let (match_patterns, element_assertions) = process_tuple_elements(elements, "__elem_");
 
-        if is_ref {
-            quote_spanned! {span=>
-                match #value_expr {
-                    #variant_path(#(#match_patterns),*) => {
-                        #(#element_assertions)*
-                    },
-                    _ => {
-                        let __line = line!();
-                        let __file = file!();
-
-                        let __error = ::assert_struct::__macro_support::ErrorContext {
-                            field_path: #field_path_str.to_string(),
-                            pattern_str: stringify!(#variant_path).to_string(),
-                            actual_value: format!("{:?}", #value_expr),
-                            line_number: __line,
-                            file_name: __file,
-                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-                            expected_value: None,
-                            error_node: Some(&#node_ident),
-                        };
-                        __errors.push(__error);
-                    }
-                }
-            }
-        } else {
-            quote_spanned! {span=>
-                #[allow(unreachable_patterns)]
-                match &#value_expr {
-                    #variant_path(#(#match_patterns),*) => {
-                        #(#element_assertions)*
-                    },
-                    _ => {
-                        let __line = line!();
-                        let __file = file!();
-
-                        let __error = ::assert_struct::__macro_support::ErrorContext {
-                            field_path: #field_path_str.to_string(),
-                            pattern_str: stringify!(#variant_path).to_string(),
-                            actual_value: format!("{:?}", &#value_expr),
-                            line_number: __line,
-                            file_name: __file,
-                            error_type: ::assert_struct::__macro_support::ErrorType::EnumVariant,
-                            expected_value: None,
-                            error_node: Some(&#node_ident),
-                        };
-                        __errors.push(__error);
-                    }
+        quote_spanned! {span=>
+            match &#value_expr {
+                #variant_path(#(#match_patterns),*) => {
+                    #(#element_assertions)*
+                },
+                _ => {
+                    #error_push
                 }
             }
         }
@@ -1254,146 +472,73 @@ fn generate_enum_tuple_assertion_with_collection(
 }
 
 /// Generate range assertion with error collection
-fn generate_range_assertion_with_collection(
-    value_expr: &TokenStream,
-    range: &syn::Expr,
-    is_ref: bool,
-    path: &[String],
-    pattern_str: &str,
-    node_ident: &Ident,
-) -> TokenStream {
-    let field_path = path.join(".");
-    let match_expr = if is_ref {
-        quote! { #value_expr }
-    } else {
-        quote! { &#value_expr }
-    };
+fn expand_range_assertion(value_expr: &TokenStream, pattern: &PatternRange) -> TokenStream {
+    let range = &pattern.expr;
 
     let span = range.span();
+    let error_push = generate_error_push(
+        span,
+        quote!(format!("{:?}", #value_expr)),
+        quote!(None),
+        pattern.node_id,
+    );
+
     quote_spanned! {span=>
-        match #match_expr {
+        match &#value_expr {
             #range => {},
             _ => {
-                // Capture line number and file info
-                let __line = line!();
-                let __file = file!();
-
-                // Build error context
-                let __error = ::assert_struct::__macro_support::ErrorContext {
-                    field_path: #field_path.to_string(),
-                    pattern_str: #pattern_str.to_string(),
-                    actual_value: format!("{:?}", #match_expr),
-                    line_number: __line,
-                    file_name: __file,
-                    error_type: ::assert_struct::__macro_support::ErrorType::Range,
-
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
-                };
-
-                __errors.push(__error);
+                #error_push
             }
         }
     }
 }
 
+/// Generate string literal assertion with error collection
+/// String literals always use .as_ref() to handle String/&str matching
+fn expand_string_assertion(value_expr: &TokenStream, pattern: &PatternString) -> TokenStream {
+    let lit = &pattern.lit;
+
+    // String patterns always use .as_ref() to handle String/&str matching
+    let span = lit.span();
+    let error_push = generate_error_push(
+        span,
+        quote!(format!("{:?}", actual)),
+        quote!(None),
+        pattern.node_id,
+    );
+
+    quote_spanned! {span=> {
+        let actual = (#value_expr).as_ref();
+        if !matches!(actual, #lit) {
+            #error_push
+        }
+    }}
+}
+
 /// Generate simple assertion with error collection
-fn generate_simple_assertion_with_collection(
-    value_expr: &TokenStream,
-    expected: &syn::Expr,
-    is_ref: bool,
-    path: &[String],
-    node_ident: &Ident,
-) -> TokenStream {
-    // Transform string literals for String comparison
-    let transformed = transform_expected_value(expected);
-    let field_path_str = path.join(".");
-    let expected_str = quote! { #expected }.to_string();
-
-    // Check if this is an index operation by looking at the path
-    // Exclude slice patterns which start with [
-    let is_index_operation = path
-        .iter()
-        .any(|segment| segment.contains("[") && !segment.starts_with("["));
-
+fn expand_simple_assertion(actual: &TokenStream, pattern: &PatternSimple) -> TokenStream {
+    let expected = &pattern.expr;
     let span = expected.span();
-    if is_index_operation {
-        // For index operations, avoid references on both sides to fix type inference
-        quote_spanned! {span=>
-            if #value_expr != #transformed {
-                let __line = line!();
-                let __file = file!();
-                let __error = ::assert_struct::__macro_support::ErrorContext {
-                    field_path: #field_path_str.to_string(),
-                    pattern_str: #expected_str.to_string(),
-                    actual_value: format!("{:?}", #value_expr),
-                    line_number: __line,
-                    file_name: __file,
-                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
+    let error_push = generate_error_push(
+        span,
+        quote!(format!("{:?}", #actual)),
+        quote!(None),
+        pattern.node_id,
+    );
 
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
-                };
-                __errors.push(__error);
-            }
-        }
-    } else if is_ref {
-        quote_spanned! {span=>
-            if #value_expr != &(#transformed) {
-                let __line = line!();
-                let __file = file!();
-                let __error = ::assert_struct::__macro_support::ErrorContext {
-                    field_path: #field_path_str.to_string(),
-                    pattern_str: #expected_str.to_string(),
-                    actual_value: format!("{:?}", #value_expr),
-                    line_number: __line,
-                    file_name: __file,
-                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
-
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
-                };
-                __errors.push(__error);
-            }
-        }
-    } else {
-        quote_spanned! {span=>
-            if &#value_expr != &(#transformed) {
-                let __line = line!();
-                let __file = file!();
-                let __error = ::assert_struct::__macro_support::ErrorContext {
-                    field_path: #field_path_str.to_string(),
-                    pattern_str: #expected_str.to_string(),
-                    actual_value: format!("{:?}", &#value_expr),
-                    line_number: __line,
-                    file_name: __file,
-                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
-
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
-                };
-                __errors.push(__error);
-            }
+    quote_spanned! {span=>
+        if !matches!(#actual, #expected) {
+            #error_push
         }
     }
 }
 
 /// Generate slice assertion with error collection
-fn generate_slice_assertion_with_collection(
-    value_expr: &TokenStream,
-    elements: &[Pattern],
-    _is_ref: bool,
-    field_path: &[String],
-    node_ident: &Ident,
-) -> TokenStream {
+fn expand_slice_assertion(value_expr: &TokenStream, pattern: &PatternSlice) -> TokenStream {
     let mut pattern_parts = Vec::new();
     let mut bindings_and_assertions = Vec::new();
 
-    for (i, elem) in elements.iter().enumerate() {
+    for (i, elem) in pattern.elements.iter().enumerate() {
         match elem {
             Pattern::Range(PatternRange {
                 expr: syn::Expr::Range(r),
@@ -1410,16 +555,7 @@ fn generate_slice_assertion_with_collection(
                 let binding = quote::format_ident!("__elem_{}", i);
                 pattern_parts.push(quote! { #binding });
 
-                // Build path for this slice element
-                let mut elem_path = field_path.to_vec();
-                elem_path.push(format!("[{}]", i));
-
-                let assertion = generate_pattern_assertion_with_collection(
-                    &quote! { #binding },
-                    elem,
-                    true, // elements from slice matching are references
-                    &elem_path,
-                );
+                let assertion = expand_pattern_assertion(&quote! { #binding }, elem);
                 bindings_and_assertions.push(assertion);
             }
         }
@@ -1427,8 +563,13 @@ fn generate_slice_assertion_with_collection(
 
     // Convert Vec to slice for matching
     let slice_expr = quote! { (#value_expr).as_slice() };
-    let field_path_str = field_path.join(".");
-    let elements_len = elements.len();
+
+    let error_push = generate_error_push(
+        proc_macro2::Span::call_site(),
+        quote!(format!("{:?}", &#value_expr)),
+        quote!(None),
+        pattern.node_id,
+    );
 
     quote! {
         match #slice_expr {
@@ -1436,20 +577,7 @@ fn generate_slice_assertion_with_collection(
                 #(#bindings_and_assertions)*
             }
             _ => {
-                let __line = line!();
-                let __file = file!();
-                let __error = ::assert_struct::__macro_support::ErrorContext {
-                    field_path: #field_path_str.to_string(),
-                    pattern_str: format!("[{} elements]", #elements_len),
-                    actual_value: format!("{:?}", &#value_expr),
-                    line_number: __line,
-                    file_name: __file,
-                    error_type: ::assert_struct::__macro_support::ErrorType::Slice,
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
-                };
-                __errors.push(__error);
+                #error_push
             }
         }
     }
@@ -1457,63 +585,24 @@ fn generate_slice_assertion_with_collection(
 
 #[cfg(feature = "regex")]
 /// Generate regex assertion with error collection
-fn generate_regex_assertion_with_collection(
-    value_expr: &TokenStream,
-    pattern_str: &str,
-    span: proc_macro2::Span,
-    is_ref: bool,
-    path: &[String],
-    full_pattern_str: &str,
-    node_ident: &Ident,
-) -> TokenStream {
-    let field_path_str = path.join(".");
+fn expand_regex_assertion(value_expr: &TokenStream, pattern: &PatternRegex) -> TokenStream {
+    let pattern_str = &pattern.pattern;
+    let span = pattern.span;
 
-    if is_ref {
-        quote_spanned! {span=>
-            {
-                use ::assert_struct::Like;
-                let re = ::assert_struct::__macro_support::Regex::new(#pattern_str)
-                    .expect(concat!("Invalid regex pattern: ", #pattern_str));
-                if !#value_expr.like(&re) {
-                    let __line = line!();
-                    let __file = file!();
-                    let __error = ::assert_struct::__macro_support::ErrorContext {
-                        field_path: #field_path_str.to_string(),
-                        pattern_str: #full_pattern_str.to_string(),
-                        actual_value: format!("{:?}", #value_expr),
-                        line_number: __line,
-                        file_name: __file,
-                        error_type: ::assert_struct::__macro_support::ErrorType::Regex,
-                expected_value: None,
+    let error_push = generate_error_push(
+        span,
+        quote!(format!("{:?}", #value_expr)),
+        quote!(None),
+        pattern.node_id,
+    );
 
-                error_node: Some(&#node_ident),
-                    };
-                    __errors.push(__error);
-                }
-            }
-        }
-    } else {
-        quote_spanned! {span=>
-            {
-                use ::assert_struct::Like;
-                let re = ::assert_struct::__macro_support::Regex::new(#pattern_str)
-                    .expect(concat!("Invalid regex pattern: ", #pattern_str));
-                if !(&#value_expr).like(&re) {
-                    let __line = line!();
-                    let __file = file!();
-                    let __error = ::assert_struct::__macro_support::ErrorContext {
-                        field_path: #field_path_str.to_string(),
-                        pattern_str: #full_pattern_str.to_string(),
-                        actual_value: format!("{:?}", &#value_expr),
-                        line_number: __line,
-                        file_name: __file,
-                        error_type: ::assert_struct::__macro_support::ErrorType::Regex,
-                expected_value: None,
-
-                error_node: Some(&#node_ident),
-                    };
-                    __errors.push(__error);
-                }
+    quote_spanned! {span=>
+        {
+            use ::assert_struct::Like;
+            let re = ::assert_struct::__macro_support::Regex::new(#pattern_str)
+                .expect(concat!("Invalid regex pattern: ", #pattern_str));
+            if !#value_expr.like(&re) {
+                #error_push
             }
         }
     }
@@ -1521,97 +610,40 @@ fn generate_regex_assertion_with_collection(
 
 #[cfg(feature = "regex")]
 /// Generate Like trait assertion with error collection
-fn generate_like_assertion_with_collection(
-    value_expr: &TokenStream,
-    pattern_expr: &syn::Expr,
-    is_ref: bool,
-    path: &[String],
-    node_ident: &Ident,
-) -> TokenStream {
-    let field_path_str = path.join(".");
-    let pattern_str = format!("=~ {}", quote! { #pattern_expr });
+fn expand_like_assertion(value_expr: &TokenStream, pattern: &PatternLike) -> TokenStream {
+    let pattern_expr = &pattern.expr;
 
     let span = pattern_expr.span();
-    if is_ref {
-        quote_spanned! {span=>
-            {
-                use ::assert_struct::Like;
-                if !#value_expr.like(&#pattern_expr) {
-                    let __line = line!();
-                    let __file = file!();
-                    let __error = ::assert_struct::__macro_support::ErrorContext {
-                        field_path: #field_path_str.to_string(),
-                        pattern_str: #pattern_str.to_string(),
-                        actual_value: format!("{:?}", #value_expr),
-                        line_number: __line,
-                        file_name: __file,
-                        error_type: ::assert_struct::__macro_support::ErrorType::Regex,
-                        expected_value: None,
-                        error_node: Some(&#node_ident),
-                    };
-                    __errors.push(__error);
-                }
-            }
-        }
-    } else {
-        quote_spanned! {span=>
-            {
-                use ::assert_struct::Like;
-                if !(&#value_expr).like(&#pattern_expr) {
-                    let __line = line!();
-                    let __file = file!();
-                    let __error = ::assert_struct::__macro_support::ErrorContext {
-                        field_path: #field_path_str.to_string(),
-                        pattern_str: #pattern_str.to_string(),
-                        actual_value: format!("{:?}", &#value_expr),
-                        line_number: __line,
-                        file_name: __file,
-                        error_type: ::assert_struct::__macro_support::ErrorType::Regex,
-                        expected_value: None,
-                        error_node: Some(&#node_ident),
-                    };
-                    __errors.push(__error);
-                }
+    let actual_value = quote!(format!("{:?}", #value_expr));
+
+    let error_push = generate_error_push(span, actual_value, quote!(None), pattern.node_id);
+
+    quote_spanned! {span=>
+        {
+            use ::assert_struct::Like;
+            if !#value_expr.like(&#pattern_expr) {
+                #error_push
             }
         }
     }
 }
 
 /// Generate closure assertion with error collection
-fn generate_closure_assertion_with_collection(
-    value_expr: &TokenStream,
-    closure: &syn::ExprClosure,
-    is_ref: bool,
-    path: &[String],
-    node_ident: &Ident,
-) -> TokenStream {
-    let field_path_str = path.join(".");
-    let closure_str = quote! { #closure }.to_string();
-
-    // Adjust for reference level - closures receive the actual value
-    let actual_expr = if is_ref {
-        quote! { #value_expr }
-    } else {
-        quote! { &#value_expr }
-    };
-
+fn expand_closure_assertion(value_expr: &TokenStream, pattern: &PatternClosure) -> TokenStream {
+    let closure = &pattern.closure;
     let span = closure.span();
+
+    let error_push = generate_error_push(
+        span,
+        quote!(format!("{:?}", #value_expr)),
+        quote!(None),
+        pattern.node_id,
+    );
+
     quote_spanned! {span=>
         {
-            if !::assert_struct::__macro_support::check_closure_condition(#actual_expr, #closure) {
-                let __line = line!();
-                let __file = file!();
-                let __error = ::assert_struct::__macro_support::ErrorContext {
-                    field_path: #field_path_str.to_string(),
-                    pattern_str: #closure_str.to_string(),
-                    actual_value: format!("{:?}", #actual_expr),
-                    line_number: __line,
-                    file_name: __file,
-                    error_type: ::assert_struct::__macro_support::ErrorType::Closure,
-                    expected_value: None,
-                    error_node: Some(&#node_ident),
-                };
-                __errors.push(__error);
+            if !::assert_struct::__macro_support::check_closure_condition(#value_expr, #closure) {
+                #error_push
             }
         }
     }
@@ -1619,36 +651,29 @@ fn generate_closure_assertion_with_collection(
 
 /// Generate map assertion with error collection using duck typing
 /// Assumes map types have len() -> usize and get(&K) -> Option<&V> methods
-fn generate_map_assertion_with_collection(
-    value_expr: &TokenStream,
-    entries: &[(syn::Expr, Pattern)],
-    rest: bool,
-    _is_ref: bool,
-    path: &[String],
-    node_ident: &Ident,
-    map_span: proc_macro2::Span,
-) -> TokenStream {
-    let field_path_str = path.join(".");
+fn expand_map_assertion(value_expr: &TokenStream, pattern: &PatternMap) -> TokenStream {
+    let entries = &pattern.entries;
+    let rest = pattern.rest;
+
+    // Use span from first entry or default span if empty
+    let map_span = entries
+        .first()
+        .map(|(key, _)| key.span())
+        .unwrap_or_else(proc_macro2::Span::call_site);
 
     // Generate length check assertion for exact matching (when no rest pattern)
     let len_check = if !rest {
         let expected_len = entries.len();
+        let error_push = generate_error_push(
+            map_span,
+            quote!(format!("map with {} entries", (#value_expr).len())),
+            quote!(Some(format!("{} entries", #expected_len))),
+            pattern.node_id,
+        );
         quote_spanned! {map_span=>
             // Check exact length for maps without rest pattern
             if (#value_expr).len() != #expected_len {
-                let __line = line!();
-                let __file = file!();
-                let __error = ::assert_struct::__macro_support::ErrorContext {
-                    field_path: #field_path_str.to_string(),
-                    pattern_str: format!("#{{ {} entries }}", #expected_len),
-                    actual_value: format!("map with {} entries", (#value_expr).len()),
-                    line_number: __line,
-                    file_name: __file,
-                    error_type: ::assert_struct::__macro_support::ErrorType::Value,
-                    expected_value: Some(format!("{} entries", #expected_len)),
-                    error_node: Some(&#node_ident),
-                };
-                __errors.push(__error);
+                #error_push
             }
         }
     } else {
@@ -1661,16 +686,15 @@ fn generate_map_assertion_with_collection(
         .map(|(key, value_pattern)| {
             let key_str = quote! { #key }.to_string();
 
-            // Build path for this key
-            let mut key_path = path.to_vec();
-            key_path.push(key_str.clone());
-
             let span = key.span();
-            let pattern_assertion = generate_pattern_assertion_with_collection(
-                &quote! { __map_value },
-                value_pattern,
-                true, // map.get() returns Option<&V>, so we have a reference
-                &key_path,
+            let pattern_assertion =
+                expand_pattern_assertion(&quote! { __map_value }, value_pattern);
+
+            let missing_key_error = generate_error_push(
+                span,
+                quote!("missing key".to_string()),
+                quote!(Some(format!("key present: {}", #key_str))),
+                pattern.node_id,
             );
 
             // Handle different key types for duck typing
@@ -1696,19 +720,7 @@ fn generate_map_assertion_with_collection(
                         #pattern_assertion
                     }
                     None => {
-                        let __line = line!();
-                        let __file = file!();
-                        let __error = ::assert_struct::__macro_support::ErrorContext {
-                            field_path: #field_path_str.to_string(),
-                            pattern_str: format!("key: {}", #key_str),
-                            actual_value: "missing key".to_string(),
-                            line_number: __line,
-                            file_name: __file,
-                            error_type: ::assert_struct::__macro_support::ErrorType::Value,
-                            expected_value: Some(format!("key present: {}", #key_str)),
-                            error_node: Some(&#node_ident),
-                        };
-                        __errors.push(__error);
+                        #missing_key_error
                     }
                 }
             }
@@ -1718,5 +730,18 @@ fn generate_map_assertion_with_collection(
     quote! {
         #len_check
         #(#key_value_assertions)*
+    }
+}
+
+/// Generate the error context creation and push code
+fn generate_error_push(
+    span: proc_macro2::Span,
+    actual_value: TokenStream,
+    expected_value: TokenStream,
+    node_id: usize,
+) -> TokenStream {
+    let node_ident = expand_pattern_node_ident(node_id);
+    quote_spanned! {span=>
+        __report.push(&#node_ident, #actual_value, #expected_value);
     }
 }

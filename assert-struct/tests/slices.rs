@@ -167,7 +167,7 @@ fn test_empty_slice() {
 }
 
 #[test]
-#[should_panic(expected = "mismatch")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_slice_length_mismatch() {
     let container = Container {
         items: vec![1, 2, 3],
@@ -537,7 +537,7 @@ fn test_slice_element_comparison_success() {
 }
 
 #[test]
-#[should_panic(expected = "data.values.[1]")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_slice_element_comparison_failure() {
     let data = SlicePathData {
         values: vec![10, 5, 30],

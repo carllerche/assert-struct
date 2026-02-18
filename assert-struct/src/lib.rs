@@ -726,7 +726,7 @@ pub mod error;
 // Hidden module for macro support functions
 #[doc(hidden)]
 pub mod __macro_support {
-    pub use crate::error::{ErrorContext, ErrorType, PatternNode, format_errors_with_root};
+    pub use crate::error::{ComparisonOp, ErrorReport, NodeKind, PatternNode, PlainOutputGuard};
 
     // Re-export regex types for macro expansion when regex feature is enabled
     #[cfg(feature = "regex")]

@@ -18,7 +18,7 @@ pub fn test_case() {
         container,
         Container {
             id: 4,
-            value: Some((100, "other".to_string(), true)),  // All three fields wrong
+            value: Some((100, "other", true)), // All three fields wrong
         }
     );
 }

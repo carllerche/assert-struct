@@ -105,7 +105,7 @@ fn test_equality_in_tuples() {
 
 // Test failure cases
 #[test]
-#[should_panic(expected = "mismatch")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_equality_failure() {
     let user = User {
         name: "Alice".to_string(),
@@ -121,7 +121,7 @@ fn test_equality_failure() {
 }
 
 #[test]
-#[should_panic(expected = "mismatch")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_inequality_failure() {
     let user = User {
         name: "Alice".to_string(),
@@ -254,7 +254,7 @@ fn test_nested_struct_equality() {
 
 // Test failure cases
 #[test]
-#[should_panic(expected = "mismatch")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_struct_equality_failure() {
     let shape = Shape {
         origin: Point { x: 0, y: 0 },
@@ -268,7 +268,7 @@ fn test_struct_equality_failure() {
 }
 
 #[test]
-#[should_panic(expected = "mismatch")]
+#[should_panic(expected = "assert_struct! failed")]
 fn test_struct_inequality_failure() {
     let shape = Shape {
         origin: Point { x: 0, y: 0 },

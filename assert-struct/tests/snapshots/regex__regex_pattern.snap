@@ -2,11 +2,8 @@
 source: assert-struct/tests/regex.rs
 expression: message
 ---
-assert_struct! failed:
-
-   | User {
-mismatch:
-  --> `user.email` (line 15)
-   | =~ r"@example\.com$"
-   | ^^^^^^^^^^^^^^^^^^^^ actual: "alice@wrong.com"
-   | }
+error: assert_struct! failed
+  --> assert-struct/tests/regex_errors/regex_pattern.rs:15:19
+   |
+15 |         email: =~ r"@example\.com$",
+   |                   ^^^^^^^^^^^^^^^^^ got "alice@wrong.com"
