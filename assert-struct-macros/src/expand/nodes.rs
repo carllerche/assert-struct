@@ -24,7 +24,10 @@ pub(super) fn get_pattern_span(pattern: &Pattern) -> Option<Span> {
     match pattern {
         Pattern::Simple(PatternSimple { expr, .. }) => Some(expr.span()),
         Pattern::String(PatternString { lit, .. }) => Some(lit.span()),
-        Pattern::Comparison(PatternComparison { expr, .. }) => Some(expr.span()),
+        Pattern::Comparison(PatternComparison { op, expr, .. }) => {
+            let op_span = op.span();
+            Some(op_span.join(expr.span()).unwrap_or(op_span))
+        }
         Pattern::Range(PatternRange { expr, .. }) => Some(expr.span()),
         #[cfg(feature = "regex")]
         Pattern::Regex(PatternRegex { span, .. }) => Some(*span),
@@ -129,12 +132,12 @@ pub(super) fn generate_pattern_nodes(
         }
         Pattern::Comparison(PatternComparison { op, expr, .. }) => {
             let op_variant = match op {
-                ComparisonOp::Less => quote!(::assert_struct::__macro_support::ComparisonOp::Less),
-                ComparisonOp::LessEqual => quote!(::assert_struct::__macro_support::ComparisonOp::LessEqual),
-                ComparisonOp::Greater => quote!(::assert_struct::__macro_support::ComparisonOp::Greater),
-                ComparisonOp::GreaterEqual => quote!(::assert_struct::__macro_support::ComparisonOp::GreaterEqual),
-                ComparisonOp::Equal => quote!(::assert_struct::__macro_support::ComparisonOp::Equal),
-                ComparisonOp::NotEqual => quote!(::assert_struct::__macro_support::ComparisonOp::NotEqual),
+                ComparisonOp::Less(_) => quote!(::assert_struct::__macro_support::ComparisonOp::Less),
+                ComparisonOp::LessEqual(_) => quote!(::assert_struct::__macro_support::ComparisonOp::LessEqual),
+                ComparisonOp::Greater(_) => quote!(::assert_struct::__macro_support::ComparisonOp::Greater),
+                ComparisonOp::GreaterEqual(_) => quote!(::assert_struct::__macro_support::ComparisonOp::GreaterEqual),
+                ComparisonOp::Equal(_) => quote!(::assert_struct::__macro_support::ComparisonOp::Equal),
+                ComparisonOp::NotEqual(_) => quote!(::assert_struct::__macro_support::ComparisonOp::NotEqual),
             };
             let value_str = quote! { #expr }.to_string();
             quote! {

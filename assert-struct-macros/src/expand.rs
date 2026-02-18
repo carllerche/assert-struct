@@ -396,24 +396,21 @@ fn expand_comparison_assertion(
     let op = &pattern.op;
     let expected = &pattern.expr;
 
-    let is_index_operation = true;
-
     let span = expected.span();
-    let comparison = if is_index_operation {
+
+    let comparison = {
         // For index operations, avoid references on both sides
-        match pattern.op {
-            ComparisonOp::Less => quote_spanned! {span=> (#value_expr).lt(&(#expected)) },
-            ComparisonOp::LessEqual => quote_spanned! {span=> (#value_expr).le(&(#expected)) },
-            ComparisonOp::Greater => quote_spanned! {span=> (#value_expr).gt(&(#expected)) },
-            ComparisonOp::GreaterEqual => quote_spanned! {span=> (#value_expr).ge(&(#expected)) },
-            ComparisonOp::Equal => quote_spanned! {span=> (#value_expr).eq(&(#expected)) },
-            ComparisonOp::NotEqual => quote_spanned! {span=> (#value_expr).ne(&(#expected)) },
+        match &pattern.op {
+            ComparisonOp::Less(_) => quote_spanned! {span=> (#value_expr).lt(&(#expected)) },
+            ComparisonOp::LessEqual(_) => quote_spanned! {span=> (#value_expr).le(&(#expected)) },
+            ComparisonOp::Greater(_) => quote_spanned! {span=> (#value_expr).gt(&(#expected)) },
+            ComparisonOp::GreaterEqual(_) => quote_spanned! {span=> (#value_expr).ge(&(#expected)) },
+            ComparisonOp::Equal(_) => quote_spanned! {span=> (#value_expr).eq(&(#expected)) },
+            ComparisonOp::NotEqual(_) => quote_spanned! {span=> (#value_expr).ne(&(#expected)) },
         }
-    } else {
-        todo!()
     };
 
-    let expected_value = if matches!(op, ComparisonOp::Equal) {
+    let expected_value = if matches!(op, ComparisonOp::Equal(_)) {
         let expected_str = quote! { #expected }.to_string();
         quote!(Some(#expected_str.to_string()))
     } else {
