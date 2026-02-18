@@ -33,7 +33,10 @@ fn test_basic_closure_success() {
     );
 }
 
-error_message_test!("closures_errors/basic_closure_failure.rs", basic_closure_failure);
+error_message_test!(
+    "closures_errors/basic_closure_failure.rs",
+    basic_closure_failure
+);
 
 #[test]
 fn test_closure_with_complex_logic() {

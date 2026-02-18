@@ -18,7 +18,6 @@ pub(super) fn expand_pattern_node_ident(node_id: usize) -> Ident {
     Ident::new(&format!("__PATTERN_NODE_{}", node_id), Span::call_site())
 }
 
-
 /// Generate pattern nodes using the IDs already in patterns
 pub(super) fn generate_pattern_nodes(
     pattern: &Pattern,
@@ -108,12 +107,24 @@ pub(super) fn generate_pattern_nodes(
         }
         Pattern::Comparison(PatternComparison { op, expr, .. }) => {
             let op_variant = match op {
-                ComparisonOp::Less(_) => quote!(::assert_struct::__macro_support::ComparisonOp::Less),
-                ComparisonOp::LessEqual(_) => quote!(::assert_struct::__macro_support::ComparisonOp::LessEqual),
-                ComparisonOp::Greater(_) => quote!(::assert_struct::__macro_support::ComparisonOp::Greater),
-                ComparisonOp::GreaterEqual(_) => quote!(::assert_struct::__macro_support::ComparisonOp::GreaterEqual),
-                ComparisonOp::Equal(_) => quote!(::assert_struct::__macro_support::ComparisonOp::Equal),
-                ComparisonOp::NotEqual(_) => quote!(::assert_struct::__macro_support::ComparisonOp::NotEqual),
+                ComparisonOp::Less(_) => {
+                    quote!(::assert_struct::__macro_support::ComparisonOp::Less)
+                }
+                ComparisonOp::LessEqual(_) => {
+                    quote!(::assert_struct::__macro_support::ComparisonOp::LessEqual)
+                }
+                ComparisonOp::Greater(_) => {
+                    quote!(::assert_struct::__macro_support::ComparisonOp::Greater)
+                }
+                ComparisonOp::GreaterEqual(_) => {
+                    quote!(::assert_struct::__macro_support::ComparisonOp::GreaterEqual)
+                }
+                ComparisonOp::Equal(_) => {
+                    quote!(::assert_struct::__macro_support::ComparisonOp::Equal)
+                }
+                ComparisonOp::NotEqual(_) => {
+                    quote!(::assert_struct::__macro_support::ComparisonOp::NotEqual)
+                }
             };
             let value_str = quote! { #expr }.to_string();
             quote! {
@@ -295,7 +306,8 @@ pub(super) fn generate_pattern_nodes(
                 .iter()
                 .map(|field| {
                     let field_name = field.operations.root_field_name().to_string();
-                    let child_ref = generate_pattern_nodes(&field.pattern, node_defs, Some(&node_ident));
+                    let child_ref =
+                        generate_pattern_nodes(&field.pattern, node_defs, Some(&node_ident));
                     quote! {
                         (#field_name, &#child_ref)
                     }

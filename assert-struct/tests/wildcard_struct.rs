@@ -141,7 +141,10 @@ fn test_wildcard_partial_matching() {
     });
 }
 
-error_message_test!("wildcard_errors/wildcard_struct_failure.rs", wildcard_struct_failure);
+error_message_test!(
+    "wildcard_errors/wildcard_struct_failure.rs",
+    wildcard_struct_failure
+);
 
 #[test]
 fn test_wildcard_with_options() {

@@ -404,7 +404,9 @@ fn expand_comparison_assertion(
             ComparisonOp::Less(_) => quote_spanned! {span=> (#value_expr).lt(&(#expected)) },
             ComparisonOp::LessEqual(_) => quote_spanned! {span=> (#value_expr).le(&(#expected)) },
             ComparisonOp::Greater(_) => quote_spanned! {span=> (#value_expr).gt(&(#expected)) },
-            ComparisonOp::GreaterEqual(_) => quote_spanned! {span=> (#value_expr).ge(&(#expected)) },
+            ComparisonOp::GreaterEqual(_) => {
+                quote_spanned! {span=> (#value_expr).ge(&(#expected)) }
+            }
             ComparisonOp::Equal(_) => quote_spanned! {span=> (#value_expr).eq(&(#expected)) },
             ComparisonOp::NotEqual(_) => quote_spanned! {span=> (#value_expr).ne(&(#expected)) },
         }

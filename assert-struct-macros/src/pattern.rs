@@ -105,72 +105,128 @@ impl Pattern {
             Pattern::Simple(PatternSimple { expr, .. }) => {
                 let start = expr.span().start();
                 let end = expr.span().end();
-                (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+                (
+                    start.line as u32,
+                    start.column as u32,
+                    end.line as u32,
+                    end.column as u32,
+                )
             }
             Pattern::String(PatternString { lit, .. }) => {
                 let start = lit.span().start();
                 let end = lit.span().end();
-                (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+                (
+                    start.line as u32,
+                    start.column as u32,
+                    end.line as u32,
+                    end.column as u32,
+                )
             }
             Pattern::Comparison(PatternComparison { op, expr, .. }) => {
                 let start = op.span().start();
                 let end = expr.span().end();
-                (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+                (
+                    start.line as u32,
+                    start.column as u32,
+                    end.line as u32,
+                    end.column as u32,
+                )
             }
             Pattern::Range(PatternRange { expr, .. }) => {
                 if let syn::Expr::Range(range_expr) = expr {
-                    let start = range_expr.start.as_ref()
+                    let start = range_expr
+                        .start
+                        .as_ref()
                         .map(|s| s.span().start())
                         .unwrap_or_else(|| range_expr.limits.span().start());
-                    let end = range_expr.end.as_ref()
+                    let end = range_expr
+                        .end
+                        .as_ref()
                         .map(|e| e.span().end())
                         .unwrap_or_else(|| range_expr.limits.span().end());
-                    (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+                    (
+                        start.line as u32,
+                        start.column as u32,
+                        end.line as u32,
+                        end.column as u32,
+                    )
                 } else {
                     let start = expr.span().start();
                     let end = expr.span().end();
-                    (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+                    (
+                        start.line as u32,
+                        start.column as u32,
+                        end.line as u32,
+                        end.column as u32,
+                    )
                 }
             }
             #[cfg(feature = "regex")]
             Pattern::Regex(PatternRegex { span, .. }) => {
                 let start = span.start();
                 let end = span.end();
-                (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+                (
+                    start.line as u32,
+                    start.column as u32,
+                    end.line as u32,
+                    end.column as u32,
+                )
             }
             #[cfg(feature = "regex")]
             Pattern::Like(PatternLike { expr, .. }) => {
                 let start = expr.span().start();
                 let end = expr.span().end();
-                (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+                (
+                    start.line as u32,
+                    start.column as u32,
+                    end.line as u32,
+                    end.column as u32,
+                )
             }
             // Highlight only the path itself, not the args or fields that follow.
             // Use first/last segment idents independently to avoid Span::join().
-            Pattern::Struct(PatternStruct { path: Some(path), .. })
+            Pattern::Struct(PatternStruct {
+                path: Some(path), ..
+            })
             | Pattern::Enum(PatternEnum { path, .. }) => {
                 let first = path.segments.first().map(|s| s.ident.span().start());
                 let last = path.segments.last().map(|s| s.ident.span().end());
                 match (first, last) {
-                    (Some(start), Some(end)) => {
-                        (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
-                    }
+                    (Some(start), Some(end)) => (
+                        start.line as u32,
+                        start.column as u32,
+                        end.line as u32,
+                        end.column as u32,
+                    ),
                     _ => (0, 0, 0, 0),
                 }
             }
             Pattern::Closure(PatternClosure { closure, .. }) => {
                 let start = closure.span().start();
                 let end = closure.span().end();
-                (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+                (
+                    start.line as u32,
+                    start.column as u32,
+                    end.line as u32,
+                    end.column as u32,
+                )
             }
             Pattern::Tuple(PatternTuple { span, .. })
             | Pattern::Slice(PatternSlice { span, .. })
             | Pattern::Map(PatternMap { span, .. }) => {
                 let start = span.start();
                 let end = span.end();
-                (start.line as u32, start.column as u32, end.line as u32, end.column as u32)
+                (
+                    start.line as u32,
+                    start.column as u32,
+                    end.line as u32,
+                    end.column as u32,
+                )
             }
             // Wildcard struct patterns and plain wildcards have no meaningful location.
-            Pattern::Struct(PatternStruct { path: None, .. }) | Pattern::Wildcard(_) => (0, 0, 0, 0),
+            Pattern::Struct(PatternStruct { path: None, .. }) | Pattern::Wildcard(_) => {
+                (0, 0, 0, 0)
+            }
         }
     }
 }

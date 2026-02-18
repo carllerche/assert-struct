@@ -278,7 +278,10 @@ fn error_label(error: &ErrorContext) -> String {
             } else {
                 let n = items.len();
                 let suffix = if n == 1 { "element" } else { "elements" };
-                format!("expected slice with {} {}, got {}", n, suffix, error.actual_value)
+                format!(
+                    "expected slice with {} {}, got {}",
+                    n, suffix, error.actual_value
+                )
             }
         }
         NodeKind::Closure { .. } => format!(
@@ -315,9 +318,14 @@ impl fmt::Display for ErrorReport {
                 .iter()
                 .zip(labels.iter())
                 .map(|(error, label)| {
-                    let start = byte_offset_of(source, error.error_node.line_start, error.error_node.col_start);
-                    let end = byte_offset_of(source, error.error_node.line_end, error.error_node.col_end)
-                        .max(start + 1);
+                    let start = byte_offset_of(
+                        source,
+                        error.error_node.line_start,
+                        error.error_node.col_start,
+                    );
+                    let end =
+                        byte_offset_of(source, error.error_node.line_end, error.error_node.col_end)
+                            .max(start + 1);
                     AnnotationKind::Primary
                         .span(start..end)
                         .label(label.as_str())
