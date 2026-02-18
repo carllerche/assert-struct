@@ -422,3 +422,22 @@ fn test_empty_vs_wildcard_distinction() {
         ..
     });
 }
+
+// Tests for issue #52: map patterns inside enum variants (Some, Ok, etc.)
+#[test]
+fn test_map_inside_some() {
+    let mut map = HashMap::new();
+    map.insert("key".to_string(), "value".to_string());
+    let optional_map: Option<HashMap<String, String>> = Some(map);
+
+    assert_struct!(optional_map, Some(#{ "key": "value" }));
+}
+
+#[test]
+fn test_map_inside_ok() {
+    let mut map = HashMap::new();
+    map.insert("key".to_string(), 42);
+    let result_map: Result<HashMap<String, i32>, String> = Ok(map);
+
+    assert_struct!(result_map, Ok(#{ "key": 42 }));
+}
