@@ -439,3 +439,26 @@ fn test_result_with_struct_abbreviated_display() {
     let value: Result<SimpleDisplayFoo, String> = Ok(SimpleDisplayFoo { value: 42 });
     assert_struct!(value, Err("error"));
 }
+
+// One-variant enums
+#[derive(Debug, PartialEq)]
+enum OneVariantUnit {
+    Only,
+}
+
+#[derive(Debug, PartialEq)]
+enum OneVariantTuple {
+    Value(i32),
+}
+
+#[test]
+fn test_one_variant_enum_value() {
+    let data = OneVariantTuple::Value(42);
+    assert_struct!(data, OneVariantTuple::Value(42));
+}
+
+#[test]
+fn test_one_variant_enum_bare() {
+    let data = OneVariantUnit::Only;
+    assert_struct!(data, OneVariantUnit::Only);
+}

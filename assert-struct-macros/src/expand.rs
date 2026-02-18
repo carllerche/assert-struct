@@ -1157,6 +1157,7 @@ fn generate_enum_tuple_assertion_with_collection(
             }
         } else {
             quote_spanned! {span=>
+                #[allow(unreachable_patterns)]
                 match &#value_expr {
                     #variant_path => {},
                     _ => {
@@ -1225,6 +1226,7 @@ fn generate_enum_tuple_assertion_with_collection(
             }
         } else {
             quote_spanned! {span=>
+                #[allow(unreachable_patterns)]
                 match &#value_expr {
                     #variant_path(#(#match_patterns),*) => {
                         #(#element_assertions)*
