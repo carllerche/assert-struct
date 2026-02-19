@@ -36,7 +36,7 @@ checksum = "5f0e0fee31ef5ed1ba1316088939cea399010ed7731dba877ed44aeb407a75ea"
 
 [[package]]
 name = "assert-struct"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "annotate-snippets",
  "assert-struct-macros",
@@ -48,7 +48,7 @@ dependencies = [
 
 [[package]]
 name = "assert-struct-macros"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "assert-struct",
  "proc-macro2",

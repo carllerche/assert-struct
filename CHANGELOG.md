@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-02-19
+
+### Fixed
+- **Method call regression** - Fixed E0716/E0507 errors when calling methods that return owned values or references (#105)
+
 ## [0.3.0] - 2026-02-19
 
 ### Added
@@ -114,6 +119,7 @@ Initial release of assert-struct - a procedural macro for ergonomic structural a
 - Complete pattern reference in macro documentation
 - Comprehensive test coverage - 350+ tests across 29 test files
 
+[0.3.1]: https://github.com/carllerche/assert-struct/releases/tag/v0.3.1
 [0.3.0]: https://github.com/carllerche/assert-struct/releases/tag/v0.3.0
 [0.2.0]: https://github.com/carllerche/assert-struct/releases/tag/v0.2.0
 [0.1.0]: https://github.com/carllerche/assert-struct/releases/tag/v0.1.0
