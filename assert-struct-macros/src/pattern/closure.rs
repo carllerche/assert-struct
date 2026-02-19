@@ -2,7 +2,6 @@
 //!
 //! Handles closure patterns: |x| x > 5
 
-use std::fmt;
 use syn::parse::Parse;
 
 use crate::parse::next_node_id;
@@ -32,12 +31,5 @@ impl Parse for PatternClosure {
             node_id: next_node_id(),
             closure,
         })
-    }
-}
-
-impl fmt::Display for PatternClosure {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let closure = &self.closure;
-        write!(f, "{}", quote::quote! { #closure })
     }
 }

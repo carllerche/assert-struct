@@ -135,40 +135,6 @@ pub(crate) enum FieldOperation {
     },
 }
 
-impl fmt::Display for FieldOperation {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            FieldOperation::Deref { count, .. } => {
-                for _ in 0..*count {
-                    write!(f, "*")?;
-                }
-                Ok(())
-            }
-            FieldOperation::Method { name, .. } => {
-                write!(f, ".{}()", name)
-            }
-            FieldOperation::Await { .. } => {
-                write!(f, ".await")
-            }
-            FieldOperation::NamedField { name, .. } => {
-                write!(f, ".{}", name)
-            }
-            FieldOperation::UnnamedField { index, .. } => {
-                write!(f, ".{}", index)
-            }
-            FieldOperation::Index { index, .. } => {
-                write!(f, "[{}]", quote::quote! { #index })
-            }
-            FieldOperation::Chained { operations, .. } => {
-                for op in operations {
-                    write!(f, "{}", op)?;
-                }
-                Ok(())
-            }
-        }
-    }
-}
-
 impl Parse for FieldAssertion {
     /// Parses a single field assertion within a struct pattern.
     ///

@@ -2,11 +2,9 @@
 //!
 //! Handles range patterns: 10..20, 0..=100
 
-use std::fmt;
 use syn::parse::Parse;
 
 use crate::parse::next_node_id;
-use crate::pattern::expr_to_string;
 
 /// Range pattern: 10..20, 0..=100
 #[derive(Debug, Clone)]
@@ -42,11 +40,5 @@ impl Parse for PatternRange {
             node_id: next_node_id(),
             expr,
         })
-    }
-}
-
-impl fmt::Display for PatternRange {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", expr_to_string(&self.expr))
     }
 }

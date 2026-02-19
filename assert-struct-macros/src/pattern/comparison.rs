@@ -2,8 +2,6 @@
 //!
 //! This module defines comparison operators and patterns like `> 30`, `<= 100`, etc.
 
-use std::fmt;
-
 use proc_macro2::Span;
 use syn::{Token, parse::Parse, spanned::Spanned};
 
@@ -36,19 +34,6 @@ impl ComparisonOp {
             ComparisonOp::GreaterEqual(t) => t.span(),
             ComparisonOp::Equal(t) => t.span(),
             ComparisonOp::NotEqual(t) => t.span(),
-        }
-    }
-}
-
-impl fmt::Display for ComparisonOp {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ComparisonOp::Less(_) => write!(f, "<"),
-            ComparisonOp::LessEqual(_) => write!(f, "<="),
-            ComparisonOp::Greater(_) => write!(f, ">"),
-            ComparisonOp::GreaterEqual(_) => write!(f, ">="),
-            ComparisonOp::Equal(_) => write!(f, "=="),
-            ComparisonOp::NotEqual(_) => write!(f, "!="),
         }
     }
 }

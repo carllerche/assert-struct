@@ -2,11 +2,10 @@
 //!
 //! Handles struct patterns like User { name: "Alice", age: 30, .. }
 
-use std::fmt;
 use syn::{Token, parse::Parse, punctuated::Punctuated};
 
 use crate::parse::next_node_id;
-use crate::pattern::{FieldAssertion, path_to_string};
+use crate::pattern::FieldAssertion;
 
 /// Struct pattern: User { name: "Alice", age: 30, .. }
 /// When path is None, it's a wildcard pattern: _ { name: "Alice", .. }
@@ -88,28 +87,5 @@ impl Parse for PatternStruct {
             fields,
             rest,
         })
-    }
-}
-
-impl fmt::Display for PatternStruct {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(path) = &self.path {
-            write!(f, "{} {{ ", path_to_string(path))?;
-        } else {
-            write!(f, "_ {{ ")?;
-        }
-        for (i, field) in self.fields.iter().enumerate() {
-            if i > 0 {
-                write!(f, ", ")?;
-            }
-            write!(f, "{}: {}", field.operations, field.pattern)?;
-        }
-        if self.rest {
-            if !self.fields.is_empty() {
-                write!(f, ", ")?;
-            }
-            write!(f, "..")?;
-        }
-        write!(f, " }}")
     }
 }
