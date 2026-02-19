@@ -513,7 +513,13 @@ fn expand_string_assertion(value_expr: &TokenStream, pattern: &PatternString) ->
     );
 
     quote_spanned! {span=> {
-        let actual = (#value_expr).as_ref();
+        // Take a reference to the expression result so that:
+        // 1. Temporaries (e.g. from method calls returning String) live for the
+        //    entire block - fixes E0716 "temporary dropped while borrowed".
+        // 2. Reference-typed expressions (e.g. from index operations) are not
+        //    moved - fixes E0507 "cannot move out of shared reference".
+        let __assert_struct_tmp = &#value_expr;
+        let actual = (*__assert_struct_tmp).as_ref();
         if !matches!(actual, #lit) {
             #error_push
         }

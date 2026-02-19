@@ -131,3 +131,27 @@ fn test_method_calls_with_arguments() {
         ..
     });
 }
+
+// Regression test: method calls that return String (a temporary) compared against
+// a string literal pattern must not produce E0716 "temporary value dropped while borrowed".
+// The expansion of `field.method(): "literal"` previously generated:
+//   let actual = (value.field.method()).as_ref();
+// which borrows from the temporary String before it is dropped at end of statement.
+#[test]
+fn test_method_returning_string_compared_with_literal() {
+    #[derive(Debug)]
+    struct Item {
+        name: String,
+    }
+
+    let item = Item {
+        name: "hello".to_string(),
+    };
+
+    // `name.to_uppercase()` returns a temporary String; matching it against a
+    // string literal `"HELLO"` requires borrowing that temporary via `.as_ref()`.
+    assert_struct!(item, Item {
+        name.to_uppercase(): "HELLO",
+        ..
+    });
+}
