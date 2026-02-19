@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-02-19
+
+### Added
+
+#### Set Pattern Support
+- **Set patterns** - New `#(pattern1, pattern2, ..)` syntax for unordered collection matching
+- **Exact set matching** - `#(1, 2, 3)` requires the collection to contain exactly these elements
+- **Partial set matching** - `#(> 0, < 10, ..)` finds elements matching each pattern, ignores the rest
+- **Pattern flexibility** - All existing patterns work within set patterns (comparisons, ranges, regex, nested structs)
+- **Empty sets** - `#()` matches exactly empty collections
+
+### Fixed
+- **Unreachable patterns warning** - Suppress spurious `unreachable_patterns` warnings for single-variant enums
+- **Vec index assertions** - Fixed regression with index-based assertions on `Vec` fields (#93)
+
+### Internal
+- Refactored macro expansion for improved maintainability
+- Consolidated comparison pattern parsing
+
 ## [0.2.0] - 2025-08-23
 
 ### Added
@@ -95,5 +114,6 @@ Initial release of assert-struct - a procedural macro for ergonomic structural a
 - Complete pattern reference in macro documentation
 - Comprehensive test coverage - 350+ tests across 29 test files
 
+[0.3.0]: https://github.com/carllerche/assert-struct/releases/tag/v0.3.0
 [0.2.0]: https://github.com/carllerche/assert-struct/releases/tag/v0.2.0
 [0.1.0]: https://github.com/carllerche/assert-struct/releases/tag/v0.1.0
