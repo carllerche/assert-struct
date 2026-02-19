@@ -157,7 +157,6 @@ assert_struct!(result, Result {
 ## Documentation
 
 - **[API Documentation](https://docs.rs/assert-struct)** - Complete API reference with examples
-- **[Examples Directory](examples/)** - Real-world usage examples
 - **Getting Started Guide** - See the main crate documentation
 
 ## License
