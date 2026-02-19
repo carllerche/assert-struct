@@ -11,13 +11,13 @@ note: required by a bound in `core::str::<impl str>::get`
    |     pub const fn get<I: [const] SliceIndex<str>>(&self, i: I) -> Option<&I::Output> {
    |                         ^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `core::str::<impl str>::get`
 
-error[E0282]: type annotations needed
-  --> tests/compile_fail/map_pattern_on_non_map.rs:16:5
+error[E0282]: type annotations needed for `&&_`
+  --> tests/compile_fail/map_pattern_on_non_map.rs:17:25
    |
-16 | /     assert_struct!(user, User {
-17 | |         name: #{ "key": "value" },
-18 | |         age: 30,
-19 | |     });
-   | |______^ cannot infer type
+17 |         name: #{ "key": "value" },
+   |                         ^^^^^^^
    |
-   = note: this error originates in the macro `assert_struct` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider giving `__assert_struct_tmp` an explicit type, where the placeholders `_` are specified
+   |
+17 |         name: #{ "key": "value": &&_ },
+   |                                +++++
