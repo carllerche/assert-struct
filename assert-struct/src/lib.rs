@@ -781,11 +781,7 @@ pub mod __macro_support {
         // Backtracking assignment
         let mut matched = vec![false; n_elements];
         if !set_backtrack(predicates, &mut matched, 0) {
-            report.push(
-                node,
-                format!("{} element(s)", n_elements),
-                None,
-            );
+            report.push(node, format!("{} element(s)", n_elements), None);
         }
     }
 

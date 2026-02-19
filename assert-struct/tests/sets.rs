@@ -82,9 +82,18 @@ struct Event {
 #[test]
 fn test_set_struct_patterns() {
     let events = vec![
-        Event { kind: "click".to_string(), value: 10 },
-        Event { kind: "hover".to_string(), value: 20 },
-        Event { kind: "scroll".to_string(), value: 30 },
+        Event {
+            kind: "click".to_string(),
+            value: 10,
+        },
+        Event {
+            kind: "hover".to_string(),
+            value: 20,
+        },
+        Event {
+            kind: "scroll".to_string(),
+            value: 30,
+        },
     ];
 
     assert_struct!(events, #(
@@ -97,9 +106,18 @@ fn test_set_struct_patterns() {
 #[test]
 fn test_set_struct_patterns_with_rest() {
     let events = vec![
-        Event { kind: "click".to_string(), value: 10 },
-        Event { kind: "hover".to_string(), value: 20 },
-        Event { kind: "scroll".to_string(), value: 30 },
+        Event {
+            kind: "click".to_string(),
+            value: 10,
+        },
+        Event {
+            kind: "hover".to_string(),
+            value: 20,
+        },
+        Event {
+            kind: "scroll".to_string(),
+            value: 30,
+        },
     ];
 
     // Only check that click and hover are present; scroll is ignored
@@ -167,8 +185,20 @@ fn test_set_string_literals() {
 
 // ── Failure cases ─────────────────────────────────────────────────────────────
 
-error_message_test!("sets_errors/exact_wrong_length.rs", test_set_exact_wrong_length);
-error_message_test!("sets_errors/exact_too_many_patterns.rs", test_set_exact_too_many_patterns);
-error_message_test!("sets_errors/rest_too_few_elements.rs", test_set_rest_too_few_elements);
-error_message_test!("sets_errors/no_valid_assignment.rs", test_set_no_valid_assignment);
+error_message_test!(
+    "sets_errors/exact_wrong_length.rs",
+    test_set_exact_wrong_length
+);
+error_message_test!(
+    "sets_errors/exact_too_many_patterns.rs",
+    test_set_exact_too_many_patterns
+);
+error_message_test!(
+    "sets_errors/rest_too_few_elements.rs",
+    test_set_rest_too_few_elements
+);
+error_message_test!(
+    "sets_errors/no_valid_assignment.rs",
+    test_set_no_valid_assignment
+);
 error_message_test!("sets_errors/empty_mismatch.rs", test_set_empty_mismatch);

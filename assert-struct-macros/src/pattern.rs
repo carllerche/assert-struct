@@ -337,4 +337,3 @@ impl Parse for Pattern {
         }
     }
 }
-
