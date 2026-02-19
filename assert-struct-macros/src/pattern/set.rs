@@ -29,13 +29,17 @@ impl Parse for PatternSet {
     /// #(_ { kind: "click", .. }, ..)
     /// ```
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        // Capture the span of the `#` token before consuming anything
+        let hash_span = input.span();
+
         // Consume the # token
         let _: Token![#] = input.parse()?;
 
-        // Capture the span of the `(` token before consuming it
-        let span = input.span();
         let content;
-        syn::parenthesized!(content in input);
+        let paren = syn::parenthesized!(content in input);
+
+        // Full span from `#` to closing `)`
+        let span = hash_span.join(paren.span.close()).unwrap_or(hash_span);
 
         let mut elements = Vec::new();
         let mut rest = false;

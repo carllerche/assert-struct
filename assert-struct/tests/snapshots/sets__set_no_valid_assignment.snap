@@ -1,10 +1,9 @@
 ---
 source: assert-struct/tests/sets.rs
-assertion_line: 173
 expression: message
 ---
 error: assert_struct! failed
- --> assert-struct/tests/sets_errors/no_valid_assignment.rs:7:28
+ --> assert-struct/tests/sets_errors/no_valid_assignment.rs:7:27
   |
 7 |     assert_struct!(items, #(1, < 0, 3));
-  |                            ^ set pattern mismatch (exact), got 3 element(s)
+  |                           ^ set pattern mismatch (exact), got 3 element(s)
