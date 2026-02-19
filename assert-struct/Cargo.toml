@@ -1,6 +1,6 @@
 [package]
 name = "assert-struct"
-version = "0.3.0"
+version = "0.3.1"
 authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -23,7 +23,7 @@ default = ["regex"]
 regex = ["assert-struct-macros/regex", "dep:regex"]
 
 [dependencies]
-assert-struct-macros = { version = "0.3.0", path = "../assert-struct-macros" }
+assert-struct-macros = { version = "0.3.1", path = "../assert-struct-macros" }
 annotate-snippets = "0.12"
 regex = { workspace = true, optional = true }
 
