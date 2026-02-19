@@ -1,0 +1,10 @@
+---
+source: assert-struct/tests/sets.rs
+assertion_line: 172
+expression: message
+---
+error: assert_struct! failed
+ --> assert-struct/tests/sets_errors/rest_too_few_elements.rs:6:28
+  |
+6 |     assert_struct!(items, #(1, 2, ..)); // need at least 2 elements
+  |                            ^ set pattern mismatch, got 1 element(s)

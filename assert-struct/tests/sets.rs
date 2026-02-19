@@ -167,38 +167,8 @@ fn test_set_string_literals() {
 
 // ── Failure cases ─────────────────────────────────────────────────────────────
 
-#[test]
-#[should_panic(expected = "assert_struct! failed")]
-fn test_set_exact_wrong_length() {
-    let items = vec![1, 2, 3];
-    assert_struct!(items, #(1, 2)); // too few patterns, no rest
-}
-
-#[test]
-#[should_panic(expected = "assert_struct! failed")]
-fn test_set_exact_too_many_patterns() {
-    let items = vec![1, 2];
-    assert_struct!(items, #(1, 2, 3)); // more patterns than elements
-}
-
-#[test]
-#[should_panic(expected = "assert_struct! failed")]
-fn test_set_rest_too_few_elements() {
-    let items = vec![1];
-    assert_struct!(items, #(1, 2, ..)); // need at least 2 elements
-}
-
-#[test]
-#[should_panic(expected = "assert_struct! failed")]
-fn test_set_no_valid_assignment() {
-    // No element is < 0, so the pattern cannot be satisfied
-    let items = vec![1, 2, 3];
-    assert_struct!(items, #(1, < 0, 3));
-}
-
-#[test]
-#[should_panic(expected = "assert_struct! failed")]
-fn test_set_empty_mismatch() {
-    let items = vec![1];
-    assert_struct!(items, #()); // expected empty but has 1 element
-}
+error_message_test!("sets_errors/exact_wrong_length.rs", test_set_exact_wrong_length);
+error_message_test!("sets_errors/exact_too_many_patterns.rs", test_set_exact_too_many_patterns);
+error_message_test!("sets_errors/rest_too_few_elements.rs", test_set_rest_too_few_elements);
+error_message_test!("sets_errors/no_valid_assignment.rs", test_set_no_valid_assignment);
+error_message_test!("sets_errors/empty_mismatch.rs", test_set_empty_mismatch);
