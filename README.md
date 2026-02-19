@@ -48,6 +48,7 @@ assert_struct!(response, Response {
 
 - **Partial matching** with `..` - check only the fields you care about
 - **Deep nesting** - assert on nested structs without field access chains
+- **Set patterns** - `#(pattern1, pattern2, ..)` for unordered collection matching
 - **Map patterns** - `#{ "key": pattern }` for HashMap, BTreeMap, and custom map types
 - **Advanced matchers** - comparisons (`> 18`), ranges (`0..100`), regex (`=~ r"pattern"`)
 - **Method calls** - `field.len(): 5`, `field.is_some(): true`
@@ -121,6 +122,13 @@ assert_struct!(company, Company {
 // Collections
 assert_struct!(response, Response {
     scores: [> 80.0, >= 90.0, < 100.0],
+    ..
+});
+
+// Set patterns (unordered collection matching)
+assert_struct!(response, Response {
+    tags: #("rust", "async", ..),       // Contains these tags in any order
+    scores: #(> 90, < 50, > 70),        // Each pattern matches a distinct element
     ..
 });
 

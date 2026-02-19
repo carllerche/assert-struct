@@ -24,6 +24,7 @@
 //!   - [Method Call Patterns](#method-call-patterns)
 //! - [Data Types](#data-types)
 //!   - [Collections (Vec/Slice)](#collections-vecslice)
+//!   - [Set Patterns](#set-patterns)
 //!   - [Maps (HashMap/BTreeMap)](#maps-hashmapbtreemap)
 //!   - [Tuples](#tuples)
 //!   - [Enums (Option/Result/Custom)](#enums-optionresultcustom)
@@ -339,6 +340,83 @@
 //!     items: [1, .., 5],      // First and last elements
 //! });
 //! ```
+//!
+//! ## Set Patterns
+//!
+//! Use `#(...)` to assert that a collection contains elements matching the given patterns,
+//! **in any order**. Each pattern must match a distinct element; unlike slice patterns `[...]`,
+//! position does not matter.
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct Data { items: Vec<i32>, tags: Vec<String> }
+//! # let data = Data {
+//! #     items: vec![3, 1, 2],
+//! #     tags: vec!["rust".to_string(), "async".to_string()],
+//! # };
+//! // Exact match - every element must be matched, in any order
+//! assert_struct!(data, Data {
+//!     items: #(1, 2, 3),
+//!     tags: #("rust", "async"),  // String literals work too
+//! });
+//!
+//! // Partial match - use .. to allow extra unmatched elements
+//! assert_struct!(data, Data {
+//!     items: #(> 0, ..),         // At least one element matching > 0
+//!     tags: #("rust", ..),       // Contains "rust", possibly more
+//! });
+//! ```
+//!
+//! Struct patterns work inside `#(...)` too, which is useful when asserting that certain
+//! items are present in a collection regardless of their order:
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct Event { kind: String, value: i32 }
+//! # let events = vec![
+//! #     Event { kind: "click".to_string(), value: 10 },
+//! #     Event { kind: "hover".to_string(), value: 20 },
+//! #     Event { kind: "scroll".to_string(), value: 30 },
+//! # ];
+//! // Assert that click and hover events are present, ignoring order and other events
+//! assert_struct!(events, #(
+//!     _ { kind: "click", value: > 0, .. },
+//!     _ { kind: "hover", .. },
+//!     ..
+//! ));
+//! ```
+//!
+//! Other pattern types also work inside `#(...)`:
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct Report { scores: Vec<i32>, results: Vec<Option<i32>> }
+//! # let report = Report {
+//! #     scores: vec![95, 42, 77],
+//! #     results: vec![Some(5), None, Some(10)],
+//! # };
+//! assert_struct!(report, Report {
+//!     scores: #(> 90, < 50, 18..=100),    // Comparisons and ranges
+//!     results: #(None, Some(> 0), ..),     // Enum patterns
+//! });
+//! ```
+//!
+//! Empty and wildcard set patterns:
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug)]
+//! # struct Data { empty: Vec<i32>, any: Vec<i32> }
+//! # let data = Data { empty: vec![], any: vec![1, 2, 3] };
+//! assert_struct!(data, Data {
+//!     empty: #(),     // Exactly empty collection
+//!     any: #(..),     // Any collection (wildcard - any contents or length)
+//! });
+//! ```
+//!
 //!
 //! ## Maps (HashMap/BTreeMap)
 //!
