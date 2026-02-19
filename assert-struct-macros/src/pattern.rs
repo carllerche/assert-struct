@@ -9,6 +9,7 @@ mod enum_pattern;
 mod field;
 mod map;
 mod range;
+mod set;
 mod simple;
 mod slice;
 mod string;
@@ -26,6 +27,7 @@ pub(crate) use enum_pattern::PatternEnum;
 pub(crate) use field::{FieldAssertion, FieldOperation};
 pub(crate) use map::PatternMap;
 pub(crate) use range::PatternRange;
+pub(crate) use set::PatternSet;
 pub(crate) use simple::PatternSimple;
 pub(crate) use slice::PatternSlice;
 pub(crate) use string::PatternString;
@@ -35,8 +37,6 @@ pub(crate) use wildcard::PatternWildcard;
 
 #[cfg(feature = "regex")]
 pub(crate) use regex::{PatternLike, PatternRegex};
-
-use std::fmt;
 
 use proc_macro2::Span;
 use syn::{
@@ -54,6 +54,7 @@ pub(crate) enum Pattern {
     Enum(PatternEnum),
     Tuple(PatternTuple),
     Slice(PatternSlice),
+    Set(PatternSet),
     Comparison(PatternComparison),
     Range(PatternRange),
     #[cfg(feature = "regex")]
@@ -83,6 +84,7 @@ impl Pattern {
             Pattern::Enum(PatternEnum { path, .. }) => Some(path.span()),
             Pattern::Tuple(PatternTuple { .. })
             | Pattern::Slice(PatternSlice { .. })
+            | Pattern::Set(PatternSet { .. })
             | Pattern::Wildcard(PatternWildcard { .. })
             | Pattern::Map(PatternMap { .. }) => None,
             Pattern::Closure(PatternClosure { closure, .. }) => Some(closure.span()),
@@ -213,6 +215,7 @@ impl Pattern {
             }
             Pattern::Tuple(PatternTuple { span, .. })
             | Pattern::Slice(PatternSlice { span, .. })
+            | Pattern::Set(PatternSet { span, .. })
             | Pattern::Map(PatternMap { span, .. }) => {
                 let start = span.start();
                 let end = span.end();
@@ -279,6 +282,12 @@ impl Parse for Pattern {
             return Err(input.error("expected `==` or `=~` pattern"));
         }
 
+        // Set pattern for unordered collection matching
+        // Example: `#(1, 2, 3)` or `#(> 0, < 10, ..)`
+        if input.peek(Token![#]) && input.peek2(syn::token::Paren) {
+            return Ok(Pattern::Set(input.parse()?));
+        }
+
         // Map patterns for map-like structures using duck typing
         // Example: `#{ "key": "value" }` or `#{ "key": > 5, .. }`
         if input.peek(Token![#]) && input.peek2(syn::token::Brace) {
@@ -325,55 +334,6 @@ impl Parse for Pattern {
             // Simple value or expression
             // Examples: `42`, `true`, `my_variable`, `compute_value()`
             Ok(Pattern::Simple(input.parse()?))
-        }
-    }
-}
-
-// Helper functions that are used across patterns
-pub(crate) fn expr_to_string(expr: &syn::Expr) -> String {
-    // This is a simplified version - in production we'd want more complete handling
-    match expr {
-        syn::Expr::Lit(lit) => {
-            // Handle literals
-            quote::quote! { #lit }.to_string()
-        }
-        syn::Expr::Path(path) => {
-            // Handle paths
-            quote::quote! { #path }.to_string()
-        }
-        syn::Expr::Range(range) => {
-            // Handle ranges
-            quote::quote! { #range }.to_string()
-        }
-        _ => {
-            // Fallback - use quote for other expressions
-            quote::quote! { #expr }.to_string()
-        }
-    }
-}
-
-pub(crate) fn path_to_string(path: &syn::Path) -> String {
-    quote::quote! { #path }.to_string()
-}
-
-impl fmt::Display for Pattern {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Pattern::Simple(p) => write!(f, "{}", p),
-            Pattern::String(p) => write!(f, "{}", p),
-            Pattern::Struct(p) => write!(f, "{}", p),
-            Pattern::Enum(p) => write!(f, "{}", p),
-            Pattern::Tuple(p) => write!(f, "{}", p),
-            Pattern::Slice(p) => write!(f, "{}", p),
-            Pattern::Comparison(p) => write!(f, "{} {}", p.op, expr_to_string(&p.expr)),
-            Pattern::Range(p) => write!(f, "{}", p),
-            #[cfg(feature = "regex")]
-            Pattern::Regex(p) => write!(f, "{}", p),
-            #[cfg(feature = "regex")]
-            Pattern::Like(p) => write!(f, "{}", p),
-            Pattern::Wildcard(p) => write!(f, "{}", p),
-            Pattern::Closure(p) => write!(f, "{}", p),
-            Pattern::Map(p) => write!(f, "{}", p),
         }
     }
 }

@@ -1,0 +1,9 @@
+---
+source: assert-struct/tests/sets.rs
+expression: message
+---
+error: assert_struct! failed
+ --> assert-struct/tests/sets_errors/exact_too_many_patterns.rs:6:27
+  |
+6 |     assert_struct!(items, #(1, 2, 3)); // more patterns than elements
+  |                           ^ set pattern mismatch (exact), got 2 element(s)

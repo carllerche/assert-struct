@@ -2,7 +2,6 @@
 //!
 //! Handles _ pattern for ignoring values
 
-use std::fmt;
 use syn::{Token, parse::Parse};
 
 use crate::parse::next_node_id;
@@ -25,11 +24,5 @@ impl Parse for PatternWildcard {
         Ok(PatternWildcard {
             node_id: next_node_id(),
         })
-    }
-}
-
-impl fmt::Display for PatternWildcard {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "_")
     }
 }

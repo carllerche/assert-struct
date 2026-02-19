@@ -155,21 +155,26 @@ pub struct PatternNode {
 /// The kind of pattern node.
 #[derive(Debug)]
 pub enum NodeKind {
-    // Structural patterns
-    Struct {
-        name: &'static str,
-        fields: &'static [(&'static str, &'static PatternNode)],
-    },
-
     // Collection patterns
     Slice {
         items: &'static [&'static PatternNode],
+        rest: bool,
+    },
+    Set {
+        items: &'static [&'static PatternNode],
+        rest: bool,
     },
     Tuple {
         items: &'static [&'static PatternNode],
     },
     Map {
         entries: &'static [(&'static str, &'static PatternNode)],
+        rest: bool,
+    },
+    Struct {
+        name: &'static str,
+        fields: &'static [(&'static str, &'static PatternNode)],
+        rest: bool,
     },
 
     // Enum patterns
@@ -197,7 +202,6 @@ pub enum NodeKind {
     },
 
     // Special
-    Rest,
     Wildcard,
     Closure {
         closure: &'static str,
@@ -238,6 +242,17 @@ impl ErrorReport {
         }
     }
 
+    /// Create a disposable probe report used during set-pattern backtracking.
+    /// The report is never displayed; callers check `is_empty()` to determine
+    /// whether a trial pattern assertion succeeded.
+    pub fn new_probe() -> Self {
+        ErrorReport {
+            errors: Vec::new(),
+            abs_path: PathBuf::new(),
+            rel_path: String::new(),
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.errors.is_empty()
     }
@@ -271,9 +286,8 @@ fn error_label(error: &ErrorContext) -> String {
             "expected variant {}, got {}",
             error.error_node, error.actual_value,
         ),
-        NodeKind::Slice { items } => {
-            let has_rest = items.iter().any(|item| matches!(item.kind, NodeKind::Rest));
-            if has_rest {
+        NodeKind::Slice { items, rest } => {
+            if *rest {
                 format!("slice pattern mismatch, got {}", error.actual_value)
             } else {
                 let n = items.len();
@@ -282,6 +296,13 @@ fn error_label(error: &ErrorContext) -> String {
                     "expected slice with {} {}, got {}",
                     n, suffix, error.actual_value
                 )
+            }
+        }
+        NodeKind::Set { rest, .. } => {
+            if *rest {
+                format!("set pattern mismatch, got {}", error.actual_value)
+            } else {
+                format!("set pattern mismatch (exact), got {}", error.actual_value)
             }
         }
         NodeKind::Closure { .. } => format!(
@@ -376,8 +397,9 @@ impl fmt::Display for PatternNode {
         match &self.kind {
             NodeKind::Struct { name, .. } => write!(f, "{} {{ ... }}", name),
             NodeKind::Slice { .. } => write!(f, "[...]"),
+            NodeKind::Set { .. } => write!(f, "#(...)"),
             NodeKind::Tuple { items } => write!(f, "({})", ".., ".repeat(items.len())),
-            NodeKind::Map { entries } => write!(f, "#{{ {} entries }}", entries.len()),
+            NodeKind::Map { entries, .. } => write!(f, "#{{ {} entries }}", entries.len()),
             NodeKind::EnumVariant { path, args } => {
                 if args.is_some() {
                     write!(f, "{}(...)", path)
@@ -390,7 +412,6 @@ impl fmt::Display for PatternNode {
             NodeKind::Range { pattern } => write!(f, "{}", pattern),
             NodeKind::Regex { pattern } => write!(f, "=~ {}", pattern),
             NodeKind::Like { expr } => write!(f, "=~ {}", expr),
-            NodeKind::Rest => write!(f, ".."),
             NodeKind::Wildcard => write!(f, "_"),
             NodeKind::Closure { closure } => write!(f, "{}", closure),
         }

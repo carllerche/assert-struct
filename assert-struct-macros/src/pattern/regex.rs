@@ -2,11 +2,9 @@
 //!
 //! Handles regex patterns (=~ r"pattern") and Like trait patterns (=~ expr)
 
-use std::fmt;
 use syn::{Token, parse::Parse};
 
 use crate::parse::next_node_id;
-use crate::pattern::expr_to_string;
 
 /// Regex pattern: =~ "pattern" - string literal optimized at compile time
 #[cfg(feature = "regex")]
@@ -72,19 +70,5 @@ impl Parse for PatternLike {
             node_id: next_node_id(),
             expr,
         })
-    }
-}
-
-#[cfg(feature = "regex")]
-impl fmt::Display for PatternRegex {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, r#"=~ r"{}""#, self.pattern)
-    }
-}
-
-#[cfg(feature = "regex")]
-impl fmt::Display for PatternLike {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "=~ {}", expr_to_string(&self.expr))
     }
 }

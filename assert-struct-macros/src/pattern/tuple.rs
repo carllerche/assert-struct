@@ -2,7 +2,6 @@
 //!
 //! Handles raw tuple patterns: (10, 20), (> 10, < 30)
 
-use std::fmt;
 use syn::{
     Token,
     parse::{Parse, ParseStream},
@@ -125,37 +124,5 @@ impl TupleElement {
         }
 
         Ok(elements)
-    }
-}
-
-impl fmt::Display for PatternTuple {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "(")?;
-        for (i, elem) in self.elements.iter().enumerate() {
-            if i > 0 {
-                write!(f, ", ")?;
-            }
-            write!(f, "{}", elem)?;
-        }
-        write!(f, ")")
-    }
-}
-
-impl fmt::Display for TupleElement {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TupleElement::Positional(pattern) => {
-                write!(f, "{}", pattern)
-            }
-            TupleElement::Indexed(boxed_field_assertion) => {
-                let field_assertion = boxed_field_assertion.as_ref();
-                let operations = &field_assertion.operations;
-                let pattern = &field_assertion.pattern;
-
-                // For indexed tuple elements, just display the operations followed by the pattern
-                // The operations will include the index (as UnnamedField or in a chain)
-                write!(f, "{}: {}", operations, pattern)
-            }
-        }
     }
 }

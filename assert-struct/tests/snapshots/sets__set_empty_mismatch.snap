@@ -1,0 +1,9 @@
+---
+source: assert-struct/tests/sets.rs
+expression: message
+---
+error: assert_struct! failed
+ --> assert-struct/tests/sets_errors/empty_mismatch.rs:6:27
+  |
+6 |     assert_struct!(items, #()); // expected empty but has 1 element
+  |                           ^ set pattern mismatch (exact), got 1 element(s)

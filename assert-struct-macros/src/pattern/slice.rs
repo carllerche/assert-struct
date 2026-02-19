@@ -2,7 +2,6 @@
 //!
 //! Handles slice patterns: [1, 2, 3], [> 0, < 10]
 
-use std::fmt;
 use syn::{Token, parse::Parse};
 
 use crate::parse::next_node_id;
@@ -14,19 +13,6 @@ pub(crate) struct PatternSlice {
     pub node_id: usize,
     pub span: proc_macro2::Span,
     pub elements: Vec<Pattern>,
-}
-
-impl fmt::Display for PatternSlice {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[")?;
-        for (i, elem) in self.elements.iter().enumerate() {
-            if i > 0 {
-                write!(f, ", ")?;
-            }
-            write!(f, "{}", elem)?;
-        }
-        write!(f, "]")
-    }
 }
 
 impl Parse for PatternSlice {

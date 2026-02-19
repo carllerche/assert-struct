@@ -33,6 +33,7 @@ Focus on clean design, good architecture, and comprehensive functionality rather
 - **Regex patterns**: `=~ r"pattern"` for string matching (feature-gated)
 - **Like trait**: `=~ expr` for flexible pattern matching with variables/expressions
 - **Slice patterns**: Element-wise patterns for Vec fields `[> 0, < 10, == 5]`
+- **Set patterns**: Unordered collection matching `#(1, 2, 3)` or `#(> 0, < 10, ..)`
 - **Index operations**: Direct indexing into collections `values[0]: 10`, `matrix[0][1]: 2`
 - **Enum support**: Full support for Option, Result, and custom enums (all variant types)
 - **Tuple support**: Multi-field tuples with advanced patterns `(> 10, < 30)`

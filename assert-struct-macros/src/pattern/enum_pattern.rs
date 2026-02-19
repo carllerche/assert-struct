@@ -2,11 +2,9 @@
 //!
 //! Handles enum tuple patterns: Some(42), Event::Click(>= 0, < 100), Ok(> 0)
 
-use std::fmt;
 use syn::parse::{Parse, ParseStream};
 
 use crate::parse::next_node_id;
-use crate::pattern::path_to_string;
 use crate::pattern::tuple::TupleElement;
 
 /// Enum tuple pattern: Some(42), Event::Click(>= 0, < 100), or Status::Active
@@ -48,22 +46,5 @@ impl Parse for PatternEnum {
             path,
             elements,
         })
-    }
-}
-
-impl fmt::Display for PatternEnum {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", path_to_string(&self.path))?;
-        if !self.elements.is_empty() {
-            write!(f, "(")?;
-            for (i, elem) in self.elements.iter().enumerate() {
-                if i > 0 {
-                    write!(f, ", ")?;
-                }
-                write!(f, "{}", elem)?;
-            }
-            write!(f, ")")?;
-        }
-        Ok(())
     }
 }

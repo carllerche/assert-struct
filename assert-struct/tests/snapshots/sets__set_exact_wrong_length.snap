@@ -1,0 +1,9 @@
+---
+source: assert-struct/tests/sets.rs
+expression: message
+---
+error: assert_struct! failed
+ --> assert-struct/tests/sets_errors/exact_wrong_length.rs:6:27
+  |
+6 |     assert_struct!(items, #(1, 2)); // too few patterns, no rest
+  |                           ^ set pattern mismatch (exact), got 3 element(s)
