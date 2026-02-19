@@ -9,6 +9,7 @@ mod enum_pattern;
 mod field;
 mod map;
 mod range;
+mod set;
 mod simple;
 mod slice;
 mod string;
@@ -26,6 +27,7 @@ pub(crate) use enum_pattern::PatternEnum;
 pub(crate) use field::{FieldAssertion, FieldOperation};
 pub(crate) use map::PatternMap;
 pub(crate) use range::PatternRange;
+pub(crate) use set::PatternSet;
 pub(crate) use simple::PatternSimple;
 pub(crate) use slice::PatternSlice;
 pub(crate) use string::PatternString;
@@ -54,6 +56,7 @@ pub(crate) enum Pattern {
     Enum(PatternEnum),
     Tuple(PatternTuple),
     Slice(PatternSlice),
+    Set(PatternSet),
     Comparison(PatternComparison),
     Range(PatternRange),
     #[cfg(feature = "regex")]
@@ -83,6 +86,7 @@ impl Pattern {
             Pattern::Enum(PatternEnum { path, .. }) => Some(path.span()),
             Pattern::Tuple(PatternTuple { .. })
             | Pattern::Slice(PatternSlice { .. })
+            | Pattern::Set(PatternSet { .. })
             | Pattern::Wildcard(PatternWildcard { .. })
             | Pattern::Map(PatternMap { .. }) => None,
             Pattern::Closure(PatternClosure { closure, .. }) => Some(closure.span()),
@@ -213,6 +217,7 @@ impl Pattern {
             }
             Pattern::Tuple(PatternTuple { span, .. })
             | Pattern::Slice(PatternSlice { span, .. })
+            | Pattern::Set(PatternSet { span, .. })
             | Pattern::Map(PatternMap { span, .. }) => {
                 let start = span.start();
                 let end = span.end();
@@ -277,6 +282,12 @@ impl Parse for Pattern {
             }
 
             return Err(input.error("expected `==` or `=~` pattern"));
+        }
+
+        // Set pattern for unordered collection matching
+        // Example: `#(1, 2, 3)` or `#(> 0, < 10, ..)`
+        if input.peek(Token![#]) && input.peek2(syn::token::Paren) {
+            return Ok(Pattern::Set(input.parse()?));
         }
 
         // Map patterns for map-like structures using duck typing
@@ -374,6 +385,7 @@ impl fmt::Display for Pattern {
             Pattern::Wildcard(p) => write!(f, "{}", p),
             Pattern::Closure(p) => write!(f, "{}", p),
             Pattern::Map(p) => write!(f, "{}", p),
+            Pattern::Set(p) => write!(f, "{}", p),
         }
     }
 }

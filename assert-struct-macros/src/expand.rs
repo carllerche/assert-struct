@@ -3,7 +3,7 @@ mod nodes;
 use crate::AssertStruct;
 use crate::pattern::{
     ComparisonOp, FieldAssertion, FieldOperation, Pattern, PatternClosure, PatternComparison,
-    PatternEnum, PatternMap, PatternRange, PatternSimple, PatternSlice, PatternString,
+    PatternEnum, PatternMap, PatternRange, PatternSet, PatternSimple, PatternSlice, PatternString,
     PatternStruct, PatternTuple, PatternWildcard, TupleElement,
 };
 #[cfg(feature = "regex")]
@@ -119,6 +119,10 @@ fn expand_pattern_assertion(value_expr: &TokenStream, pattern: &Pattern) -> Toke
         Pattern::Map(map_pattern) => {
             // Generate map assertion with error collection
             expand_map_assertion(value_expr, map_pattern)
+        }
+        Pattern::Set(set_pattern) => {
+            // Generate set assertion with backtracking
+            expand_set_assertion(value_expr, set_pattern)
         }
     }
 }
@@ -731,6 +735,59 @@ fn expand_map_assertion(value_expr: &TokenStream, pattern: &PatternMap) -> Token
     quote! {
         #len_check
         #(#key_value_assertions)*
+    }
+}
+
+/// Generate set assertion using backtracking to match patterns in any order.
+///
+/// Each element pattern becomes a predicate closure that shadows `__report` with a
+/// probe report, allowing the existing assertion code to be reused unchanged. The
+/// runtime `set_match` function owns the length check and backtracking algorithm.
+fn expand_set_assertion(value_expr: &TokenStream, pattern: &PatternSet) -> TokenStream {
+    let elements = &pattern.elements;
+    let rest = pattern.rest;
+    let node_ident = expand_pattern_node_ident(pattern.node_id);
+
+    // Generate one named predicate binding per element pattern.
+    // Each closure:
+    //   1. Looks up the element by index from __set_coll (captured by ref)
+    //   2. Shadows __report with a fresh probe report
+    //   3. Runs the generated assertion (which writes to the local __report)
+    //   4. Returns true iff no errors were pushed (i.e. the pattern matched)
+    let pred_names: Vec<_> = (0..elements.len())
+        .map(|i| quote::format_ident!("__set_pred_{}", i))
+        .collect();
+
+    let pred_defs: Vec<TokenStream> = elements
+        .iter()
+        .zip(pred_names.iter())
+        .map(|(elem, name)| {
+            let assertion = expand_pattern_assertion(&quote! { __set_elem }, elem);
+            quote! {
+                let #name = |__set_idx: usize| -> bool {
+                    let __set_elem = __set_coll[__set_idx];
+                    #[allow(unused_mut)]
+                    let mut __report = ::assert_struct::__macro_support::ErrorReport::new_probe();
+                    #assertion
+                    __report.is_empty()
+                };
+            }
+        })
+        .collect();
+
+    quote! {
+        {
+            let __set_coll: ::std::vec::Vec<_> = (&(#value_expr)).into_iter().collect();
+            #(#pred_defs)*
+            let __set_preds: &[&dyn ::std::ops::Fn(usize) -> bool] = &[#(&#pred_names),*];
+            ::assert_struct::__macro_support::set_match(
+                __set_coll.len(),
+                #rest,
+                __set_preds,
+                &mut __report,
+                &#node_ident,
+            );
+        }
     }
 }
 

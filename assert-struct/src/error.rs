@@ -165,6 +165,10 @@ pub enum NodeKind {
     Slice {
         items: &'static [&'static PatternNode],
     },
+    Set {
+        items: &'static [&'static PatternNode],
+        rest: bool,
+    },
     Tuple {
         items: &'static [&'static PatternNode],
     },
@@ -238,6 +242,17 @@ impl ErrorReport {
         }
     }
 
+    /// Create a disposable probe report used during set-pattern backtracking.
+    /// The report is never displayed; callers check `is_empty()` to determine
+    /// whether a trial pattern assertion succeeded.
+    pub fn new_probe() -> Self {
+        ErrorReport {
+            errors: Vec::new(),
+            abs_path: PathBuf::new(),
+            rel_path: String::new(),
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.errors.is_empty()
     }
@@ -282,6 +297,13 @@ fn error_label(error: &ErrorContext) -> String {
                     "expected slice with {} {}, got {}",
                     n, suffix, error.actual_value
                 )
+            }
+        }
+        NodeKind::Set { rest, .. } => {
+            if *rest {
+                format!("set pattern mismatch, got {}", error.actual_value)
+            } else {
+                format!("set pattern mismatch (exact), got {}", error.actual_value)
             }
         }
         NodeKind::Closure { .. } => format!(
@@ -376,6 +398,7 @@ impl fmt::Display for PatternNode {
         match &self.kind {
             NodeKind::Struct { name, .. } => write!(f, "{} {{ ... }}", name),
             NodeKind::Slice { .. } => write!(f, "[...]"),
+            NodeKind::Set { .. } => write!(f, "#(...)"),
             NodeKind::Tuple { items } => write!(f, "({})", ".., ".repeat(items.len())),
             NodeKind::Map { entries } => write!(f, "#{{ {} entries }}", entries.len()),
             NodeKind::EnumVariant { path, args } => {

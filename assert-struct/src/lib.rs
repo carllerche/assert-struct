@@ -740,6 +740,74 @@ pub mod __macro_support {
     {
         predicate(value)
     }
+
+    /// Runtime helper for the set pattern `#(...)`.
+    ///
+    /// Checks that `n_elements` satisfies the length constraint, then uses backtracking
+    /// to find a 1-to-1 assignment of patterns to elements. Each predicate returns `true`
+    /// if the element at the given index matches its pattern.
+    ///
+    /// On failure, pushes exactly one error to `report`.
+    pub fn set_match(
+        n_elements: usize,
+        rest: bool,
+        predicates: &[&dyn Fn(usize) -> bool],
+        report: &mut ErrorReport,
+        node: &'static PatternNode,
+    ) {
+        let n_patterns = predicates.len();
+
+        // Length check
+        let length_ok = if rest {
+            n_elements >= n_patterns
+        } else {
+            n_elements == n_patterns
+        };
+
+        if !length_ok {
+            let expected_str = if rest {
+                format!("at least {} element(s)", n_patterns)
+            } else {
+                format!("{} element(s)", n_patterns)
+            };
+            report.push(
+                node,
+                format!("{} element(s)", n_elements),
+                Some(expected_str),
+            );
+            return;
+        }
+
+        // Backtracking assignment
+        let mut matched = vec![false; n_elements];
+        if !set_backtrack(predicates, &mut matched, 0) {
+            report.push(
+                node,
+                format!("{} element(s)", n_elements),
+                None,
+            );
+        }
+    }
+
+    fn set_backtrack(
+        predicates: &[&dyn Fn(usize) -> bool],
+        matched: &mut [bool],
+        pattern_idx: usize,
+    ) -> bool {
+        if pattern_idx == predicates.len() {
+            return true;
+        }
+        for i in 0..matched.len() {
+            if !matched[i] && predicates[pattern_idx](i) {
+                matched[i] = true;
+                if set_backtrack(predicates, matched, pattern_idx + 1) {
+                    return true;
+                }
+                matched[i] = false;
+            }
+        }
+        false
+    }
 }
 
 /// A trait for pattern matching, similar to `PartialEq` but for flexible matching.

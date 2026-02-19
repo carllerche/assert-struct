@@ -5,8 +5,8 @@
 
 use crate::pattern::{
     ComparisonOp, Pattern, PatternClosure, PatternComparison, PatternEnum, PatternMap,
-    PatternRange, PatternSimple, PatternSlice, PatternString, PatternStruct, PatternTuple,
-    PatternWildcard, TupleElement,
+    PatternRange, PatternSet, PatternSimple, PatternSlice, PatternString, PatternStruct,
+    PatternTuple, PatternWildcard, TupleElement,
 };
 #[cfg(feature = "regex")]
 use crate::pattern::{PatternLike, PatternRegex};
@@ -36,7 +36,8 @@ pub(super) fn generate_pattern_nodes(
         | Pattern::Range(PatternRange { node_id, .. })
         | Pattern::Wildcard(PatternWildcard { node_id })
         | Pattern::Closure(PatternClosure { node_id, .. })
-        | Pattern::Map(PatternMap { node_id, .. }) => *node_id,
+        | Pattern::Map(PatternMap { node_id, .. })
+        | Pattern::Set(PatternSet { node_id, .. }) => *node_id,
         #[cfg(feature = "regex")]
         Pattern::Regex(PatternRegex { node_id, .. })
         | Pattern::Like(PatternLike { node_id, .. }) => *node_id,
@@ -344,6 +345,52 @@ pub(super) fn generate_pattern_nodes(
                         kind: ::assert_struct::__macro_support::NodeKind::Struct {
                             name: #name_str,
                             fields: &[#(#field_entries),*],
+                        },
+                        parent: #parent_ref,
+                        line_start: #line_start,
+                        col_start: #col_start,
+                        line_end: #line_end,
+                        col_end: #col_end,
+                    }
+                }
+            }
+        }
+        Pattern::Set(PatternSet { elements, rest, .. }) => {
+            let child_refs: Vec<TokenStream> = elements
+                .iter()
+                .map(|elem| generate_pattern_nodes(elem, node_defs, Some(&node_ident)))
+                .collect();
+
+            if *rest {
+                quote! {
+                    ::assert_struct::__macro_support::PatternNode {
+                        kind: ::assert_struct::__macro_support::NodeKind::Set {
+                            items: &[
+                                #(&#child_refs,)*
+                                &::assert_struct::__macro_support::PatternNode {
+                                    kind: ::assert_struct::__macro_support::NodeKind::Rest,
+                                    parent: Some(&#node_ident),
+                                    line_start: 0,
+                                    col_start: 0,
+                                    line_end: 0,
+                                    col_end: 0,
+                                }
+                            ],
+                            rest: true,
+                        },
+                        parent: #parent_ref,
+                        line_start: #line_start,
+                        col_start: #col_start,
+                        line_end: #line_end,
+                        col_end: #col_end,
+                    }
+                }
+            } else {
+                quote! {
+                    ::assert_struct::__macro_support::PatternNode {
+                        kind: ::assert_struct::__macro_support::NodeKind::Set {
+                            items: &[#(&#child_refs),*],
+                            rest: false,
                         },
                         parent: #parent_ref,
                         line_start: #line_start,
