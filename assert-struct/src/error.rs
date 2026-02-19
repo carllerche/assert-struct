@@ -155,15 +155,10 @@ pub struct PatternNode {
 /// The kind of pattern node.
 #[derive(Debug)]
 pub enum NodeKind {
-    // Structural patterns
-    Struct {
-        name: &'static str,
-        fields: &'static [(&'static str, &'static PatternNode)],
-    },
-
     // Collection patterns
     Slice {
         items: &'static [&'static PatternNode],
+        rest: bool,
     },
     Set {
         items: &'static [&'static PatternNode],
@@ -174,6 +169,12 @@ pub enum NodeKind {
     },
     Map {
         entries: &'static [(&'static str, &'static PatternNode)],
+        rest: bool,
+    },
+    Struct {
+        name: &'static str,
+        fields: &'static [(&'static str, &'static PatternNode)],
+        rest: bool,
     },
 
     // Enum patterns
@@ -201,7 +202,6 @@ pub enum NodeKind {
     },
 
     // Special
-    Rest,
     Wildcard,
     Closure {
         closure: &'static str,
@@ -286,9 +286,8 @@ fn error_label(error: &ErrorContext) -> String {
             "expected variant {}, got {}",
             error.error_node, error.actual_value,
         ),
-        NodeKind::Slice { items } => {
-            let has_rest = items.iter().any(|item| matches!(item.kind, NodeKind::Rest));
-            if has_rest {
+        NodeKind::Slice { items, rest } => {
+            if *rest {
                 format!("slice pattern mismatch, got {}", error.actual_value)
             } else {
                 let n = items.len();
@@ -400,7 +399,7 @@ impl fmt::Display for PatternNode {
             NodeKind::Slice { .. } => write!(f, "[...]"),
             NodeKind::Set { .. } => write!(f, "#(...)"),
             NodeKind::Tuple { items } => write!(f, "({})", ".., ".repeat(items.len())),
-            NodeKind::Map { entries } => write!(f, "#{{ {} entries }}", entries.len()),
+            NodeKind::Map { entries, .. } => write!(f, "#{{ {} entries }}", entries.len()),
             NodeKind::EnumVariant { path, args } => {
                 if args.is_some() {
                     write!(f, "{}(...)", path)
@@ -413,7 +412,6 @@ impl fmt::Display for PatternNode {
             NodeKind::Range { pattern } => write!(f, "{}", pattern),
             NodeKind::Regex { pattern } => write!(f, "=~ {}", pattern),
             NodeKind::Like { expr } => write!(f, "=~ {}", expr),
-            NodeKind::Rest => write!(f, ".."),
             NodeKind::Wildcard => write!(f, "_"),
             NodeKind::Closure { closure } => write!(f, "{}", closure),
         }
