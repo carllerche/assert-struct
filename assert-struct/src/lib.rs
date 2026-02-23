@@ -31,6 +31,7 @@
 //!   - [Smart Pointers](#smart-pointers)
 //! - [Error Messages](#error-messages)
 //! - [Advanced Usage](#advanced-usage)
+//!   - [Dynamic Value Types](#dynamic-value-types)
 //!
 //! # Quick Start
 //!
@@ -754,6 +755,70 @@
 //! Method calls are also shown in the field path for clear debugging.
 //!
 //! # Advanced Usage
+//!
+//! ## Mixing Structural and Operator Patterns
+//!
+//! Structural patterns and operator patterns are complementary — within a single
+//! `assert_struct!` call, use whichever is most concise for each field. The goal is
+//! the shortest assertion that expresses what you actually care about.
+//!
+//! Structural patterns (`SomeType { field: value, .. }`) are great for navigating
+//! nested types. But for a specific field, writing out the full structural equivalent
+//! can be far more verbose than a simple `==` or `=~` check — especially when the
+//! field's type implements `PartialEq` or `PartialOrd` with a simpler type.
+//!
+//! For example, consider a `Value` enum (similar to `serde_json::Value`) that can
+//! hold different primitive types and implements `PartialEq` with them:
+//!
+//! ```rust
+//! # use assert_struct::assert_struct;
+//! # #[derive(Debug, PartialEq)]
+//! # enum Value { Bool(bool), Int(i64), Text(String) }
+//! # impl PartialEq<bool> for Value {
+//! #     fn eq(&self, other: &bool) -> bool {
+//! #         match self { Value::Bool(b) => b == other, _ => false }
+//! #     }
+//! # }
+//! # impl PartialEq<i64> for Value {
+//! #     fn eq(&self, other: &i64) -> bool {
+//! #         match self { Value::Int(n) => n == other, _ => false }
+//! #     }
+//! # }
+//! # impl PartialEq<&str> for Value {
+//! #     fn eq(&self, other: &&str) -> bool {
+//! #         match self { Value::Text(s) => s == *other, _ => false }
+//! #     }
+//! # }
+//! # impl PartialOrd<i64> for Value {
+//! #     fn partial_cmp(&self, other: &i64) -> Option<std::cmp::Ordering> {
+//! #         match self { Value::Int(n) => n.partial_cmp(other), _ => None }
+//! #     }
+//! # }
+//! # #[derive(Debug)]
+//! # struct Filter { column: usize, value: Value }
+//! # #[derive(Debug)]
+//! # struct Query { table: String, filter: Option<Filter> }
+//! # let query = Query {
+//! #     table: "users".to_string(),
+//! #     filter: Some(Filter { column: 2, value: Value::Text("alice".to_string()) }),
+//! # };
+//! // Structural matching navigates the outer types; operator pattern handles Value
+//! assert_struct!(query, Query {
+//!     table: "users",
+//!     filter: Some(_ {
+//!         column: 2,
+//!         value: == "alice",  // much shorter than Value::Text("alice".to_string())
+//!     }),
+//! });
+//! ```
+//!
+//! The `== "alice"` works because `Value: PartialEq<&str>`. The same applies to
+//! comparison operators — if `Value: PartialOrd<i64>`, you can write `value: > 0i64`
+//! instead of matching the variant.
+//!
+//! The general rule: if writing the structural pattern for a field requires naming
+//! internal types or constructing wrapper values, check whether an operator pattern
+//! expresses the same intent more directly.
 //!
 //! ## Pattern Composition
 //!

@@ -1,0 +1,483 @@
+assert-struct LLM Reference
+
+This file is structured for LLM consumption: dense, exhaustive, no motivational prose.
+
+
+MACRO SIGNATURE
+
+    assert_struct!(expr, pattern);
+
+expr is any Rust expression. pattern is one of the forms described below.
+Panics on mismatch with a formatted error showing field path and pattern location.
+
+
+WHEN TO USE assert_struct!
+
+Use whichever form produces fewer characters. assert_struct! wins when asserting
+multiple fields or using patterns not available in assert_eq!. assert_eq! wins
+when a constructor or single field access is shorter.
+
+    // assert_eq! wins — constructor is shorter than enumerating fields
+    assert_eq!(result, Foo::default());
+
+    // assert_struct! wins — one call vs multiple assert_eq! calls
+    assert_struct!(foo, _ { x: 1, y: 2 });
+    // vs.
+    assert_eq!(foo.x, 1); assert_eq!(foo.y, 2);
+
+    // assert_eq! wins — single field
+    assert_eq!(foo.x, 1);
+
+
+STRATEGY: WRITE THE MOST SUCCINCT PATTERN
+
+Don't write the full structural pattern when an operator expression is shorter.
+Operator patterns (==, !=, <, >, =~) go through PartialEq, PartialOrd, and Like,
+so they work whenever the field type implements those traits for the RHS type.
+
+    // DON'T — verbose structural pattern
+    field: Value::Int(42)
+    field: Value::Text("alice")     // string literal works here, but still verbose
+    field: Status::Code(200)
+
+    // DO — operator pattern is shorter and requires no imports
+    field: == 42i64
+    field: == "alice"
+    field: == 200
+
+Note: method calls (.to_string(), etc.) are NOT valid in pattern position (no leading
+operator). Only plain values, literals, and nested patterns are valid there. Method
+calls are only valid on the RHS of an operator: field: == some_fn().
+
+Mix structural and operator patterns freely within one call — structural for
+navigating nested types, operators for the leaf values:
+
+    // DON'T
+    assert_struct!(q, Query {
+        filter: Some(_ { value: Value::Text("alice"), .. }),
+    });
+
+    // DO
+    assert_struct!(q, Query {
+        filter: Some(_ { value: == "alice", .. }),
+    });
+
+
+PATTERN GRAMMAR (informal EBNF)
+
+    pattern         ::= struct_pat | enum_pat | slice_pat | set_pat | map_pat
+                      | tuple_pat | comparison | range | equality | regex
+                      | method_call | index_op | deref | closure | wildcard | expr
+
+    struct_pat      ::= (TypePath | "_") "{" field_assertion* ".."? "}"
+    field_assertion ::= field_lhs ":" pattern ","
+    field_lhs       ::= IDENT ("." IDENT)*
+                      | "*"+ IDENT
+                      | IDENT ("[" expr "]")+ ("." IDENT)?
+                      | IDENT "." IDENT "(" args? ")"
+                      | IDENT "[" expr "]" "." IDENT "(" args? ")"
+
+    enum_pat        ::= path                                    (unit variant)
+                      | path "(" pattern ("," pattern)* ")"    (tuple variant)
+                      | path "{" field_assertion* ".."? "}"    (struct variant)
+
+    slice_pat       ::= "[" (pattern ",")* ".."? (pattern ",")* "]"
+    set_pat         ::= "#(" (pattern ",")* ".."? ")"
+    map_pat         ::= "#{" (string_lit ":" pattern ",")* ".."? "}"
+    tuple_pat       ::= "(" (pattern | index_method) ("," (pattern | index_method))* ")"
+    index_method    ::= INT_LIT "." IDENT "(" args? ")" ":" pattern
+
+    comparison      ::= (">" | ">=" | "<" | "<=") expr
+    equality        ::= ("==" | "!=") expr
+    range           ::= expr? ".." "="? expr?                  (Rust range syntax)
+    regex           ::= "=~" (raw_string_lit | expr)           (raw str = compile-time; expr = Like trait)
+    deref           ::= "*"+ field_lhs                         (field assertions only)
+    closure         ::= ("|" IDENT "|" | "move" "|" IDENT "|") bool_expr
+    wildcard        ::= "_"
+
+
+STRUCT PATTERNS
+
+Named struct — partial matching requires ".."
+
+    assert_struct!(value, MyType {
+        field_a: 42,
+        field_b: "hello",
+        ..          // required for partial; omit only if asserting ALL fields
+    });
+
+Wildcard struct — avoids type import; ".." is optional, matching is always partial
+
+    assert_struct!(value, _ {
+        field_a: 42,
+        field_b: > 0,
+    });
+
+Nested structs
+
+    assert_struct!(value, Outer {
+        inner: Inner {
+            x: 1,
+            ..
+        },
+        other: _ {
+            y: 2,
+        },
+        ..
+    });
+
+Nested field access shorthand (dot-path as field LHS)
+
+    assert_struct!(value, MyType {
+        user.profile.age: >= 18,
+        user.profile.name: "alice",
+        ..
+    });
+    // Equivalent to nesting User { Profile { age: >= 18, .. }, .. }
+
+
+COMPARISON PATTERNS
+
+    field: > 10
+    field: >= 10
+    field: < 100
+    field: <= 100
+
+RHS is any expression. Requires PartialOrd. Works inside any compound pattern.
+
+
+EQUALITY PATTERNS
+
+    field: == 42      // explicit equality (PartialEq)
+    field: != 0       // not-equal
+
+Plain "field: 42" also asserts equality (implicit ==).
+
+
+RANGE PATTERNS
+
+Rust native range syntax. Requires PartialOrd on value type.
+
+    field: 18..=65      // inclusive both ends
+    field: 0..100       // exclusive upper
+    field: 18..         // no upper bound
+    field: ..100        // no lower bound (exclusive)
+    field: ..=100       // no lower bound (inclusive)
+    field: ..           // any value
+    field: 'A'..='Z'    // char range
+    field: 0.0..100.0   // float range
+
+
+REGEX / LIKE PATTERNS
+
+    // Requires regex feature (on by default). Compiled at macro expansion time.
+    field: =~ r"^\d{4}-\d{2}-\d{2}$"
+
+    // Any expression implementing Like<T>. Works without regex feature. Runtime evaluation.
+    field: =~ my_pattern_var
+    field: =~ build_pattern()
+
+NON-OBVIOUS: "=~ r\"...\"" (raw string literal) and "=~ expr" (any expression) are two
+separate code paths. The raw string compiles the regex at macro time (zero runtime cost);
+expressions use the Like trait at runtime.
+
+
+ENUM PATTERNS
+
+Option
+
+    field: None
+    field: Some(42)
+    field: Some(> 30)
+    field: Some("text")         // string literal auto-coerced, no .to_string()
+    field: Some([1, 2, 3])
+    field: Some(Inner { x: 1, .. })
+
+Result
+
+    field: Ok(42)
+    field: Ok(> 0)
+    field: Err("message")
+    field: Err(ErrorType { code: 500, .. })
+
+Custom enums — unit variant
+
+    field: Status::Active
+    field: Status::Pending
+
+Custom enums — tuple variant
+
+    field: Event::Click(x, y)
+    field: Event::Click(>= 0, < 1920)
+    field: Message::Data("meta", [> 0, < 10])
+
+Custom enums — struct variant
+
+    field: Status::Error { code: 500, .. }
+    field: Status::Error { code: > 400, message: =~ r"timeout" }
+
+Nested enums
+
+    field: Outer::Wrap(Inner::A(42))
+    field: Some(Status::Active)
+    field: Ok(Some(> 0))
+
+NON-OBVIOUS: Enum patterns generate match expressions (not let bindings), so they are
+exhaustive — any unmatched variant panics with a useful message.
+
+
+SLICE / VEC PATTERNS (position-based, length-checked)
+
+    field: []                           // exactly empty
+    field: [1, 2, 3]                    // exactly three elements
+    field: [> 0, < 10, == 5]            // per-element patterns
+    field: [1, 2, ..]                   // first two elements, rest ignored
+    field: [.., 4, 5]                   // last two elements
+    field: [1, .., 5]                   // first and last
+    field: [..]                         // any slice (length not checked)
+    field: ["a", "b"]                   // string literals
+    field: [Some(1), None, Some(> 0)]   // enums inside slices
+    field: [[1, 2], [3, 4]]             // nested slices
+
+Constraint: at most one ".." per slice pattern. Length is enforced when ".." is absent.
+
+
+SET PATTERNS (unordered, backtracking)
+
+    field: #()                      // exactly empty
+    field: #(1, 2, 3)               // exactly these elements, any order
+    field: #(> 0, < 10, >= 50)      // per-element patterns, any order
+    field: #(1, 2, ..)              // contains at least 1 and 2 (any order)
+    field: #(..)                    // any collection
+    field: #(None, Some(> 0), ..)
+    field: #(_ { kind: "click", .. }, _ { kind: "hover", .. }, ..)
+
+NON-OBVIOUS: Uses backtracking to match elements. Each pattern is tried against remaining
+unmatched elements. With "..", extra elements are allowed.
+
+
+MAP PATTERNS (duck-typed: needs len() and get())
+
+    field: #{}                      // exactly empty
+    field: #{ "k": "v" }            // exact match (length enforced)
+    field: #{ "k": "v", .. }        // partial match (extra keys allowed)
+    field: #{ "count": > 40, "score": >= 90, .. }
+    field: #{ "email": =~ r".*@.*\.com", .. }
+    field: #{ "item": NestedType { x: 1, .. }, .. }
+
+Keys must be string literals. Values accept any pattern.
+
+
+TUPLE PATTERNS
+
+    field: (1, 2)
+    field: (> 10, < 30)
+    field: ("alice", 30, true)
+    field: (1, _, 3)                // _ ignores element
+    field: (Some(1), None)
+
+Tuple index method calls (inside tuple patterns):
+Syntax — INT_LITERAL "." method_name "(" args? ")" ":" pattern
+
+    field: (0.len(): 5, 1.len(): > 3)
+    field: (0.starts_with("pre"): true, _)
+    field: (0.contains(&5): true, 1.is_some(): true)
+
+INT_LITERAL is the zero-based tuple index.
+
+
+METHOD CALL PATTERNS (as field assertions)
+
+    field.len(): 10
+    field.len(): > 5
+    field.is_empty(): false
+    field.contains("word"): true
+    field.get("key"): Some("value")
+    field.starts_with("pre"): true
+
+Syntax: IDENT "." IDENT "(" args? ")" ":" pattern as a field-level assertion.
+
+
+INDEX OPERATIONS (as field assertions)
+
+    field[0]: 42
+    field[0]: > 5
+    field[i]: pattern               // variable index
+    values[0][1]: 99                // nested indexing
+    items[0].name: "alice"          // index then field access
+    names[0].len(): 5               // index then method call
+
+
+DEREFERENCE PATTERNS (smart pointers: Box, Rc, Arc)
+
+    *boxed: 42
+    *rc_str: "hello"
+    *arc_val: > 50
+    **double_box: true
+
+Multiple "*" for multiple dereference levels.
+
+
+CLOSURE PATTERNS
+
+    field: |x| x > 5
+    field: |x| x.len() > 0 && x.starts_with("prefix")
+    field: move |x| x > threshold
+    field: |x| { let n = x * 2; n < 100 }
+
+Closure takes one parameter of the field's type and returns bool.
+true = pass, false = fail.
+
+
+WILDCARD PATTERN
+
+    field: _       // field must exist but any value passes
+
+In tuples: (1, _, 3) — ignores middle element.
+In slices: [1, _, 3] — ignores middle element.
+
+
+STRING LITERAL AUTO-COERCION
+
+String literals are automatically compared without .to_string() in all contexts:
+
+    field: "hello"
+    field: Some("text")
+    field: Ok("message")
+    field: ["a", "b", "c"]
+    field: #("x", "y")
+    field: #{ "key": "value" }
+    field: ("hello", "world")
+
+Works with both String and &str field types.
+
+
+NOT SUPPORTED — INVALID SYNTAX
+
+    // Method chaining on single field
+    field.method1().method2(): pattern          // INVALID
+
+    // Nested field path with method call
+    outer.inner.method(): pattern               // INVALID
+
+    // Multiple ".." in same struct
+    Type { .., field: x, .. }                  // INVALID — compile error
+
+    // Multiple ".." in same slice
+    [1, .., 3, ..]                             // INVALID
+
+    // "=~ r\"...\"" without regex feature — compile error
+    // Use "=~ expression" with Like trait instead
+
+
+FEATURE FLAGS
+
+    Feature   Default   Effect
+    regex     enabled   Enables "=~ r\"...\"" raw string regex syntax.
+                        Without it, only "=~ expr" (Like trait) works.
+
+    // Cargo.toml
+    assert-struct = "0.3"                                          // regex on
+    assert-struct = { version = "0.3", default-features = false }  // no regex
+
+
+THE LIKE TRAIT
+
+Like<T> is the trait powering "=~ expr". Implement for custom matchers.
+
+    use assert_struct::Like;
+
+    struct MyMatcher;
+    impl Like<String> for MyMatcher {
+        fn like(&self, other: &String) -> bool {
+            other.starts_with("expected-prefix")
+        }
+    }
+
+    assert_struct!(data, MyType {
+        field: =~ MyMatcher,
+        ..
+    });
+
+Built-in implementations: String and &str implement Like<&str> and Like<String>
+(pattern interpreted as regex); String and &str implement Like<regex::Regex>
+(pre-compiled regex). All built-in implementations require the regex feature.
+
+
+FULL COMPOSITION EXAMPLE
+
+    assert_struct!(response, Response {
+        // equality (implicit ==)
+        status: 200,
+
+        // comparison
+        latency_ms: < 500,
+
+        // explicit equality / inequality
+        retry_count: == 0,
+        error_code: != 404,
+
+        // range
+        score: 0..=100,
+
+        // regex (regex feature)
+        request_id: =~ r"^req-[a-f0-9]{8}$",
+
+        // nested struct
+        user: User {
+            id: > 0,
+            name: "alice",
+            age: >= 18,
+            active: true,
+            ..
+        },
+
+        // wildcard struct (no import needed)
+        config: _ {
+            timeout: > 0,
+            retries: 3,
+        },
+
+        // nested field shorthand
+        user.profile.city: "SF",
+
+        // Option / Result
+        cached_value: Some(> 0),
+        api_result: Ok("success"),
+
+        // custom enum
+        event: Event::Click(>= 0, < 1920),
+        state: Status::Active,
+
+        // slice (position-based)
+        top_scores: [> 90, > 85, > 80],
+
+        // slice with rest
+        tags: ["important", ..],
+
+        // set (unordered)
+        permissions: #("read", "write", ..),
+
+        // map
+        headers: #{ "content-type": =~ r"application/json", .. },
+
+        // tuple
+        dimensions: (> 0, > 0),
+
+        // method call
+        items.len(): > 0,
+
+        // index
+        items[0]: > 0,
+
+        // dereference
+        *boxed_count: >= 1,
+
+        // closure
+        raw_value: |v| v % 2 == 0,
+
+        // wildcard
+        internal_id: _,
+
+        ..
+    });
