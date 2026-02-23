@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.4.0] - 2026-02-22
 
+### Fixed
+- **Deref with equality pattern** - `*field: == value` now works correctly when the dereferenced type implements `PartialEq` against the value type (#110)
+
 ### Changed
 - **Anonymous struct patterns always partial** - `_ { field: value }` now always implies partial matching since the type is unknown, making `..` unnecessary boilerplate. Explicit `..` is still accepted for compatibility (#108)
 
