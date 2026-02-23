@@ -11,6 +11,24 @@ expr is any Rust expression. pattern is one of the forms described below.
 Panics on mismatch with a formatted error showing field path and pattern location.
 
 
+WHEN TO USE assert_struct!
+
+Use whichever form produces fewer characters. assert_struct! wins when asserting
+multiple fields or using patterns not available in assert_eq!. assert_eq! wins
+when a constructor or single field access is shorter.
+
+    // assert_eq! wins — constructor is shorter than enumerating fields
+    assert_eq!(result, Foo::default());
+
+    // assert_struct! wins — one call vs multiple assert_eq! calls
+    assert_struct!(foo, _ { x: 1, y: 2 });
+    // vs.
+    assert_eq!(foo.x, 1); assert_eq!(foo.y, 2);
+
+    // assert_eq! wins — single field
+    assert_eq!(foo.x, 1);
+
+
 STRATEGY: WRITE THE MOST SUCCINCT PATTERN
 
 Don't write the full structural pattern when an operator expression is shorter.
