@@ -214,8 +214,10 @@ fn expand_struct_wildcard_assertion(
             let base_field_access = quote! { (#value_expr).#field_name };
 
             let expr = if let Some(tail_ops) = field_operations.tail_operations() {
-                // Apply remaining operations after the field access
-                apply_field_operations(&base_field_access, &tail_ops)
+                // Wrap in & to match the reference context expected by apply_field_operations
+                // (which adds count+1 dereferences, accounting for one leading &)
+                let base_ref = quote! { &#base_field_access };
+                apply_field_operations(&base_ref, &tail_ops)
             } else {
                 // No additional operations, take a reference to the field for comparison
                 quote! { &#base_field_access }

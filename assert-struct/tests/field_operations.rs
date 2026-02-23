@@ -69,6 +69,31 @@ fn test_mixed_tuple_syntax() {
     });
 }
 
+#[derive(Debug)]
+struct Bar(u64);
+
+impl PartialEq<u64> for Bar {
+    fn eq(&self, other: &u64) -> bool {
+        self.0 == *other
+    }
+}
+
+#[derive(Debug)]
+struct WithBoxedBar {
+    foo: Box<Bar>,
+}
+
+#[test]
+fn test_deref_box_with_partial_eq() {
+    let val = WithBoxedBar {
+        foo: Box::new(Bar(42)),
+    };
+
+    assert_struct!(val, _ {
+        *foo: == 42u64,
+    });
+}
+
 // Error message tests using snapshot testing
 error_message_test!(
     "field_operations_errors/deref_field_mismatch.rs",
