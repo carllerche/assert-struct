@@ -158,6 +158,7 @@ assert_struct!(result, Result {
 
 - **[API Documentation](https://docs.rs/assert-struct)** - Complete API reference with examples
 - **Getting Started Guide** - See the main crate documentation
+- **[LLM Reference](assert-struct/LLM.txt)** - Compact syntax reference optimized for LLM consumption
 
 ## License
 

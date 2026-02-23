@@ -11,6 +11,40 @@ expr is any Rust expression. pattern is one of the forms described below.
 Panics on mismatch with a formatted error showing field path and pattern location.
 
 
+STRATEGY: WRITE THE MOST SUCCINCT PATTERN
+
+Don't write the full structural pattern when an operator expression is shorter.
+Operator patterns (==, !=, <, >, =~) go through PartialEq, PartialOrd, and Like,
+so they work whenever the field type implements those traits for the RHS type.
+
+    // DON'T — verbose structural pattern
+    field: Value::Int(42)
+    field: Value::Text("alice")     // string literal works here, but still verbose
+    field: Status::Code(200)
+
+    // DO — operator pattern is shorter and requires no imports
+    field: == 42i64
+    field: == "alice"
+    field: == 200
+
+Note: method calls (.to_string(), etc.) are NOT valid in pattern position (no leading
+operator). Only plain values, literals, and nested patterns are valid there. Method
+calls are only valid on the RHS of an operator: field: == some_fn().
+
+Mix structural and operator patterns freely within one call — structural for
+navigating nested types, operators for the leaf values:
+
+    // DON'T
+    assert_struct!(q, Query {
+        filter: Some(_ { value: Value::Text("alice"), .. }),
+    });
+
+    // DO
+    assert_struct!(q, Query {
+        filter: Some(_ { value: == "alice", .. }),
+    });
+
+
 PATTERN GRAMMAR (informal EBNF)
 
     pattern         ::= struct_pat | enum_pat | slice_pat | set_pat | map_pat
@@ -337,8 +371,8 @@ Like<T> is the trait powering "=~ expr". Implement for custom matchers.
 
     struct MyMatcher;
     impl Like<String> for MyMatcher {
-        fn matches(&self, value: &String) -> bool {
-            value.starts_with("expected-prefix")
+        fn like(&self, other: &String) -> bool {
+            other.starts_with("expected-prefix")
         }
     }
 
@@ -347,8 +381,9 @@ Like<T> is the trait powering "=~ expr". Implement for custom matchers.
         ..
     });
 
-Built-in implementations: &str and String implement Like<String> (substring match);
-Regex implements Like<String> and Like<str> when regex feature is enabled.
+Built-in implementations: String and &str implement Like<&str> and Like<String>
+(pattern interpreted as regex); String and &str implement Like<regex::Regex>
+(pre-compiled regex). All built-in implementations require the regex feature.
 
 
 FULL COMPOSITION EXAMPLE
