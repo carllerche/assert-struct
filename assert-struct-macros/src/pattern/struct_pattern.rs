@@ -23,7 +23,8 @@ impl Parse for PatternStruct {
     /// # Example Input
     /// ```text
     /// User { name: "Alice", age: >= 18, .. }
-    /// _ { name: "Alice", .. }  // wildcard struct
+    /// _ { name: "Alice" }      // wildcard struct (.. implied, never required)
+    /// _ { name: "Alice", .. }  // also valid - explicit .. is accepted
     /// ```
     ///
     /// Handles both named structs (with a path) and wildcard structs (starting with `_`).

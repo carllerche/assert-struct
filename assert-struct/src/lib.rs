@@ -382,8 +382,8 @@
 //! # ];
 //! // Assert that click and hover events are present, ignoring order and other events
 //! assert_struct!(events, #(
-//!     _ { kind: "click", value: > 0, .. },
-//!     _ { kind: "hover", .. },
+//!     _ { kind: "click", value: > 0 },
+//!     _ { kind: "hover" },
 //!     ..
 //! ));
 //! ```
@@ -668,17 +668,15 @@
 //! #     metadata: api::Metadata { timestamp: 1234567890, version: "1.0".to_string() }
 //! # };
 //! // No need to import User or Metadata types!
+//! // Wildcard patterns always do partial matching, so .. is never required.
 //! assert_struct!(response, _ {
 //!     user: _ {
 //!         id: 123,
 //!         name: "Alice",
-//!         ..
 //!     },
 //!     metadata: _ {
 //!         version: "1.0",
-//!         ..  // Ignore other metadata fields
 //!     },
-//!     ..
 //! });
 //! ```
 //!
@@ -701,11 +699,9 @@
 //! // Test deeply nested structures without imports
 //! assert_struct!(json_response, _ {
 //!     data: _ {
-//!         items: [_ { id: 1, value: "test", .. }],
+//!         items: [_ { id: 1, value: "test" }],
 //!         total: 1,
-//!         ..
 //!     },
-//!     ..
 //! });
 //! ```
 //!

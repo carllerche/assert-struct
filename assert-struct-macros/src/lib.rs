@@ -165,6 +165,7 @@ struct AssertStruct {
 /// - **Without `..`**: All struct fields must be specified in the pattern (exhaustive)
 /// - **With `..`**: Only specified fields are checked (partial matching)
 /// - **Multiple `..`**: Compilation error - only one rest pattern allowed per struct
+/// - **Wildcard structs (`_`)**: Always partial — `..` is never required and may be omitted
 ///
 /// ### Field Operation Precedence
 /// Field operations are applied in left-to-right order:
