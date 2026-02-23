@@ -63,7 +63,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dev-dependencies]
-assert-struct = "0.3"
+assert-struct = "0.4"
 ```
 
 Basic usage:

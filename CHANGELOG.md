@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-02-22
+
+### Fixed
+- **Deref with equality pattern** - `*field: == value` now works correctly when the dereferenced type implements `PartialEq` against the value type (#110)
+
+### Changed
+- **Anonymous struct patterns always partial** - `_ { field: value }` now always implies partial matching since the type is unknown, making `..` unnecessary boilerplate. Explicit `..` is still accepted for compatibility (#108)
+
+### Added
+- **LLM reference guide** - Compact syntax reference in `LLM.txt` optimized for LLM consumption (#109)
+- **Improved API documentation** - Expanded doc comments and examples in the main crate (#109)
+
 ## [0.3.1] - 2026-02-19
 
 ### Fixed
@@ -119,6 +131,7 @@ Initial release of assert-struct - a procedural macro for ergonomic structural a
 - Complete pattern reference in macro documentation
 - Comprehensive test coverage - 350+ tests across 29 test files
 
+[0.4.0]: https://github.com/carllerche/assert-struct/releases/tag/v0.4.0
 [0.3.1]: https://github.com/carllerche/assert-struct/releases/tag/v0.3.1
 [0.3.0]: https://github.com/carllerche/assert-struct/releases/tag/v0.3.0
 [0.2.0]: https://github.com/carllerche/assert-struct/releases/tag/v0.2.0
