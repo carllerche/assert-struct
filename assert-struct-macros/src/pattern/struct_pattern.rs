@@ -31,12 +31,12 @@ impl Parse for PatternStruct {
         let node_id = next_node_id();
 
         // Check if this is a wildcard struct pattern: _ { ... }
-        let (path, wildcard_span) = if input.peek(Token![_]) {
-            let underscore: Token![_] = input.parse()?;
-            (None, Some(underscore.span)) // wildcard has no path
+        let path = if input.peek(Token![_]) {
+            let _: Token![_] = input.parse()?;
+            None // wildcard has no path
         } else {
             // Named struct pattern: TypeName { ... }
-            (Some(input.parse::<syn::Path>()?), None)
+            Some(input.parse::<syn::Path>()?)
         };
 
         // Parse the braced contents
@@ -72,13 +72,10 @@ impl Parse for PatternStruct {
             }
         }
 
-        // Wildcard struct patterns must use rest pattern (..)
-        // to indicate partial matching
-        if path.is_none() && !rest {
-            return Err(syn::Error::new(
-                wildcard_span.unwrap(),
-                "Wildcard struct patterns must use '..' for partial matching",
-            ));
+        // Wildcard struct patterns always imply partial matching since the type
+        // is unknown, so .. is never required (but still accepted if written).
+        if path.is_none() {
+            rest = true;
         }
 
         Ok(PatternStruct {

@@ -121,8 +121,8 @@ struct AssertStruct {
 ///
 /// | Pattern | Syntax | Description | Constraints |
 /// |---------|--------|-------------|-------------|
-/// | **Wildcard Struct** | `value: _ { fields... }` | Match struct without naming type | Must use `..` for partial matching |
-/// | **Nested Wildcard** | `_ { field: _ { ... }, .. }` | Nested anonymous structs | Avoids importing nested types |
+/// | **Wildcard Struct** | `value: _ { fields... }` | Match struct without naming type | Always partial; `..` is optional |
+/// | **Nested Wildcard** | `_ { field: _ { ... } }` | Nested anonymous structs | Avoids importing nested types |
 ///
 /// ## Collection Patterns
 ///
