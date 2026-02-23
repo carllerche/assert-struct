@@ -32,15 +32,13 @@ fn test_wildcard_struct_simple() {
         count: 5,
     };
 
-    // Using wildcard pattern - no need to import Inner type
+    // Using wildcard pattern - no need to import Inner type, .. is not required
     assert_struct!(data, _ {
         inner: _ {
             value: 42,
             text: "hello",
-            ..
         },
         count: 5,
-        ..
     });
 }
 
@@ -63,13 +61,10 @@ fn test_wildcard_struct_nested() {
             inner: _ {
                 value: > 50,
                 text: "world",
-                ..
             },
             count: >= 10,
-            ..
         },
         enabled: true,
-        ..
     });
 }
 
@@ -87,10 +82,8 @@ fn test_wildcard_with_comparisons() {
         inner: _ {
             value: > 20,
             text: != "other",
-            ..
         },
         count: < 10,
-        ..
     });
 }
 
@@ -108,10 +101,8 @@ fn test_wildcard_with_method_calls() {
         inner: _ {
             text.len(): 11,
             text.contains("world"): true,
-            ..
         },
         count: > 0,
-        ..
     });
 }
 
@@ -128,16 +119,13 @@ fn test_wildcard_partial_matching() {
         enabled: false,
     };
 
-    // Only check specific fields, ignore the rest
+    // Only check specific fields, ignore the rest (.. is implicit for _ patterns)
     assert_struct!(data, _ {
         outer: _ {
             inner: _ {
                 value: 42,
-                ..  // Ignore text field
             },
-            ..  // Ignore count field
         },
-        ..  // Ignore enabled field
     });
 }
 
@@ -165,8 +153,23 @@ fn test_wildcard_with_options() {
         maybe_inner: Some(_ {
             value: 42,
             text: "present",
-            ..
         }),
+    });
+}
+
+// Explicit .. is still accepted in wildcard patterns for those who prefer it
+#[test]
+fn test_wildcard_explicit_rest_still_works() {
+    let data = Outer {
+        inner: Inner {
+            value: 7,
+            text: "ok".to_string(),
+        },
+        count: 1,
+    };
+
+    assert_struct!(data, _ {
+        count: 1,
         ..
     });
 }

@@ -121,8 +121,8 @@ struct AssertStruct {
 ///
 /// | Pattern | Syntax | Description | Constraints |
 /// |---------|--------|-------------|-------------|
-/// | **Wildcard Struct** | `value: _ { fields... }` | Match struct without naming type | Must use `..` for partial matching |
-/// | **Nested Wildcard** | `_ { field: _ { ... }, .. }` | Nested anonymous structs | Avoids importing nested types |
+/// | **Wildcard Struct** | `value: _ { fields... }` | Match struct without naming type | Always partial; `..` is optional |
+/// | **Nested Wildcard** | `_ { field: _ { ... } }` | Nested anonymous structs | Avoids importing nested types |
 ///
 /// ## Collection Patterns
 ///
@@ -165,6 +165,7 @@ struct AssertStruct {
 /// - **Without `..`**: All struct fields must be specified in the pattern (exhaustive)
 /// - **With `..`**: Only specified fields are checked (partial matching)
 /// - **Multiple `..`**: Compilation error - only one rest pattern allowed per struct
+/// - **Wildcard structs (`_`)**: Always partial — `..` is never required and may be omitted
 ///
 /// ### Field Operation Precedence
 /// Field operations are applied in left-to-right order:
