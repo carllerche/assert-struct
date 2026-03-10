@@ -306,6 +306,12 @@ impl Parse for Pattern {
             return Ok(Pattern::Tuple(input.parse()?));
         }
 
+        // Bare anonymous struct pattern: { foo: "bar", .. }
+        // Shorthand for _ { foo: "bar", .. }
+        if input.peek(syn::token::Brace) {
+            return Ok(Pattern::Struct(input.parse()?));
+        }
+
         // Complex path-based patterns: structs, enums, tuple variants
         // This is where disambiguation becomes critical
         let fork = input.fork();
