@@ -383,8 +383,8 @@
 //! # ];
 //! // Assert that click and hover events are present, ignoring order and other events
 //! assert_struct!(events, #(
-//!     _ { kind: "click", value: > 0 },
-//!     _ { kind: "hover" },
+//!     { kind: "click", value: > 0 },
+//!     { kind: "hover" },
 //!     ..
 //! ));
 //! ```
@@ -641,9 +641,10 @@
 //! });
 //! ```
 //!
-//! ## Wildcard Patterns
+//! ## Anonymous Struct Patterns
 //!
-//! Use wildcard patterns (`_`) to avoid importing types while still asserting on their structure:
+//! Use anonymous struct patterns to avoid importing types while still asserting on their structure.
+//! Anonymous structs are always non-exhaustive, so `..` is never required:
 //!
 //! ```rust
 //! # use assert_struct::assert_struct;
@@ -669,13 +670,12 @@
 //! #     metadata: api::Metadata { timestamp: 1234567890, version: "1.0".to_string() }
 //! # };
 //! // No need to import User or Metadata types!
-//! // Wildcard patterns always do partial matching, so .. is never required.
-//! assert_struct!(response, _ {
-//!     user: _ {
+//! assert_struct!(response, {
+//!     user: {
 //!         id: 123,
 //!         name: "Alice",
 //!     },
-//!     metadata: _ {
+//!     metadata: {
 //!         version: "1.0",
 //!     },
 //! });
@@ -698,9 +698,9 @@
 //! #     }
 //! # };
 //! // Test deeply nested structures without imports
-//! assert_struct!(json_response, _ {
-//!     data: _ {
-//!         items: [_ { id: 1, value: "test" }],
+//! assert_struct!(json_response, {
+//!     data: {
+//!         items: [{ id: 1, value: "test" }],
 //!         total: 1,
 //!     },
 //! });
@@ -805,7 +805,7 @@
 //! // Structural matching navigates the outer types; operator pattern handles Value
 //! assert_struct!(query, Query {
 //!     table: "users",
-//!     filter: Some(_ {
+//!     filter: Some({
 //!         column: 2,
 //!         value: == "alice",  // much shorter than Value::Text("alice".to_string())
 //!     }),

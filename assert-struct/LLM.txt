@@ -69,7 +69,7 @@ PATTERN GRAMMAR (informal EBNF)
                       | tuple_pat | comparison | range | equality | regex
                       | method_call | index_op | deref | closure | wildcard | expr
 
-    struct_pat      ::= (TypePath | "_"?) "{" field_assertion* ".."? "}"
+    struct_pat      ::= (TypePath)? "{" field_assertion* ".."? "}"
     field_assertion ::= field_lhs ":" pattern ","
     field_lhs       ::= IDENT ("." IDENT)*
                       | "*"+ IDENT
