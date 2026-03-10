@@ -31,10 +31,12 @@ impl Parse for PatternStruct {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let node_id = next_node_id();
 
-        // Check if this is a wildcard struct pattern: _ { ... }
+        // Check if this is a wildcard/anonymous struct pattern: _ { ... } or { ... }
         let path = if input.peek(Token![_]) {
             let _: Token![_] = input.parse()?;
             None // wildcard has no path
+        } else if input.peek(syn::token::Brace) {
+            None // bare { ... } — anonymous struct
         } else {
             // Named struct pattern: TypeName { ... }
             Some(input.parse::<syn::Path>()?)
