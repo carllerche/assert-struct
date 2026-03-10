@@ -13,9 +13,8 @@ pub fn main() {
         age: 20,
     };
 
-    assert_struct!(actual, _ {
+    assert_struct!(actual, {
         name: "Bob",
         age: 21,
-        ..
     });
 }

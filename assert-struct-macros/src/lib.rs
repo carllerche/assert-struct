@@ -49,7 +49,7 @@ struct AssertStruct {
 /// assert_struct!(expression, TypePattern);
 ///
 /// TypePattern ::= TypeName '{' FieldPatternList '}'
-///              | '_' '{' FieldPatternList '}'  // Wildcard pattern
+///              | '{' FieldPatternList '}'            // Anonymous struct (always partial)
 /// FieldPatternList ::= (FieldPattern ',')* ('..')?
 /// FieldPattern ::= FieldName ':' Pattern
 ///              | FieldName FieldOperation ':' Pattern
@@ -117,12 +117,12 @@ struct AssertStruct {
 /// | **Tuple Variant** | `field: EnumType::Variant(patterns...)` | Match tuple enum variant | Enum with tuple variant |
 /// | **Struct Variant** | `field: EnumType::Variant { fields... }` | Match struct enum variant | Enum with struct variant |
 ///
-/// ## Wildcard Struct Patterns
+/// ## Anonymous Struct Patterns
 ///
 /// | Pattern | Syntax | Description | Constraints |
 /// |---------|--------|-------------|-------------|
-/// | **Wildcard Struct** | `value: _ { fields... }` | Match struct without naming type | Always partial; `..` is optional |
-/// | **Nested Wildcard** | `_ { field: _ { ... } }` | Nested anonymous structs | Avoids importing nested types |
+/// | **Anonymous Struct** | `value: { fields... }` | Match struct without naming type | Always partial; `..` never required |
+/// | **Nested Anonymous** | `{ field: { ... } }` | Nested anonymous structs | Avoids importing nested types |
 ///
 /// ## Collection Patterns
 ///
@@ -165,7 +165,7 @@ struct AssertStruct {
 /// - **Without `..`**: All struct fields must be specified in the pattern (exhaustive)
 /// - **With `..`**: Only specified fields are checked (partial matching)
 /// - **Multiple `..`**: Compilation error - only one rest pattern allowed per struct
-/// - **Wildcard structs (`_`)**: Always partial — `..` is never required and may be omitted
+/// - **Anonymous structs (`{ ... }`)**: Always partial — `..` is never required and may be omitted
 ///
 /// ### Field Operation Precedence
 /// Field operations are applied in left-to-right order:

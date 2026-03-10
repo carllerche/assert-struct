@@ -8,7 +8,7 @@ use crate::parse::next_node_id;
 use crate::pattern::FieldAssertion;
 
 /// Struct pattern: User { name: "Alice", age: 30, .. }
-/// When path is None, it's a wildcard pattern: _ { name: "Alice", .. }
+/// When path is None, it's an anonymous struct pattern: { name: "Alice" }
 #[derive(Debug, Clone)]
 pub(crate) struct PatternStruct {
     pub node_id: usize,
@@ -23,8 +23,7 @@ impl Parse for PatternStruct {
     /// # Example Input
     /// ```text
     /// User { name: "Alice", age: >= 18, .. }
-    /// _ { name: "Alice" }      // wildcard struct (.. implied, never required)
-    /// _ { name: "Alice", .. }  // also valid - explicit .. is accepted
+    /// { name: "Alice" }        // anonymous struct (.. implied, never required)
     /// ```
     ///
     /// Handles both named structs (with a path) and wildcard structs (starting with `_`).

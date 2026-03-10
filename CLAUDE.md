@@ -39,7 +39,7 @@ Focus on clean design, good architecture, and comprehensive functionality rather
 - **Tuple support**: Multi-field tuples with advanced patterns `(> 10, < 30)`
 - **Method call patterns**: `field.method(): value` and `(0.method(): value, _)` for tuple elements
 - **Pattern composition**: Combine all features (e.g., `Some(> 30)`, `Event::Click(>= 0, < 100)`)
-- **Wildcard struct patterns**: Use `_` instead of type names to avoid imports `_ { field: value, .. }`
+- **Anonymous struct patterns**: Use bare `{ field: value }` to avoid imports (always non-exhaustive, `..` never required)
 - **Smart pointer dereferencing**: Direct pattern matching through `Box`, `Arc`, `Rc` with `*field: value`
 
 ### Improved Error Messages
