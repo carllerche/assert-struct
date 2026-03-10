@@ -21,7 +21,7 @@ when a constructor or single field access is shorter.
     assert_eq!(result, Foo::default());
 
     // assert_struct! wins — one call vs multiple assert_eq! calls
-    assert_struct!(foo, _ { x: 1, y: 2 });
+    assert_struct!(foo, { x: 1, y: 2 });
     // vs.
     assert_eq!(foo.x, 1); assert_eq!(foo.y, 2);
 
@@ -54,12 +54,12 @@ navigating nested types, operators for the leaf values:
 
     // DON'T
     assert_struct!(q, Query {
-        filter: Some(_ { value: Value::Text("alice"), .. }),
+        filter: Some({ value: Value::Text("alice") }),
     });
 
     // DO
     assert_struct!(q, Query {
-        filter: Some(_ { value: == "alice", .. }),
+        filter: Some({ value: == "alice" }),
     });
 
 
@@ -69,7 +69,7 @@ PATTERN GRAMMAR (informal EBNF)
                       | tuple_pat | comparison | range | equality | regex
                       | method_call | index_op | deref | closure | wildcard | expr
 
-    struct_pat      ::= (TypePath | "_") "{" field_assertion* ".."? "}"
+    struct_pat      ::= (TypePath | "_"?) "{" field_assertion* ".."? "}"
     field_assertion ::= field_lhs ":" pattern ","
     field_lhs       ::= IDENT ("." IDENT)*
                       | "*"+ IDENT
@@ -106,9 +106,9 @@ Named struct — partial matching requires ".."
         ..          // required for partial; omit only if asserting ALL fields
     });
 
-Wildcard struct — avoids type import; ".." is optional, matching is always partial
+Anonymous struct — avoids type import; matching is always partial
 
-    assert_struct!(value, _ {
+    assert_struct!(value, {
         field_a: 42,
         field_b: > 0,
     });
@@ -120,7 +120,7 @@ Nested structs
             x: 1,
             ..
         },
-        other: _ {
+        other: {
             y: 2,
         },
         ..
@@ -250,7 +250,7 @@ SET PATTERNS (unordered, backtracking)
     field: #(1, 2, ..)              // contains at least 1 and 2 (any order)
     field: #(..)                    // any collection
     field: #(None, Some(> 0), ..)
-    field: #(_ { kind: "click", .. }, _ { kind: "hover", .. }, ..)
+    field: #({ kind: "click" }, { kind: "hover" }, ..)
 
 NON-OBVIOUS: Uses backtracking to match elements. Each pattern is tried against remaining
 unmatched elements. With "..", extra elements are allowed.
@@ -352,6 +352,30 @@ String literals are automatically compared without .to_string() in all contexts:
 Works with both String and &str field types.
 
 
+DEPRECATIONS
+
+The following syntax forms are deprecated. When encountered in existing code, update them
+to the current syntax.
+
+Anonymous struct with `_` prefix — the `_` is no longer needed for anonymous structs.
+Bare `{ ... }` is now the preferred form.
+
+    // DEPRECATED
+    assert_struct!(value, _ { field: 42 });
+
+    // CURRENT
+    assert_struct!(value, { field: 42 });
+
+Trailing `..` in anonymous structs — anonymous structs always use partial matching,
+so `..` is redundant and should be removed.
+
+    // DEPRECATED
+    assert_struct!(value, { field: 42, .. });
+
+    // CURRENT
+    assert_struct!(value, { field: 42 });
+
+
 NOT SUPPORTED — INVALID SYNTAX
 
     // Method chaining on single field
@@ -432,8 +456,8 @@ FULL COMPOSITION EXAMPLE
             ..
         },
 
-        // wildcard struct (no import needed)
-        config: _ {
+        // anonymous struct (no import needed)
+        config: {
             timeout: > 0,
             retries: 3,
         },
