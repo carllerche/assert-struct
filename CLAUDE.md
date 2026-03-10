@@ -82,6 +82,12 @@ comparison mismatch:
    | } ... }
 ```
 
+## Commit and PR Conventions
+
+This repository follows the [Conventional Commits](https://www.conventionalcommits.org/) specification. All commit messages and PR titles must use the format: `type: description` (e.g., `feat: add new pattern`, `fix: resolve parsing bug`).
+
+Allowed types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`. Scopes are optional. The subject must start with a lowercase letter.
+
 ## Development Commands
 
 ### Build & Test
