@@ -106,7 +106,7 @@ Named struct — partial matching requires ".."
         ..          // required for partial; omit only if asserting ALL fields
     });
 
-Anonymous struct — avoids type import; ".." is optional, matching is always partial
+Anonymous struct — avoids type import; matching is always partial
 
     assert_struct!(value, {
         field_a: 42,
@@ -350,6 +350,30 @@ String literals are automatically compared without .to_string() in all contexts:
     field: ("hello", "world")
 
 Works with both String and &str field types.
+
+
+DEPRECATIONS
+
+The following syntax forms are deprecated. When encountered in existing code, update them
+to the current syntax.
+
+Anonymous struct with `_` prefix — the `_` is no longer needed for anonymous structs.
+Bare `{ ... }` is now the preferred form.
+
+    // DEPRECATED
+    assert_struct!(value, _ { field: 42 });
+
+    // CURRENT
+    assert_struct!(value, { field: 42 });
+
+Trailing `..` in anonymous structs — anonymous structs always use partial matching,
+so `..` is redundant and should be removed.
+
+    // DEPRECATED
+    assert_struct!(value, { field: 42, .. });
+
+    // CURRENT
+    assert_struct!(value, { field: 42 });
 
 
 NOT SUPPORTED — INVALID SYNTAX
