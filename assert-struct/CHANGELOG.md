@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3](https://github.com/carllerche/assert-struct/compare/assert-struct-v0.4.2...assert-struct-v0.4.3) - 2026-04-28
+
+### Other
+
+- bump tokio from 1.50.0 to 1.52.1 ([#132](https://github.com/carllerche/assert-struct/pull/132))
+- bump insta from 1.46.3 to 1.47.2 ([#126](https://github.com/carllerche/assert-struct/pull/126))
+
 ## [0.4.2](https://github.com/carllerche/assert-struct/compare/assert-struct-v0.4.1...assert-struct-v0.4.2) - 2026-03-11
 
 ### Other
