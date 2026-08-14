@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/carllerche/assert-struct/compare/assert-struct-v0.4.2...assert-struct-v0.5.0) - 2026-08-14
+
+### Added
+
+- [**breaking**] remove deprecated anonymous struct pattern syntax ([#155](https://github.com/carllerche/assert-struct/pull/155))
+
+### Fixed
+
+- prevent struct field bindings from shadowing expected expressions ([#153](https://github.com/carllerche/assert-struct/pull/153))
+
+### Other
+
+- bump tokio from 1.50.0 to 1.52.1 ([#132](https://github.com/carllerche/assert-struct/pull/132))
+- bump insta from 1.46.3 to 1.47.2 ([#126](https://github.com/carllerche/assert-struct/pull/126))
+
 ### Removed
 
 - remove deprecated `_ { ... }` anonymous struct syntax and redundant trailing `..` in anonymous structs
