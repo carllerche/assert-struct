@@ -2,15 +2,15 @@ mod nodes;
 
 use crate::AssertStruct;
 use crate::pattern::{
-    ComparisonOp, FieldAssertion, FieldOperation, Pattern, PatternClosure, PatternComparison,
-    PatternEnum, PatternMap, PatternRange, PatternSet, PatternSimple, PatternSlice, PatternString,
-    PatternStruct, PatternTuple, PatternWildcard, TupleElement,
+    ComparisonOp, FieldAssertion, FieldName, FieldOperation, Pattern, PatternClosure,
+    PatternComparison, PatternEnum, PatternMap, PatternRange, PatternSet, PatternSimple,
+    PatternSlice, PatternString, PatternStruct, PatternTuple, PatternWildcard, TupleElement,
 };
 #[cfg(feature = "regex")]
 use crate::pattern::{PatternLike, PatternRegex};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, quote_spanned};
-use std::collections::HashSet;
+use std::collections::{HashMap, hash_map::Entry};
 use syn::{Token, punctuated::Punctuated, spanned::Spanned};
 
 use nodes::{expand_pattern_node_ident, generate_pattern_nodes};
@@ -140,18 +140,35 @@ fn expand_struct_assertion(value_expr: &TokenStream, pattern: &PatternStruct) ->
 
     // For nested field access, we need to collect unique field names only
     // If we have middle.inner.value and middle.count, we only want "middle" once
-    let mut unique_field_names = HashSet::new();
-    let field_names: Vec<_> = fields
-        .iter()
-        .filter_map(|f| {
-            let field_name = f.operations.root_field_name();
-            if unique_field_names.insert(field_name.clone()) {
-                Some(field_name)
-            } else {
-                None
-            }
-        })
-        .collect();
+    let mut field_bindings = HashMap::new();
+    let mut field_patterns = Vec::new();
+
+    for field in fields {
+        let field_name = field.operations.root_field_name();
+
+        if let Entry::Vacant(entry) = field_bindings.entry(field_name.clone()) {
+            // Keep generated bindings hygienically distinct from identifiers in
+            // caller-provided expected expressions while preserving their source
+            // spelling and location for readable expansions and diagnostics.
+            let binding = match &field_name {
+                FieldName::Ident(field_ident) => {
+                    let mut binding = field_ident.clone();
+                    binding.set_span(field_ident.span().resolved_at(Span::mixed_site()));
+                    binding
+                }
+                FieldName::Index(_) => Ident::new(
+                    &format!("__assert_struct_field_{}", field_patterns.len()),
+                    field
+                        .operations
+                        .root_field_span()
+                        .resolved_at(Span::mixed_site()),
+                ),
+            };
+
+            field_patterns.push(quote! { #field_name: #binding });
+            entry.insert(binding);
+        }
+    }
 
     let rest_pattern = if rest {
         quote! { , .. }
@@ -163,9 +180,18 @@ fn expand_struct_assertion(value_expr: &TokenStream, pattern: &PatternStruct) ->
         .iter()
         .map(|f| {
             let field_name = f.operations.root_field_name();
+            let field_binding = field_bindings
+                .get(&field_name)
+                .expect("every asserted field must have a match binding");
+            let mut field_reference = field_binding.clone();
+            field_reference.set_span(
+                field_binding
+                    .span()
+                    .located_at(f.operations.root_field_span()),
+            );
 
-            // Expand the FieldAssertion starting from the bound field name
-            let assertion = expand_field_assertion(&quote! { #field_name }, f);
+            // Expand the FieldAssertion starting from its hygienic match binding.
+            let assertion = expand_field_assertion(&quote! { #field_reference }, f);
 
             // Wrap the assertion with the span of the field pattern if available
             if let Some(span) = f.pattern.span() {
@@ -188,7 +214,7 @@ fn expand_struct_assertion(value_expr: &TokenStream, pattern: &PatternStruct) ->
     quote_spanned! {span=>
         #[allow(unreachable_patterns)]
         match &#value_expr {
-            #struct_path { #(#field_names),* #rest_pattern } => {
+            #struct_path { #(#field_patterns),* #rest_pattern } => {
                 #(#field_assertions)*
             },
             _ => {
@@ -284,7 +310,10 @@ fn apply_field_operations(base_expr: &TokenStream, operation: &FieldOperation) -
             }
         }
         FieldOperation::Await { span } => {
-            quote_spanned! { *span=> #base_expr.await }
+            // Keep the await token in the same hygiene context as a generated
+            // field binding so rustc can construct its "remove `.await`" fix.
+            let span = span.resolved_at(Span::mixed_site());
+            quote_spanned! {span=> #base_expr.await }
         }
         FieldOperation::NamedField { name, span } => {
             quote_spanned! { *span=> #base_expr.#name }

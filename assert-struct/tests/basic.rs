@@ -23,6 +23,11 @@ struct TupleHolder {
     active: bool,
 }
 
+#[derive(Debug)]
+struct IdHolder {
+    id: u32,
+}
+
 #[test]
 fn assert_eq_one_level() {
     let user = User {
@@ -47,6 +52,15 @@ fn partial_match_with_rest() {
     };
 
     assert_struct!(user, User { name: "Bob", .. });
+}
+
+#[test]
+#[should_panic(expected = "assert_struct! failed")]
+fn expected_expression_is_not_shadowed_by_field_binding() {
+    let id = 12;
+    let holder = IdHolder { id: 13 };
+
+    assert_struct!(holder, IdHolder { id: == id });
 }
 
 // Error message tests using snapshot testing

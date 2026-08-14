@@ -24,7 +24,7 @@ mod regex;
 pub(crate) use closure::PatternClosure;
 pub(crate) use comparison::{ComparisonOp, PatternComparison};
 pub(crate) use enum_pattern::PatternEnum;
-pub(crate) use field::{FieldAssertion, FieldOperation};
+pub(crate) use field::{FieldAssertion, FieldName, FieldOperation};
 pub(crate) use map::PatternMap;
 pub(crate) use range::PatternRange;
 pub(crate) use set::PatternSet;
