@@ -292,7 +292,7 @@ pub(super) fn generate_pattern_nodes(
             let name_str = if let Some(p) = path {
                 quote! { #p }.to_string().replace(" :: ", "::")
             } else {
-                "anonymous".to_string()
+                "_".to_string()
             };
 
             let field_entries: Vec<TokenStream> = fields
