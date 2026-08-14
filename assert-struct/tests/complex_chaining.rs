@@ -198,13 +198,11 @@ async fn test_wildcard_with_complex_await() {
         },
     };
 
-    // Test wildcard patterns with complex await chains
-    assert_struct!(data, _ {
-        nested_futures: _ {
+    // Test anonymous patterns with complex await chains
+    assert_struct!(data, {
+        nested_futures: {
             // TODO: Fix this pattern - indexing issue
             // triple_future.get_future().await.as_vec().await[2]: 52, // (25 * 2) + 2 = 52
-            ..
         },
-        ..
     });
 }

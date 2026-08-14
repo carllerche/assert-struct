@@ -288,11 +288,11 @@ pub(super) fn generate_pattern_nodes(
         Pattern::Struct(PatternStruct {
             path, fields, rest, ..
         }) => {
-            // Handle wildcard struct patterns (path is None)
+            // Anonymous struct patterns have no path.
             let name_str = if let Some(p) = path {
                 quote! { #p }.to_string().replace(" :: ", "::")
             } else {
-                "_".to_string() // Use "_" for wildcard struct patterns
+                "anonymous".to_string()
             };
 
             let field_entries: Vec<TokenStream> = fields

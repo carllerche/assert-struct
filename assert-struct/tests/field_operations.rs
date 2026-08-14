@@ -89,7 +89,7 @@ fn test_deref_box_with_partial_eq() {
         foo: Box::new(Bar(42)),
     };
 
-    assert_struct!(val, _ {
+    assert_struct!(val, {
         *foo: == 42u64,
     });
 }

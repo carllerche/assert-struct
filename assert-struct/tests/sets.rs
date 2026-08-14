@@ -97,9 +97,9 @@ fn test_set_struct_patterns() {
     ];
 
     assert_struct!(events, #(
-        _ { kind: "hover", .. },
-        _ { kind: "click", .. },
-        _ { kind: "scroll", .. },
+        { kind: "hover" },
+        { kind: "click" },
+        { kind: "scroll" },
     ));
 }
 
@@ -122,8 +122,8 @@ fn test_set_struct_patterns_with_rest() {
 
     // Only check that click and hover are present; scroll is ignored
     assert_struct!(events, #(
-        _ { kind: "click", .. },
-        _ { kind: "hover", .. },
+        { kind: "click" },
+        { kind: "hover" },
         ..
     ));
 }

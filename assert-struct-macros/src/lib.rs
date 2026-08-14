@@ -48,9 +48,10 @@ struct AssertStruct {
 /// ```text
 /// assert_struct!(expression, TypePattern);
 ///
-/// TypePattern ::= TypeName '{' FieldPatternList '}'
-///              | '{' FieldPatternList '}'            // Anonymous struct (always partial)
-/// FieldPatternList ::= (FieldPattern ',')* ('..')?
+/// TypePattern ::= TypeName '{' NamedFieldPatternList '}'
+///              | '{' AnonymousFieldPatternList '}'    // Always partial
+/// NamedFieldPatternList ::= (FieldPattern ',')* ('..')?
+/// AnonymousFieldPatternList ::= (FieldPattern ',')*
 /// FieldPattern ::= FieldName ':' Pattern
 ///              | FieldName FieldOperation ':' Pattern
 /// FieldOperation ::= ('*')+ | ('.' Identifier '(' ArgumentList? ')')
@@ -121,7 +122,7 @@ struct AssertStruct {
 ///
 /// | Pattern | Syntax | Description | Constraints |
 /// |---------|--------|-------------|-------------|
-/// | **Anonymous Struct** | `value: { fields... }` | Match struct without naming type | Always partial; `..` never required |
+/// | **Anonymous Struct** | `value: { fields... }` | Match struct without naming type | Always partial |
 /// | **Nested Anonymous** | `{ field: { ... } }` | Nested anonymous structs | Avoids importing nested types |
 ///
 /// ## Collection Patterns
@@ -165,7 +166,7 @@ struct AssertStruct {
 /// - **Without `..`**: All struct fields must be specified in the pattern (exhaustive)
 /// - **With `..`**: Only specified fields are checked (partial matching)
 /// - **Multiple `..`**: Compilation error - only one rest pattern allowed per struct
-/// - **Anonymous structs (`{ ... }`)**: Always partial — `..` is never required and may be omitted
+/// - **Anonymous structs (`{ ... }`)**: Always partial
 ///
 /// ### Field Operation Precedence
 /// Field operations are applied in left-to-right order:

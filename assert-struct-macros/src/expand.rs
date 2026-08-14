@@ -133,9 +133,9 @@ fn expand_struct_assertion(value_expr: &TokenStream, pattern: &PatternStruct) ->
     let fields = &pattern.fields;
     let rest = pattern.rest;
 
-    // If struct_path is None, it's a wildcard pattern - use field access
+    // Anonymous struct patterns use direct field access.
     let Some(struct_path) = struct_path.as_ref() else {
-        return expand_struct_wildcard_assertion(value_expr, fields);
+        return expand_anonymous_struct_assertion(value_expr, fields);
     };
 
     // For nested field access, we need to collect unique field names only
@@ -224,8 +224,8 @@ fn expand_struct_assertion(value_expr: &TokenStream, pattern: &PatternStruct) ->
     }
 }
 
-/// Generate wildcard struct assertion using direct field access
-fn expand_struct_wildcard_assertion(
+/// Generate an anonymous struct assertion using direct field access.
+fn expand_anonymous_struct_assertion(
     value_expr: &TokenStream,
     fields: &Punctuated<FieldAssertion, Token![,]>,
 ) -> TokenStream {

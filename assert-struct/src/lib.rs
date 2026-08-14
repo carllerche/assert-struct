@@ -644,7 +644,7 @@
 //! ## Anonymous Struct Patterns
 //!
 //! Use anonymous struct patterns to avoid importing types while still asserting on their structure.
-//! Anonymous structs are always non-exhaustive, so `..` is never required:
+//! Anonymous structs are always non-exhaustive:
 //!
 //! ```rust
 //! # use assert_struct::assert_struct;

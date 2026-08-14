@@ -26,7 +26,7 @@ impl Parse for PatternSet {
     /// ```text
     /// #(1, 2, 3)
     /// #(> 0, < 10, ..)
-    /// #(_ { kind: "click", .. }, ..)
+    /// #({ kind: "click" }, ..)
     /// ```
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         // Capture the span of the `#` token before consuming anything

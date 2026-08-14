@@ -1,4 +1,4 @@
-/// Tests for wildcard struct patterns that avoid type imports
+/// Tests for anonymous struct patterns that avoid type imports
 use assert_struct::assert_struct;
 
 #[macro_use]
@@ -23,7 +23,7 @@ struct Complex {
 }
 
 #[test]
-fn test_wildcard_struct_simple() {
+fn test_anonymous_struct_simple() {
     let data = Outer {
         inner: Inner {
             value: 42,
@@ -32,9 +32,9 @@ fn test_wildcard_struct_simple() {
         count: 5,
     };
 
-    // Using wildcard pattern - no need to import Inner type, .. is not required
-    assert_struct!(data, _ {
-        inner: _ {
+    // No need to import the Inner type.
+    assert_struct!(data, {
+        inner: {
             value: 42,
             text: "hello",
         },
@@ -43,7 +43,7 @@ fn test_wildcard_struct_simple() {
 }
 
 #[test]
-fn test_wildcard_struct_nested() {
+fn test_anonymous_struct_nested() {
     let data = Complex {
         outer: Outer {
             inner: Inner {
@@ -56,9 +56,9 @@ fn test_wildcard_struct_nested() {
     };
 
     // Deep nesting without any type imports
-    assert_struct!(data, _ {
-        outer: _ {
-            inner: _ {
+    assert_struct!(data, {
+        outer: {
+            inner: {
                 value: > 50,
                 text: "world",
             },
@@ -69,7 +69,7 @@ fn test_wildcard_struct_nested() {
 }
 
 #[test]
-fn test_wildcard_with_comparisons() {
+fn test_anonymous_struct_with_comparisons() {
     let data = Outer {
         inner: Inner {
             value: 25,
@@ -78,8 +78,8 @@ fn test_wildcard_with_comparisons() {
         count: 8,
     };
 
-    assert_struct!(data, _ {
-        inner: _ {
+    assert_struct!(data, {
+        inner: {
             value: > 20,
             text: != "other",
         },
@@ -88,7 +88,7 @@ fn test_wildcard_with_comparisons() {
 }
 
 #[test]
-fn test_wildcard_with_method_calls() {
+fn test_anonymous_struct_with_method_calls() {
     let data = Outer {
         inner: Inner {
             value: 0,
@@ -97,8 +97,8 @@ fn test_wildcard_with_method_calls() {
         count: 3,
     };
 
-    assert_struct!(data, _ {
-        inner: _ {
+    assert_struct!(data, {
+        inner: {
             text.len(): 11,
             text.contains("world"): true,
         },
@@ -107,7 +107,7 @@ fn test_wildcard_with_method_calls() {
 }
 
 #[test]
-fn test_wildcard_partial_matching() {
+fn test_anonymous_struct_partial_matching() {
     let data = Complex {
         outer: Outer {
             inner: Inner {
@@ -119,10 +119,10 @@ fn test_wildcard_partial_matching() {
         enabled: false,
     };
 
-    // Only check specific fields, ignore the rest (.. is implicit for _ patterns)
-    assert_struct!(data, _ {
-        outer: _ {
-            inner: _ {
+    // Only check specific fields; anonymous structs are partial.
+    assert_struct!(data, {
+        outer: {
+            inner: {
                 value: 42,
             },
         },
@@ -135,7 +135,7 @@ error_message_test!(
 );
 
 #[test]
-fn test_wildcard_with_options() {
+fn test_anonymous_struct_with_options() {
     #[derive(Debug)]
     struct Container {
         maybe_inner: Option<Inner>,
@@ -148,33 +148,15 @@ fn test_wildcard_with_options() {
         }),
     };
 
-    // Combine wildcard struct with Option pattern
-    assert_struct!(data, _ {
-        maybe_inner: Some(_ {
+    // Combine an anonymous struct with an Option pattern.
+    assert_struct!(data, {
+        maybe_inner: Some({
             value: 42,
             text: "present",
         }),
     });
 }
 
-// Explicit .. is still accepted in wildcard patterns for those who prefer it
-#[test]
-fn test_wildcard_explicit_rest_still_works() {
-    let data = Outer {
-        inner: Inner {
-            value: 7,
-            text: "ok".to_string(),
-        },
-        count: 1,
-    };
-
-    assert_struct!(data, _ {
-        count: 1,
-        ..
-    });
-}
-
-// Bare anonymous struct syntax: { ... } without _ prefix
 #[test]
 fn test_bare_anonymous_struct_simple() {
     let data = Inner {
@@ -227,7 +209,7 @@ fn test_bare_anonymous_struct_partial() {
         enabled: false,
     };
 
-    // Partial matching is implicit (like _ { ... })
+    // Partial matching is implicit.
     assert_struct!(data, {
         outer: {
             inner: {
@@ -256,22 +238,6 @@ fn test_bare_anonymous_struct_with_option() {
             value: 42,
             text: "present",
         }),
-    });
-}
-
-#[test]
-fn test_bare_anonymous_struct_with_explicit_rest() {
-    let data = Outer {
-        inner: Inner {
-            value: 7,
-            text: "ok".to_string(),
-        },
-        count: 1,
-    };
-
-    assert_struct!(data, {
-        count: 1,
-        ..
     });
 }
 
