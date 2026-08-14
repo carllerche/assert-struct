@@ -69,23 +69,19 @@ fn main() {
         ret: Some("result".to_string()),
     };
 
-    assert_struct!(query_sql, _ {
-        stmt: Statement::Query(_ {
-            body: ExprSet::Select(_ {
+    assert_struct!(query_sql, {
+        stmt: Statement::Query({
+            body: ExprSet::Select({
                 source: Source::Table([
-                    _ { table: "users", .. },
+                    { table: "users" },
                 ]),
-                filter: Expr::BinaryOp(_ {
+                filter: Expr::BinaryOp({
                     *lhs: "col",
                     op: BinaryOp::Eq,
                     *rhs: == 123,  // Type error: can't compare String with integer
-                    ..
                 }),
-                ..
             }),
-            ..
         }),
         ret: Some(_),
-        ..
     });
 }

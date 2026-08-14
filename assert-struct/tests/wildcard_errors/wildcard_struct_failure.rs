@@ -23,11 +23,9 @@ pub fn test_case() {
         count: 5,
     };
 
-    assert_struct!(data, _ {
-        inner: _ {
+    assert_struct!(data, {
+        inner: {
             value: 20,  // This should fail
-            ..
         },
-        ..
     });
 }

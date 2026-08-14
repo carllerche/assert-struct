@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- remove deprecated `_ { ... }` anonymous struct syntax and redundant trailing `..` in anonymous structs
+
 ### Fixed
 
 - prevent named struct field bindings from shadowing expected expressions ([#143](https://github.com/carllerche/assert-struct/issues/143))

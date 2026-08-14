@@ -23,19 +23,15 @@ impl Parse for PatternStruct {
     /// # Example Input
     /// ```text
     /// User { name: "Alice", age: >= 18, .. }
-    /// { name: "Alice" }        // anonymous struct (.. implied, never required)
+    /// { name: "Alice" }        // anonymous struct (always partial)
     /// ```
     ///
-    /// Handles both named structs (with a path) and wildcard structs (starting with `_`).
+    /// Handles both named and anonymous structs.
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let node_id = next_node_id();
 
-        // Check if this is a wildcard/anonymous struct pattern: _ { ... } or { ... }
-        let path = if input.peek(Token![_]) {
-            let _: Token![_] = input.parse()?;
-            None // wildcard has no path
-        } else if input.peek(syn::token::Brace) {
-            None // bare { ... } — anonymous struct
+        let path = if input.peek(syn::token::Brace) {
+            None // anonymous struct
         } else {
             // Named struct pattern: TypeName { ... }
             Some(input.parse::<syn::Path>()?)
@@ -52,6 +48,9 @@ impl Parse for PatternStruct {
         while !content.is_empty() {
             // Check for rest pattern (..) which allows partial matching
             if content.peek(Token![..]) {
+                if path.is_none() {
+                    return Err(content.error("unexpected token in anonymous struct pattern"));
+                }
                 let _: Token![..] = content.parse()?;
                 rest = true;
                 break;
@@ -68,14 +67,16 @@ impl Parse for PatternStruct {
 
             // Rest pattern can appear after a comma
             if content.peek(Token![..]) {
+                if path.is_none() {
+                    return Err(content.error("unexpected token in anonymous struct pattern"));
+                }
                 let _: Token![..] = content.parse()?;
                 rest = true;
                 break;
             }
         }
 
-        // Wildcard struct patterns always imply partial matching since the type
-        // is unknown, so .. is never required (but still accepted if written).
+        // Anonymous struct patterns always use partial matching because their type is unknown.
         if path.is_none() {
             rest = true;
         }

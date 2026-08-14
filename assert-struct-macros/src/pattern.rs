@@ -226,7 +226,7 @@ impl Pattern {
                     end.column as u32,
                 )
             }
-            // Wildcard struct patterns and plain wildcards have no meaningful location.
+            // Anonymous struct patterns and plain wildcards have no meaningful location.
             Pattern::Struct(PatternStruct { path: None, .. }) | Pattern::Wildcard(_) => {
                 (0, 0, 0, 0)
             }
@@ -248,15 +248,8 @@ impl Parse for Pattern {
 
         // Wildcard pattern: _ for ignoring a value while asserting it exists
         // Example: `Some(_)`, `field: _`, `[1, _, 3]`
-        // Special case: `_ { ... }` for wildcard struct patterns
         if input.peek(Token![_]) {
-            // Check if this is a wildcard struct pattern: `_ { ... }`
-            if input.peek2(syn::token::Brace) {
-                return Ok(Pattern::Struct(input.parse()?));
-            } else {
-                // Regular wildcard pattern
-                return Ok(Pattern::Wildcard(input.parse()?));
-            }
+            return Ok(Pattern::Wildcard(input.parse()?));
         }
 
         // Try to parse as a comparison pattern (<, <=, >, >=, ==, !=)
@@ -306,8 +299,7 @@ impl Parse for Pattern {
             return Ok(Pattern::Tuple(input.parse()?));
         }
 
-        // Bare anonymous struct pattern: { foo: "bar", .. }
-        // Shorthand for _ { foo: "bar", .. }
+        // Anonymous struct pattern: { foo: "bar" }
         if input.peek(syn::token::Brace) {
             return Ok(Pattern::Struct(input.parse()?));
         }

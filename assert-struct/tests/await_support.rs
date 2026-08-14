@@ -110,16 +110,15 @@ async fn test_complex_nested_await() {
 }
 
 #[tokio::test]
-async fn test_wildcard_struct_with_await() {
+async fn test_anonymous_struct_with_await() {
     let data = AsyncStruct {
         async_field: AsyncValue { value: 75 },
         regular_field: "wildcard".to_string(),
     };
 
-    // Test wildcard pattern with await
-    assert_struct!(data, _ {
+    // Test anonymous struct pattern with await
+    assert_struct!(data, {
         async_field.get_value().await: 75,
-        ..
     });
 }
 
