@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/carllerche/assert-struct/compare/assert-struct-macros-v0.4.2...assert-struct-macros-v0.5.0) - 2026-08-14
+
+### Added
+
+- [**breaking**] remove deprecated anonymous struct pattern syntax ([#155](https://github.com/carllerche/assert-struct/pull/155))
+
+### Fixed
+
+- prevent struct field bindings from shadowing expected expressions ([#153](https://github.com/carllerche/assert-struct/pull/153))
+
 ### Removed
 
 - remove deprecated `_ { ... }` anonymous struct syntax and redundant trailing `..` in anonymous structs
