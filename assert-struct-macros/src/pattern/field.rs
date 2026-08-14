@@ -228,6 +228,21 @@ impl FieldOperation {
         }
     }
 
+    /// Get the source span of the root field access.
+    pub(crate) fn root_field_span(&self) -> proc_macro2::Span {
+        match self {
+            FieldOperation::NamedField { span, .. } | FieldOperation::UnnamedField { span, .. } => {
+                *span
+            }
+            FieldOperation::Chained { operations, .. } => operations
+                .iter()
+                .find(|op| !matches!(op, FieldOperation::Deref { .. }))
+                .expect("Chained operation must have at least one non-Deref operation")
+                .root_field_span(),
+            _ => panic!("Cannot extract root field span from {:?}", self),
+        }
+    }
+
     /// Get operations after the root field access (tail operations)
     /// For NamedField/UnnamedField alone, returns None (no additional operations)
     /// For Chained, returns all operations except the first non-Deref field access

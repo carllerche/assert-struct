@@ -7,6 +7,7 @@ error[E0277]: `&i32` is not a future
    = help: the trait `Future` is not implemented for `&i32`
    = note: &i32 must be a future or must implement `IntoFuture` to be awaited
    = note: required for `&i32` to implement `IntoFuture`
+   = note: this error originates in the macro `assert_struct` (in Nightly builds, run with -Z macro-backtrace for more info)
 help: remove the `.await`
    |
 15 -         value.await: 42,

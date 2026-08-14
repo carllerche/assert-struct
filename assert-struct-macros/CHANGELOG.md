@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- prevent named struct field bindings from shadowing expected expressions ([#143](https://github.com/carllerche/assert-struct/issues/143))
+
 ## [0.4.2](https://github.com/carllerche/assert-struct/compare/assert-struct-macros-v0.4.1...assert-struct-macros-v0.4.2) - 2026-03-11
 
 ### Other
