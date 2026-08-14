@@ -845,14 +845,6 @@
 //! assert_eq!(complex.data.as_ref().unwrap().len(), 3);
 //! ```
 //!
-//! ## Real-World Testing Patterns
-//!
-//! See the [examples directory](../../examples/) for comprehensive real-world examples including:
-//! - API response validation
-//! - Database record testing
-//! - Configuration validation
-//! - Event system testing
-//!
 //! For complete specification details, see the [`assert_struct!`] macro documentation.
 
 // Re-export the procedural macro

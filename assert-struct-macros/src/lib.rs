@@ -327,7 +327,6 @@ struct AssertStruct {
 /// # See Also
 ///
 /// - **Learning Guide**: See the [crate-level documentation](crate) for comprehensive examples
-/// - **Real-World Examples**: Check the `examples/` directory for practical usage patterns
 /// - **Like Trait**: Implement custom pattern matching with the `Like` trait
 #[proc_macro]
 pub fn assert_struct(input: TokenStream) -> TokenStream {

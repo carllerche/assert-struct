@@ -163,6 +163,5 @@ Initial release of assert-struct - a procedural macro for ergonomic structural a
 
 #### Documentation
 - Comprehensive API documentation with examples
-- Real-world examples in `examples/` directory
 - Complete pattern reference in macro documentation
 - Comprehensive test coverage - 350+ tests across 29 test files
